@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-2.0-only
+
+config AWINIC_SARSENSOR
+	tristate "Awinic SAR sensor"
+	depends on I2C
+	help
+	  Awinic capacitive SAR sensor (aw9610x/aw9620x/aw963xx), used to
+	  back off the radio when the phone is held close to the body.
+
+	  Say Y to build it into the kernel.

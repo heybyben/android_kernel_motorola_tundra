@@ -79,3 +79,4 @@ obj-$(CONFIG_MMI_SYS_TEMP)	+= mmi_sys_temp/
 obj-$(CONFIG_MOTO_UTAGS)	+= utag/
 obj-$(CONFIG_SARSENSOR_SX937X)	+= sx937x/
 obj-$(CONFIG_LDO_VIBRATOR_MMI)	+= ldo_vibrator_mmi/
+obj-$(CONFIG_AWINIC_SARSENSOR)	+= awinic/sarsensor/

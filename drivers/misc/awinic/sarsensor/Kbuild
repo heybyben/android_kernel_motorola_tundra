@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: GPL-2.0-only
+
+ccflags-y += -Wall
+ccflags-y += -I$(srctree)/include/linux/input/awinic
+# Vendor code keeps a large stack frame in the firmware update path.
+ccflags-y += -Wno-error=frame-larger-than
+
+ccflags-$(CONFIG_AW96XX_POWER_SUPPLY_ONLINE) += -DCONFIG_USE_POWER_SUPPLY_ONLINE
+
+obj-$(CONFIG_AWINIC_SARSENSOR) += awinic_sar.o
+
+awinic_sar-y := comm/aw_sar_comm_interface.o
+awinic_sar-y += aw_sar.o
+awinic_sar-y += aw9610x/aw9610x.o
+awinic_sar-y += aw9620x/aw9620x.o
+awinic_sar-y += aw9620x/aw_update_fw.o
+awinic_sar-y += aw963xx/aw963xx.o
