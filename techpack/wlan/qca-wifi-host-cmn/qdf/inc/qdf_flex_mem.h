@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2018-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -26,7 +25,7 @@
  * allocation are amoritized allocation cost, and reduced memory fragmentation.
  *
  * The allocator consists of 3 parts: the pool, segments, and items. Items are
- * the smallest chunks of memory that are handed out via the alloc call, and
+ * the smallest chuncks of memory that are handed out via the alloc call, and
  * are all of a uniform size. Segments are groups of items, representing the
  * smallest amount of memory that can be dynamically allocated or freed. A pool
  * is simply a collection of segments.
@@ -42,7 +41,7 @@
 #define QDF_FM_BITMAP_BITS (sizeof(QDF_FM_BITMAP) * 8)
 
 /**
- * struct qdf_flex_mem_pool - a pool of memory segments
+ * qdf_flex_mem_pool - a pool of memory segments
  * @seg_list: the list containing the memory segments
  * @lock: spinlock for protecting internal data structures
  * @reduction_limit: the minimum number of segments to keep during reduction
@@ -56,7 +55,7 @@ struct qdf_flex_mem_pool {
 };
 
 /**
- * struct qdf_flex_mem_segment - a memory pool segment
+ * qdf_flex_mem_segment - a memory pool segment
  * @node: the list node for membership in the memory pool
  * @dynamic: true if this segment was dynamically allocated
  * @used_bitmap: bitmap for tracking which items in the segment are in use

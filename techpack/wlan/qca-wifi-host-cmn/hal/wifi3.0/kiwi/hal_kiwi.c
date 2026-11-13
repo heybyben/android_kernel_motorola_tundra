@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -34,12 +34,17 @@
 #include "hal_rx_flow_info.h"
 #include "hal_be_api.h"
 #include "reo_destination_ring_with_pn.h"
-#include "rx_reo_queue_1k.h"
 
 #include <hal_be_rx.h>
 
+#define UNIFIED_RXPCU_PPDU_END_INFO_8_RX_PPDU_DURATION_OFFSET \
+	RXPCU_PPDU_END_INFO_RX_PPDU_DURATION_OFFSET
+#define UNIFIED_RXPCU_PPDU_END_INFO_8_RX_PPDU_DURATION_MASK \
+	RXPCU_PPDU_END_INFO_RX_PPDU_DURATION_MASK
+#define UNIFIED_RXPCU_PPDU_END_INFO_8_RX_PPDU_DURATION_LSB \
+	RXPCU_PPDU_END_INFO_RX_PPDU_DURATION_LSB
 #define UNIFIED_PHYRX_HT_SIG_0_HT_SIG_INFO_PHYRX_HT_SIG_INFO_DETAILS_OFFSET \
-	PHYRX_HT_SIG_PHYRX_HT_SIG_INFO_DETAILS_MCS_OFFSET
+	PHYRX_L_SIG_B_PHYRX_L_SIG_B_INFO_DETAILS_RATE_OFFSET
 #define UNIFIED_PHYRX_L_SIG_B_0_L_SIG_B_INFO_PHYRX_L_SIG_B_INFO_DETAILS_OFFSET \
 	PHYRX_L_SIG_B_PHYRX_L_SIG_B_INFO_DETAILS_RATE_OFFSET
 #define UNIFIED_PHYRX_L_SIG_A_0_L_SIG_A_INFO_PHYRX_L_SIG_A_INFO_DETAILS_OFFSET \
@@ -56,8 +61,9 @@
 	PHYRX_HE_SIG_B2_MU_PHYRX_HE_SIG_B2_MU_INFO_DETAILS_STA_ID_OFFSET
 #define UNIFIED_PHYRX_HE_SIG_B2_OFDMA_0_HE_SIG_B2_OFDMA_INFO_PHYRX_HE_SIG_B2_OFDMA_INFO_DETAILS_OFFSET \
 	PHYRX_HE_SIG_B2_OFDMA_PHYRX_HE_SIG_B2_OFDMA_INFO_DETAILS_STA_ID_OFFSET
+
 #define UNIFIED_PHYRX_RSSI_LEGACY_3_RECEIVE_RSSI_INFO_PRE_RSSI_INFO_DETAILS_OFFSET \
-	PHYRX_RSSI_LEGACY_PRE_RSSI_INFO_DETAILS_RSSI_PRI20_CHAIN0_OFFSET
+	PHYRX_RSSI_LEGACY_3_RECEIVE_RSSI_INFO_PRE_RSSI_INFO_DETAILS_OFFSET
 #define UNIFIED_PHYRX_RSSI_LEGACY_19_RECEIVE_RSSI_INFO_PREAMBLE_RSSI_INFO_DETAILS_OFFSET \
 	PHYRX_RSSI_LEGACY_PREAMBLE_RSSI_INFO_DETAILS_RSSI_PRI20_CHAIN0_OFFSET
 #define UNIFIED_RX_MPDU_START_0_RX_MPDU_INFO_RX_MPDU_INFO_DETAILS_OFFSET \
@@ -115,25 +121,10 @@
 #include "hal_be_rx_tlv.h"
 
 #include <hal_generic_api.h>
-#include "hal_be_api_mon.h"
 #include <hal_be_generic_api.h>
+#include "hal_be_api_mon.h"
 
 #define LINK_DESC_SIZE (NUM_OF_DWORDS_RX_MSDU_LINK << 2)
-
-/* For Berryllium sw2rxdma ring size increased to 20 bits */
-#define HAL_RXDMA_MAX_RING_SIZE_BE 0xFFFFF
-
-#ifdef QCA_GET_TSF_VIA_REG
-#define PCIE_PCIE_MHI_TIME_LOW 0xA28
-#define PCIE_PCIE_MHI_TIME_HIGH 0xA2C
-
-#define PMM_REG_BASE 0xB500FC
-
-#define FW_QTIME_CYCLES_PER_10_USEC 192
-#endif
-
-struct wbm2sw_completion_ring_tx gwbm2sw_tx_comp_symbol __attribute__((used));
-struct wbm2sw_completion_ring_rx gwbm2sw_rx_comp_symbol __attribute__((used));
 
 static uint32_t hal_get_link_desc_size_kiwi(void)
 {
@@ -141,10 +132,10 @@ static uint32_t hal_get_link_desc_size_kiwi(void)
 }
 
 /**
- * hal_rx_dump_msdu_end_tlv_kiwi() - dump RX msdu_end TLV in structured
+ * hal_rx_dump_msdu_end_tlv_kiwi: dump RX msdu_end TLV in structured
  *			     human readable format.
- * @msduend: pointer the msdu_end TLV in pkt.
- * @dbg_level: log level.
+ * @ msdu_end: pointer the msdu_end TLV in pkt.
+ * @ dbg_level: log level.
  *
  * Return: void
  */
@@ -250,6 +241,7 @@ static void hal_rx_dump_msdu_end_tlv_kiwi(void *msduend,
 			"reo_destination_indication :%x "
 			"flow_idx :%x "
 			"use_ppe :%x "
+			"__reserved_g_0003 :%x "
 			"vlan_ctag_stripped :%x "
 			"vlan_stag_stripped :%x "
 			"fragment_flag :%x "
@@ -282,6 +274,7 @@ static void hal_rx_dump_msdu_end_tlv_kiwi(void *msduend,
 			msdu_end->reo_destination_indication,
 			msdu_end->flow_idx,
 			msdu_end->use_ppe,
+			msdu_end->__reserved_g_0003,
 			msdu_end->vlan_ctag_stripped,
 			msdu_end->vlan_stag_stripped,
 			msdu_end->fragment_flag,
@@ -780,31 +773,10 @@ static inline
 void hal_register_rx_pkt_hdr_tlv_api_kiwi(struct hal_soc *hal_soc)
 {
 }
-
-static uint8_t *hal_rx_desc_get_80211_hdr_be(void *hw_desc_addr)
-{
-	uint8_t *rx_pkt_hdr;
-	struct rx_mon_pkt_tlvs *rx_desc =
-					(struct rx_mon_pkt_tlvs *)hw_desc_addr;
-
-	rx_pkt_hdr = &rx_desc->pkt_hdr_tlv.rx_pkt_hdr[0];
-
-	return rx_pkt_hdr;
-}
 #else
-static uint8_t *hal_rx_desc_get_80211_hdr_be(void *hw_desc_addr)
-{
-	struct rx_pkt_tlvs *rx_desc = (struct rx_pkt_tlvs *)hw_desc_addr;
-	uint8_t *rx_pkt_hdr;
-
-	rx_pkt_hdr = &rx_desc->pkt_hdr_tlv.rx_pkt_hdr[0];
-
-	return rx_pkt_hdr;
-}
-
 /**
- * hal_rx_dump_pkt_hdr_tlv_kiwi() - dump RX pkt header TLV in hex format
- * @pkt_tlvs: pointer the pkt_hdr_tlv in pkt.
+ * hal_rx_dump_pkt_hdr_tlv: dump RX pkt header TLV in hex format
+ * @pkt_hdr_tlv: pointer the pkt_hdr_tlv in pkt.
  * @dbg_level: log level.
  *
  * Return: void
@@ -817,7 +789,7 @@ static inline void hal_rx_dump_pkt_hdr_tlv_kiwi(struct rx_pkt_tlvs *pkt_tlvs,
 	hal_verbose_debug("\n---------------\n"
 			  "rx_pkt_hdr_tlv\n"
 			  "---------------\n"
-			  "phy_ppdu_id 0x%x ",
+			  "phy_ppdu_id %lld ",
 			  pkt_hdr_tlv->phy_ppdu_id);
 
 	hal_verbose_hex_dump(pkt_hdr_tlv->rx_pkt_hdr,
@@ -839,9 +811,9 @@ void hal_register_rx_pkt_hdr_tlv_api_kiwi(struct hal_soc *hal_soc)
 #endif
 
 /**
- * hal_rx_dump_mpdu_start_tlv_kiwi(): dump RX mpdu_start TLV in structured
+ * hal_rx_dump_mpdu_start_tlv_generic_be: dump RX mpdu_start TLV in structured
  *			       human readable format.
- * @mpdustart: pointer the rx_attention TLV in pkt.
+ * @mpdu_start: pointer the rx_attention TLV in pkt.
  * @dbg_level: log level.
  *
  * Return: void
@@ -1087,36 +1059,6 @@ static void hal_rx_dump_pkt_tlvs_kiwi(hal_soc_handle_t hal_soc_hdl,
 }
 
 /**
- * hal_rx_get_mpdu_flags_from_tlv() - Populate the local mpdu_flags elements
- *				      from the rx tlvs
- * @mpdu_info: buf address to rx_mpdu_info
- *
- * Return: mpdu_flags.
- */
-static inline uint32_t
-hal_rx_get_mpdu_flags_from_tlv(struct rx_mpdu_info *mpdu_info)
-{
-	uint32_t mpdu_flags = 0;
-
-	if (mpdu_info->fragment_flag)
-		mpdu_flags |= HAL_MPDU_F_FRAGMENT;
-
-	if (mpdu_info->mpdu_retry)
-		mpdu_flags |= HAL_MPDU_F_RETRY_BIT;
-
-	if (mpdu_info->ampdu_flag)
-		mpdu_flags |= HAL_MPDU_F_AMPDU_FLAG;
-
-	if (mpdu_info->raw_mpdu)
-		mpdu_flags |= HAL_MPDU_F_RAW_AMPDU;
-
-	if (mpdu_info->mpdu_qos_control_valid)
-		mpdu_flags |= HAL_MPDU_F_QOS_CONTROL_VALID;
-
-	return mpdu_flags;
-}
-
-/**
  * hal_rx_tlv_populate_mpdu_desc_info_kiwi() - Populate the local mpdu_desc_info
  *			elements from the rx tlvs
  * @buf: start address of rx tlvs [Validated by caller]
@@ -1137,18 +1079,19 @@ hal_rx_tlv_populate_mpdu_desc_info_kiwi(uint8_t *buf,
 	struct rx_mpdu_info *mpdu_info = &mpdu_start->rx_mpdu_info_details;
 
 	mpdu_desc_info->mpdu_seq = mpdu_info->mpdu_sequence_number;
-	mpdu_desc_info->mpdu_flags = hal_rx_get_mpdu_flags_from_tlv(mpdu_info);
+	mpdu_desc_info->mpdu_flags = hal_rx_get_mpdu_flags((uint32_t *)
+							    mpdu_info);
 	mpdu_desc_info->peer_meta_data = mpdu_info->peer_meta_data;
 	mpdu_desc_info->bar_frame = mpdu_info->bar_frame;
 }
 
 /**
- * hal_reo_status_get_header_kiwi() - Process reo desc info
- * @ring_desc: Pointer to reo descriptor
- * @b: tlv type info
- * @h1: Pointer to hal_reo_status_header where info to be stored
+ * hal_reo_status_get_header_kiwi - Process reo desc info
+ * @d - Pointer to reo descriptior
+ * @b - tlv type info
+ * @h1 - Pointer to hal_reo_status_header where info to be stored
  *
- * Return: none.
+ * Return - none.
  *
  */
 static void hal_reo_status_get_header_kiwi(hal_ring_desc_t ring_desc, int b,
@@ -1270,10 +1213,10 @@ void *hal_dst_mpdu_desc_info_kiwi(void *dst_ring_desc)
 	return (void *)HAL_DST_MPDU_DESC_INFO(dst_ring_desc);
 }
 
-/**
- * hal_rx_get_tlv_kiwi() - API to get the tlv
- * @rx_tlv: TLV data extracted from the rx packet
+/*
+ * hal_rx_get_tlv_kiwi(): API to get the tlv
  *
+ * @rx_tlv: TLV data extracted from the rx packet
  * Return: uint8_t
  */
 static uint8_t hal_rx_get_tlv_kiwi(void *rx_tlv)
@@ -1282,22 +1225,10 @@ static uint8_t hal_rx_get_tlv_kiwi(void *rx_tlv)
 }
 
 /**
- * hal_rx_phy_legacy_get_rssi_kiwi() - API to get RSSI from TLV
- *                                     WIFIPHYRX_RSSI_LEGACY_E
- * @buf: pointer to the start of WIFIPHYRX_RSSI_LEGACY_E TLV
- *
- * Return: value of RSSI
- */
-static int8_t hal_rx_phy_legacy_get_rssi_kiwi(uint8_t *buf)
-{
-	return HAL_RX_GET_64(buf, PHYRX_RSSI_LEGACY, RSSI_COMB_PPDU);
-}
-
-/**
  * hal_rx_proc_phyrx_other_receive_info_tlv_kiwi()
  *				    - process other receive info TLV
  * @rx_tlv_hdr: pointer to TLV header
- * @ppdu_info_handle: pointer to ppdu_info
+ * @ppdu_info: pointer to ppdu_info
  *
  * Return: None
  */
@@ -1324,8 +1255,9 @@ void hal_rx_proc_phyrx_other_receive_info_tlv_kiwi(void *rx_tlv_hdr,
 
 	switch (other_tlv_tag) {
 	default:
-		hal_err_rl("unhandled TLV type: %d, TLV len:%d",
-			   other_tlv_tag, other_tlv_len);
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+			  "%s unhandled TLV type: %d, TLV len:%d",
+			  __func__, other_tlv_tag, other_tlv_len);
 		break;
 	}
 }
@@ -1348,9 +1280,9 @@ void hal_reo_config_kiwi(struct hal_soc *soc,
 
 /**
  * hal_rx_msdu_desc_info_get_ptr_kiwi() - Get msdu desc info ptr
- * @msdu_details_ptr: Pointer to msdu_details_ptr
+ * @msdu_details_ptr - Pointer to msdu_details_ptr
  *
- * Return: Pointer to rx_msdu_desc_info structure.
+ * Return - Pointer to rx_msdu_desc_info structure.
  *
  */
 static void *hal_rx_msdu_desc_info_get_ptr_kiwi(void *msdu_details_ptr)
@@ -1359,10 +1291,10 @@ static void *hal_rx_msdu_desc_info_get_ptr_kiwi(void *msdu_details_ptr)
 }
 
 /**
- * hal_rx_link_desc_msdu0_ptr_kiwi() - Get pointer to rx_msdu details
- * @link_desc: Pointer to link desc
+ * hal_rx_link_desc_msdu0_ptr_kiwi - Get pointer to rx_msdu details
+ * @link_desc - Pointer to link desc
  *
- * Return: Pointer to rx_msdu_details structure
+ * Return - Pointer to rx_msdu_details structure
  *
  */
 static void *hal_rx_link_desc_msdu0_ptr_kiwi(void *link_desc)
@@ -1455,9 +1387,9 @@ static uint8_t hal_reo_enable_pn_in_dest_kiwi(void *hal_soc)
 
 /**
  * hal_rx_flow_setup_fse_kiwi() - Setup a flow search entry in HW FST
- * @rx_fst: Pointer to the Rx Flow Search Table
+ * @fst: Pointer to the Rx Flow Search Table
  * @table_offset: offset into the table where the flow is to be setup
- * @rx_flow: Flow Parameters
+ * @flow: Flow Parameters
  *
  * Flow table entry fields are updated in host byte order, little endian order.
  *
@@ -1565,139 +1497,6 @@ hal_rx_flow_setup_fse_kiwi(uint8_t *rx_fst, uint32_t table_offset,
 	HAL_CLR_FLD(fse, RX_FLOW_SEARCH_ENTRY, TIMESTAMP);
 
 	return fse;
-}
-
-/**
- * hal_rx_flow_setup_cmem_fse_kiwi() - Setup a flow search entry in HW CMEM FST
- * @hal_soc: hal_soc reference
- * @cmem_ba: CMEM base address
- * @table_offset: offset into the table where the flow is to be setup
- * @rx_flow: Flow Parameters
- *
- * Return: Success/Failure
- */
-static uint32_t
-hal_rx_flow_setup_cmem_fse_kiwi(struct hal_soc *hal_soc, uint32_t cmem_ba,
-				uint32_t table_offset, uint8_t *rx_flow)
-{
-	struct hal_rx_flow *flow = (struct hal_rx_flow *)rx_flow;
-	uint32_t fse_offset;
-	uint32_t value;
-
-	fse_offset = cmem_ba + (table_offset * HAL_RX_FST_ENTRY_SIZE);
-
-	/* Reset the Valid bit */
-	HAL_CMEM_WRITE(hal_soc, fse_offset + HAL_OFFSET(RX_FLOW_SEARCH_ENTRY,
-							VALID), 0);
-
-	value  = HAL_SET_FLD_SM(RX_FLOW_SEARCH_ENTRY, SRC_IP_127_96,
-				(flow->tuple_info.src_ip_127_96));
-	HAL_CMEM_WRITE(hal_soc, fse_offset + HAL_OFFSET(RX_FLOW_SEARCH_ENTRY,
-							SRC_IP_127_96), value);
-
-	value  = HAL_SET_FLD_SM(RX_FLOW_SEARCH_ENTRY, SRC_IP_95_64,
-				(flow->tuple_info.src_ip_95_64));
-	HAL_CMEM_WRITE(hal_soc, fse_offset + HAL_OFFSET(RX_FLOW_SEARCH_ENTRY,
-							SRC_IP_95_64), value);
-
-	value  = HAL_SET_FLD_SM(RX_FLOW_SEARCH_ENTRY, SRC_IP_63_32,
-				(flow->tuple_info.src_ip_63_32));
-	HAL_CMEM_WRITE(hal_soc, fse_offset + HAL_OFFSET(RX_FLOW_SEARCH_ENTRY,
-							SRC_IP_63_32), value);
-
-	value  = HAL_SET_FLD_SM(RX_FLOW_SEARCH_ENTRY, SRC_IP_31_0,
-				(flow->tuple_info.src_ip_31_0));
-	HAL_CMEM_WRITE(hal_soc, fse_offset + HAL_OFFSET(RX_FLOW_SEARCH_ENTRY,
-							SRC_IP_31_0), value);
-
-	value  = HAL_SET_FLD_SM(RX_FLOW_SEARCH_ENTRY, DEST_IP_127_96,
-				(flow->tuple_info.dest_ip_127_96));
-	HAL_CMEM_WRITE(hal_soc, fse_offset + HAL_OFFSET(RX_FLOW_SEARCH_ENTRY,
-							DEST_IP_127_96), value);
-
-	value  = HAL_SET_FLD_SM(RX_FLOW_SEARCH_ENTRY, DEST_IP_95_64,
-				(flow->tuple_info.dest_ip_95_64));
-	HAL_CMEM_WRITE(hal_soc, fse_offset + HAL_OFFSET(RX_FLOW_SEARCH_ENTRY,
-							DEST_IP_95_64), value);
-
-	value  = HAL_SET_FLD_SM(RX_FLOW_SEARCH_ENTRY, DEST_IP_63_32,
-				(flow->tuple_info.dest_ip_63_32));
-	HAL_CMEM_WRITE(hal_soc, fse_offset + HAL_OFFSET(RX_FLOW_SEARCH_ENTRY,
-							DEST_IP_63_32), value);
-
-	value  = HAL_SET_FLD_SM(RX_FLOW_SEARCH_ENTRY, DEST_IP_31_0,
-				(flow->tuple_info.dest_ip_31_0));
-	HAL_CMEM_WRITE(hal_soc, fse_offset + HAL_OFFSET(RX_FLOW_SEARCH_ENTRY,
-							DEST_IP_31_0), value);
-
-	value = 0 | HAL_SET_FLD_SM(RX_FLOW_SEARCH_ENTRY, DEST_PORT,
-				(flow->tuple_info.dest_port));
-	value |= HAL_SET_FLD_SM(RX_FLOW_SEARCH_ENTRY, SRC_PORT,
-				(flow->tuple_info.src_port));
-	HAL_CMEM_WRITE(hal_soc, fse_offset + HAL_OFFSET(RX_FLOW_SEARCH_ENTRY,
-							SRC_PORT), value);
-
-	value  = HAL_SET_FLD_SM(RX_FLOW_SEARCH_ENTRY, METADATA,
-				(flow->fse_metadata));
-	HAL_CMEM_WRITE(hal_soc, fse_offset + HAL_OFFSET(RX_FLOW_SEARCH_ENTRY,
-							METADATA), value);
-
-	/* Reset all the other fields in FSE */
-	HAL_CMEM_WRITE(hal_soc, fse_offset + HAL_OFFSET(RX_FLOW_SEARCH_ENTRY,
-							MSDU_COUNT), 0);
-	HAL_CMEM_WRITE(hal_soc, fse_offset + HAL_OFFSET(RX_FLOW_SEARCH_ENTRY,
-							MSDU_BYTE_COUNT), 0);
-	HAL_CMEM_WRITE(hal_soc, fse_offset + HAL_OFFSET(RX_FLOW_SEARCH_ENTRY,
-							TIMESTAMP), 0);
-
-	value = 0 | HAL_SET_FLD_SM(RX_FLOW_SEARCH_ENTRY, L4_PROTOCOL,
-				   flow->tuple_info.l4_protocol);
-	value |= HAL_SET_FLD_SM(RX_FLOW_SEARCH_ENTRY, REO_DESTINATION_HANDLER,
-				flow->reo_destination_handler);
-	value |= HAL_SET_FLD_SM(RX_FLOW_SEARCH_ENTRY,
-				REO_DESTINATION_INDICATION,
-				flow->reo_destination_indication);
-	value |= HAL_SET_FLD_SM(RX_FLOW_SEARCH_ENTRY, VALID, 1);
-	HAL_CMEM_WRITE(hal_soc, fse_offset + HAL_OFFSET(RX_FLOW_SEARCH_ENTRY,
-							L4_PROTOCOL), value);
-
-	return fse_offset;
-}
-
-/**
- * hal_rx_flow_get_cmem_fse_ts_kiwi() - Get timestamp field from CMEM FSE
- * @hal_soc: hal_soc reference
- * @fse_offset: CMEM FSE offset
- *
- * Return: Timestamp
- */
-static uint32_t hal_rx_flow_get_cmem_fse_ts_kiwi(struct hal_soc *hal_soc,
-						 uint32_t fse_offset)
-{
-	return HAL_CMEM_READ(hal_soc, fse_offset +
-			     HAL_OFFSET(RX_FLOW_SEARCH_ENTRY, TIMESTAMP));
-}
-
-/**
- * hal_rx_flow_get_cmem_fse_kiwi() - Get FSE from CMEM
- * @hal_soc: hal_soc reference
- * @fse_offset: CMEM FSE offset
- * @fse: reference where FSE will be copied
- * @len: length of FSE
- *
- * Return: If read is successful or not
- */
-static void
-hal_rx_flow_get_cmem_fse_kiwi(struct hal_soc *hal_soc, uint32_t fse_offset,
-			      uint32_t *fse, qdf_size_t len)
-{
-	int i;
-
-	if (len != HAL_RX_FST_ENTRY_SIZE)
-		return;
-
-	for (i = 0; i < NUM_OF_DWORDS_RX_FLOW_SEARCH_ENTRY; i++)
-		fse[i] = HAL_CMEM_READ(hal_soc, fse_offset + i * 4);
 }
 
 static
@@ -1861,256 +1660,14 @@ static uint8_t hal_get_idle_link_bm_id_kiwi(uint8_t chip_id)
  */
 static inline uint8_t hal_get_first_wow_wakeup_packet_kiwi(uint8_t *buf)
 {
-	struct rx_pkt_tlvs *pkt_tlvs = (struct rx_pkt_tlvs *)buf;
-
-	return HAL_RX_TLV_FIRST_WAKEUP_PKT_GET(pkt_tlvs);
+	return 0;
 }
 #endif
-
-static uint16_t hal_get_rx_max_ba_window_kiwi(int tid)
-{
-	return HAL_RX_BA_WINDOW_1024;
-}
-
-/**
- * hal_get_reo_qdesc_size_kiwi()- Get the reo queue descriptor size
- *				  from the give Block-Ack window size
- * @ba_window_size: Block-Ack window size
- * @tid: TID
- *
- * Return: reo queue descriptor size
- */
-static uint32_t hal_get_reo_qdesc_size_kiwi(uint32_t ba_window_size, int tid)
-{
-	/* Hardcode the ba_window_size to HAL_RX_MAX_BA_WINDOW for
-	 * NON_QOS_TID until HW issues are resolved.
-	 */
-	if (tid != HAL_NON_QOS_TID)
-		ba_window_size = hal_get_rx_max_ba_window_kiwi(tid);
-
-	/* Return descriptor size corresponding to window size of 2 since
-	 * we set ba_window_size to 2 while setting up REO descriptors as
-	 * a WAR to get 2k jump exception aggregates are received without
-	 * a BA session.
-	 */
-	if (ba_window_size <= 1) {
-		if (tid != HAL_NON_QOS_TID)
-			return sizeof(struct rx_reo_queue) +
-				sizeof(struct rx_reo_queue_ext);
-		else
-			return sizeof(struct rx_reo_queue);
-	}
-
-	if (ba_window_size <= 105)
-		return sizeof(struct rx_reo_queue) +
-			sizeof(struct rx_reo_queue_ext);
-
-	if (ba_window_size <= 210)
-		return sizeof(struct rx_reo_queue) +
-			(2 * sizeof(struct rx_reo_queue_ext));
-
-	if (ba_window_size <= 256)
-		return sizeof(struct rx_reo_queue) +
-			(3 * sizeof(struct rx_reo_queue_ext));
-
-	return sizeof(struct rx_reo_queue) +
-		(10 * sizeof(struct rx_reo_queue_ext)) +
-		sizeof(struct rx_reo_queue_1k);
-}
-
-#ifdef QCA_GET_TSF_VIA_REG
-static inline uint32_t
-hal_tsf_read_scratch_reg(struct hal_soc *soc,
-			 enum hal_scratch_reg_enum reg_enum)
-{
-	return hal_read32_mb(soc, PMM_REG_BASE + (reg_enum * 4));
-}
-
-static inline
-uint64_t hal_tsf_get_fw_time(struct hal_soc *soc)
-{
-	uint64_t fw_time_low;
-	uint64_t fw_time_high;
-
-	fw_time_low = hal_read32_mb(soc, PCIE_PCIE_MHI_TIME_LOW);
-	fw_time_high = hal_read32_mb(soc, PCIE_PCIE_MHI_TIME_HIGH);
-	return (fw_time_high << 32 | fw_time_low);
-}
-
-static inline
-uint64_t hal_fw_qtime_to_usecs(uint64_t time)
-{
-	/*
-	 * Try to preserve precision by multiplying by 10 first.
-	 * If that would cause a wrap around, divide first instead.
-	 */
-	if (time * 10 < time) {
-		time = qdf_do_div(time, FW_QTIME_CYCLES_PER_10_USEC);
-		return time * 10;
-	}
-
-	time = time * 10;
-	time = qdf_do_div(time, FW_QTIME_CYCLES_PER_10_USEC);
-
-	return time;
-}
-
-/**
- * hal_get_tsf_time_kiwi() - Get tsf time from scratch register
- * @hal_soc_hdl: HAL soc handle
- * @tsf_id: TSF id
- * @mac_id: mac_id
- * @tsf: pointer to update tsf value
- * @tsf_sync_soc_time: pointer to update tsf sync time
- *
- * Return: None.
- */
-static void
-hal_get_tsf_time_kiwi(hal_soc_handle_t hal_soc_hdl, uint32_t tsf_id,
-		      uint32_t mac_id, uint64_t *tsf,
-		      uint64_t *tsf_sync_soc_time)
-{
-	struct hal_soc *soc = (struct hal_soc *)hal_soc_hdl;
-	uint64_t global_time_low_offset, global_time_high_offset;
-	uint64_t tsf_offset_low, tsf_offset_hi;
-	uint64_t fw_time, global_time, sync_time;
-	enum hal_scratch_reg_enum tsf_enum_low = 0, tsf_enum_high = 0;
-
-	if (hif_force_wake_request(soc->hif_handle))
-		return;
-
-	hal_get_tsf_enum(tsf_id, mac_id, &tsf_enum_low, &tsf_enum_high);
-	sync_time = qdf_get_log_timestamp();
-	fw_time = hal_tsf_get_fw_time(soc);
-
-	global_time_low_offset =
-		hal_tsf_read_scratch_reg(soc, PMM_QTIMER_GLOBAL_OFFSET_LO_US);
-	global_time_high_offset =
-		hal_tsf_read_scratch_reg(soc, PMM_QTIMER_GLOBAL_OFFSET_HI_US);
-
-	tsf_offset_low = hal_tsf_read_scratch_reg(soc, tsf_enum_low);
-	tsf_offset_hi = hal_tsf_read_scratch_reg(soc, tsf_enum_high);
-
-	fw_time = hal_fw_qtime_to_usecs(fw_time);
-	global_time = fw_time +
-		      (global_time_low_offset |
-		      (global_time_high_offset << 32));
-
-	*tsf = global_time + (tsf_offset_low | (tsf_offset_hi << 32));
-	*tsf_sync_soc_time = qdf_log_timestamp_to_usecs(sync_time);
-
-	hif_force_wake_release(soc->hif_handle);
-}
-#else
-static inline void
-hal_get_tsf_time_kiwi(hal_soc_handle_t hal_soc_hdl, uint32_t tsf_id,
-		      uint32_t mac_id, uint64_t *tsf,
-		      uint64_t *tsf_sync_soc_time)
-{
-}
-#endif
-
-static QDF_STATUS hal_rx_reo_ent_get_src_link_id_kiwi(hal_rxdma_desc_t rx_desc,
-						      uint8_t *src_link_id)
-{
-	struct reo_entrance_ring *reo_ent_desc =
-					(struct reo_entrance_ring *)rx_desc;
-
-	*src_link_id = reo_ent_desc->src_link_id;
-
-	return QDF_STATUS_SUCCESS;
-}
-
-/**
- * hal_rx_en_mcast_fp_data_filter_kiwi() - Is mcast filter pass enabled
- *
- * Return: false for BE MCC
- */
-static inline
-bool hal_rx_en_mcast_fp_data_filter_kiwi(void)
-{
-	return false;
-}
-
-#ifdef QCA_WIFI_KIWI_V2
-/**
- * hal_srng_dst_hw_init_misc_1_kiwi() - Function to initialize MISC_1 register
- *                                      of destination ring HW
- * @srng: SRNG ring pointer
- *
- * Return: None
- */
-static inline
-void hal_srng_dst_hw_init_misc_1_kiwi(struct hal_srng *srng)
-{
-	uint32_t reg_val = 0;
-
-	/* number threshold for pointer update */
-	if (srng->pointer_num_threshold)
-		reg_val |= SRNG_SM(SRNG_DST_HW_FLD(MISC_1,
-						   NUM_THRESHOLD_TO_UPDATE),
-				   srng->pointer_num_threshold);
-	/* timer threshold for pointer update */
-	if (srng->pointer_timer_threshold)
-		reg_val |= SRNG_SM(SRNG_DST_HW_FLD(MISC_1,
-						   TIME_THRESHOLD_TO_UPDATE),
-				   srng->pointer_timer_threshold);
-
-	if (reg_val)
-		SRNG_DST_REG_WRITE(srng, MISC_1, reg_val);
-}
-
-/**
- * hal_srng_hw_reg_offset_init_misc_1_kiwi() - Initialize the HW srng register
- *                                             offset of MISC_1
- * @hal_soc: HAL Soc handle
- *
- * Return: None
- */
-static inline
-void hal_srng_hw_reg_offset_init_misc_1_kiwi(struct hal_soc *hal_soc)
-{
-	int32_t *hw_reg_offset = hal_soc->hal_hw_reg_offset;
-
-	hw_reg_offset[DST_MISC_1] = REG_OFFSET(DST, MISC_1);
-}
-#else
-static inline
-void hal_srng_dst_hw_init_misc_1_kiwi(struct hal_srng *srng)
-{
-}
-
-static inline
-void hal_srng_hw_reg_offset_init_misc_1_kiwi(struct hal_soc *hal_soc)
-{
-}
-#endif
-
-/**
- * hal_srng_dst_hw_init_kiwi() - Function to initialize SRNG
- *                               destination ring HW
- * @hal_soc: HAL SOC handle
- * @srng: SRNG ring pointer
- * @idle_check: Check if ring is idle
- * @idx: Ring index
- *
- * Return: None
- */
-static inline
-void hal_srng_dst_hw_init_kiwi(struct hal_soc *hal_soc,
-			       struct hal_srng *srng,
-			       bool idle_check,
-			       uint32_t idx)
-{
-	hal_srng_dst_hw_init_misc_1_kiwi(srng);
-
-	hal_srng_dst_hw_init_generic(hal_soc, srng, idle_check, idx);
-}
 
 static void hal_hw_txrx_ops_attach_kiwi(struct hal_soc *hal_soc)
 {
 	/* init and setup */
-	hal_soc->ops->hal_srng_dst_hw_init = hal_srng_dst_hw_init_kiwi;
+	hal_soc->ops->hal_srng_dst_hw_init = hal_srng_dst_hw_init_generic;
 	hal_soc->ops->hal_srng_src_hw_init = hal_srng_src_hw_init_generic;
 	hal_soc->ops->hal_get_hw_hptp = hal_get_hw_hptp_generic;
 	hal_soc->ops->hal_get_window_address = hal_get_window_address_kiwi;
@@ -2118,9 +1675,6 @@ static void hal_hw_txrx_ops_attach_kiwi(struct hal_soc *hal_soc)
 						hal_reo_set_err_dst_remap_kiwi;
 	hal_soc->ops->hal_reo_enable_pn_in_dest =
 						hal_reo_enable_pn_in_dest_kiwi;
-	/* Overwrite the default BE ops */
-	hal_soc->ops->hal_get_rx_max_ba_window = hal_get_rx_max_ba_window_kiwi;
-	hal_soc->ops->hal_get_reo_qdesc_size = hal_get_reo_qdesc_size_kiwi;
 
 	/* tx */
 	hal_soc->ops->hal_tx_set_dscp_tid_map = hal_tx_set_dscp_tid_map_kiwi;
@@ -2129,8 +1683,6 @@ static void hal_hw_txrx_ops_attach_kiwi(struct hal_soc *hal_soc)
 					hal_tx_comp_get_status_generic_be;
 	hal_soc->ops->hal_tx_init_cmd_credit_ring =
 					hal_tx_init_cmd_credit_ring_kiwi;
-	hal_soc->ops->hal_tx_config_rbm_mapping_be =
-				hal_tx_config_rbm_mapping_be_kiwi;
 
 	/* rx */
 	hal_soc->ops->hal_rx_msdu_start_nss_get = hal_rx_tlv_nss_get_be;
@@ -2145,7 +1697,6 @@ static void hal_hw_txrx_ops_attach_kiwi(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_rx_dump_mpdu_start_tlv =
 					hal_rx_dump_mpdu_start_tlv_kiwi;
 	hal_soc->ops->hal_rx_dump_pkt_tlvs = hal_rx_dump_pkt_tlvs_kiwi;
-	hal_soc->ops->hal_rx_desc_get_80211_hdr = hal_rx_desc_get_80211_hdr_be;
 
 	hal_soc->ops->hal_get_link_desc_size = hal_get_link_desc_size_kiwi;
 	hal_soc->ops->hal_rx_mpdu_start_tid_get = hal_rx_tlv_tid_get_be;
@@ -2198,7 +1749,7 @@ static void hal_hw_txrx_ops_attach_kiwi(struct hal_soc *hal_soc)
 					hal_rx_get_mpdu_mac_ad4_valid_be;
 	hal_soc->ops->hal_rx_mpdu_start_sw_peer_id_get =
 		hal_rx_mpdu_start_sw_peer_id_get_be;
-	hal_soc->ops->hal_rx_tlv_peer_meta_data_get =
+	hal_soc->ops->hal_rx_mpdu_peer_meta_data_get =
 		hal_rx_mpdu_peer_meta_data_get_be;
 	hal_soc->ops->hal_rx_mpdu_get_to_ds = hal_rx_mpdu_get_to_ds_be;
 	hal_soc->ops->hal_rx_mpdu_get_fr_ds = hal_rx_mpdu_get_fr_ds_be;
@@ -2220,8 +1771,6 @@ static void hal_hw_txrx_ops_attach_kiwi(struct hal_soc *hal_soc)
 					hal_rx_msdu_desc_info_ptr_get_kiwi;
 	hal_soc->ops->hal_ent_mpdu_desc_info = hal_ent_mpdu_desc_info_kiwi;
 	hal_soc->ops->hal_dst_mpdu_desc_info = hal_dst_mpdu_desc_info_kiwi;
-	hal_soc->ops->hal_rx_phy_legacy_get_rssi =
-					hal_rx_phy_legacy_get_rssi_kiwi;
 	hal_soc->ops->hal_rx_get_fc_valid = hal_rx_get_fc_valid_be;
 	hal_soc->ops->hal_rx_get_to_ds_flag = hal_rx_get_to_ds_flag_be;
 	hal_soc->ops->hal_rx_get_mac_addr2_valid =
@@ -2278,18 +1827,11 @@ static void hal_hw_txrx_ops_attach_kiwi(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_rx_mpdu_start_offset_get =
 					hal_rx_mpdu_start_offset_get_generic;
 	hal_soc->ops->hal_rx_flow_setup_fse = hal_rx_flow_setup_fse_kiwi;
-	hal_soc->ops->hal_rx_flow_get_tuple_info =
-					hal_rx_flow_get_tuple_info_be;
-	hal_soc->ops->hal_rx_flow_delete_entry =
-					hal_rx_flow_delete_entry_be;
-	hal_soc->ops->hal_rx_fst_get_fse_size = hal_rx_fst_get_fse_size_be;
 	hal_soc->ops->hal_compute_reo_remap_ix2_ix3 =
 					hal_compute_reo_remap_ix2_ix3_kiwi;
-	hal_soc->ops->hal_rx_flow_setup_cmem_fse =
-						hal_rx_flow_setup_cmem_fse_kiwi;
-	hal_soc->ops->hal_rx_flow_get_cmem_fse_ts =
-					hal_rx_flow_get_cmem_fse_ts_kiwi;
-	hal_soc->ops->hal_rx_flow_get_cmem_fse = hal_rx_flow_get_cmem_fse_kiwi;
+	hal_soc->ops->hal_rx_flow_setup_cmem_fse = NULL;
+	hal_soc->ops->hal_rx_flow_get_cmem_fse_ts = NULL;
+	hal_soc->ops->hal_rx_flow_get_cmem_fse = NULL;
 	hal_soc->ops->hal_cmem_write = hal_cmem_write_kiwi;
 	hal_soc->ops->hal_rx_msdu_get_reo_destination_indication =
 		hal_rx_msdu_get_reo_destination_indication_be;
@@ -2335,48 +1877,20 @@ static void hal_hw_txrx_ops_attach_kiwi(struct hal_soc *hal_soc)
 					hal_rx_msdu_start_msdu_len_set_be;
 	hal_soc->ops->hal_rx_tlv_populate_mpdu_desc_info =
 				hal_rx_tlv_populate_mpdu_desc_info_kiwi;
+	hal_soc->ops->hal_rx_tlv_get_pn_num =
+				hal_rx_tlv_get_pn_num_be;
+	hal_soc->ops->hal_get_reo_ent_desc_qdesc_addr =
+				hal_get_reo_ent_desc_qdesc_addr_be;
+	hal_soc->ops->hal_rx_get_qdesc_addr =
+				hal_rx_get_qdesc_addr_be;
+	hal_soc->ops->hal_set_reo_ent_desc_reo_dest_ind =
+				hal_set_reo_ent_desc_reo_dest_ind_be;
 	hal_soc->ops->hal_get_idle_link_bm_id = hal_get_idle_link_bm_id_kiwi;
+	hal_soc->ops->hal_compute_reo_remap_ix0 = NULL;
 #ifdef WLAN_FEATURE_MARK_FIRST_WAKEUP_PACKET
 	hal_soc->ops->hal_get_first_wow_wakeup_packet =
 		hal_get_first_wow_wakeup_packet_kiwi;
 #endif
-	hal_soc->ops->hal_compute_reo_remap_ix0 = NULL;
-
-	hal_soc->ops->hal_rx_tlv_l3_type_get = hal_rx_tlv_l3_type_get_be;
-	hal_soc->ops->hal_tx_vdev_mismatch_routing_set =
-		hal_tx_vdev_mismatch_routing_set_generic_be;
-	hal_soc->ops->hal_tx_mcast_mlo_reinject_routing_set =
-		hal_tx_mcast_mlo_reinject_routing_set_generic_be;
-	hal_soc->ops->hal_get_ba_aging_timeout =
-		hal_get_ba_aging_timeout_be_generic;
-	hal_soc->ops->hal_setup_link_idle_list =
-		hal_setup_link_idle_list_generic_be;
-	hal_soc->ops->hal_cookie_conversion_reg_cfg_be =
-		hal_cookie_conversion_reg_cfg_generic_be;
-	hal_soc->ops->hal_set_ba_aging_timeout =
-		hal_set_ba_aging_timeout_be_generic;
-	hal_soc->ops->hal_tx_populate_bank_register =
-		hal_tx_populate_bank_register_be;
-	hal_soc->ops->hal_tx_vdev_mcast_ctrl_set =
-		hal_tx_vdev_mcast_ctrl_set_be;
-	hal_soc->ops->hal_get_tsf_time = hal_get_tsf_time_kiwi;
-	hal_soc->ops->hal_rx_reo_ent_get_src_link_id =
-					hal_rx_reo_ent_get_src_link_id_kiwi;
-#ifdef FEATURE_DIRECT_LINK
-	hal_soc->ops->hal_srng_set_msi_config = hal_srng_set_msi_config;
-#endif
-	hal_soc->ops->hal_rx_en_mcast_fp_data_filter =
-					hal_rx_en_mcast_fp_data_filter_kiwi;
-#ifdef WLAN_PKT_CAPTURE_TX_2_0
-	hal_soc->ops->hal_txmon_is_mon_buf_addr_tlv =
-				hal_txmon_is_mon_buf_addr_tlv_generic_be;
-	hal_soc->ops->hal_txmon_populate_packet_info =
-				hal_txmon_populate_packet_info_generic_be;
-	hal_soc->ops->hal_txmon_status_parse_tlv =
-				hal_txmon_status_parse_tlv_generic_be;
-	hal_soc->ops->hal_txmon_status_get_num_users =
-				hal_txmon_status_get_num_users_generic_be;
-#endif /* WLAN_PKT_CAPTURE_TX_2_0 */
 };
 
 struct hal_hw_srng_config hw_srng_table_kiwi[] = {
@@ -2680,9 +2194,7 @@ struct hal_hw_srng_config hw_srng_table_kiwi[] = {
 	},
 	{ /* RXDMA_BUF */
 		.start_ring_id = HAL_SRNG_WMAC1_SW2RXDMA0_BUF0,
-#if defined(IPA_OFFLOAD) && defined(FEATURE_DIRECT_LINK)
-		.max_rings = 4,
-#elif defined(IPA_OFFLOAD) || defined(FEATURE_DIRECT_LINK)
+#ifdef IPA_OFFLOAD
 		.max_rings = 3,
 #else
 		.max_rings = 2,
@@ -2797,39 +2309,9 @@ struct hal_hw_srng_config hw_srng_table_kiwi[] = {
 	{ /* REO2PPE */ 0},
 	{ /* PPE2TCL */ 0},
 	{ /* PPE_RELEASE */ 0},
-#ifdef WLAN_PKT_CAPTURE_TX_2_0
-	{ /* TX_MONITOR_BUF */
-		.start_ring_id = HAL_SRNG_SW2TXMON_BUF0,
-		.max_rings = 1,
-		.entry_size = sizeof(struct mon_ingress_ring) >> 2,
-		.lmac_ring = TRUE,
-		.ring_dir = HAL_SRNG_SRC_RING,
-		/* reg_start is not set because LMAC rings are not accessed
-		 * from host
-		 */
-		.reg_start = {},
-		.reg_size = {},
-		.max_size = HAL_RXDMA_MAX_RING_SIZE_BE,
-	},
-	{ /* TX_MONITOR_DST */
-		.start_ring_id = HAL_SRNG_WMAC1_TXMON2SW0,
-		.max_rings = 2,
-		.entry_size = sizeof(struct mon_destination_ring) >> 2,
-		.lmac_ring = TRUE,
-		.ring_dir = HAL_SRNG_DST_RING,
-		/* reg_start is not set because LMAC rings are not accessed
-		 * from host
-		 */
-		.reg_start = {},
-		.reg_size = {},
-		.max_size = HAL_RXDMA_MAX_RING_SIZE_BE,
-	},
-#else
-	{0},
-	{0},
-#endif
+	{ /* TX_MONITOR_BUF */ 0},
+	{ /* TX_MONITOR_DST */ 0},
 	{ /* SW2RXDMA_NEW */ 0},
-	{ /* SW2RXDMA_LINK_RELEASE */ 0},
 };
 
 /**
@@ -2848,9 +2330,12 @@ static inline void hal_srng_hw_reg_offset_init_kiwi(struct hal_soc *hal_soc)
 	hw_reg_offset[DST_MSI2_DATA] = REG_OFFSET(DST, MSI2_DATA),
 	hw_reg_offset[DST_PRODUCER_INT2_SETUP] =
 					REG_OFFSET(DST, PRODUCER_INT2_SETUP);
-	hal_srng_hw_reg_offset_init_misc_1_kiwi(hal_soc);
 }
 
+/**
+ * hal_kiwi_attach() - Attach kiwi target specific hal_soc ops,
+ *			  offset and srng table
+ */
 void hal_kiwi_attach(struct hal_soc *hal_soc)
 {
 	hal_soc->hw_srng_table = hw_srng_table_kiwi;

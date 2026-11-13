@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -321,49 +320,6 @@ target_if_fwol_is_thermal_stats_enable(struct wlan_fwol_psoc_obj *fwol_obj)
 #endif
 
 #if defined FW_THERMAL_THROTTLE_SUPPORT || defined THERMAL_STATS_SUPPORT
-QDF_STATUS
-target_if_fwol_notify_thermal_throttle(struct wlan_objmgr_psoc *psoc,
-				       struct thermal_throttle_info *info)
-{
-	struct wlan_fwol_psoc_obj *fwol_obj;
-	struct wlan_fwol_rx_ops *rx_ops;
-	QDF_STATUS status;
-
-	fwol_obj = fwol_get_psoc_obj(psoc);
-	if (!fwol_obj) {
-		target_if_err("Failed to get FWOL Obj");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	rx_ops = &fwol_obj->rx_ops;
-	if (!rx_ops) {
-		target_if_err("rx_ops Null");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	if (!info) {
-		target_if_err("info Null");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	if (rx_ops->notify_thermal_throttle_handler) {
-		if (info->level == THERMAL_UNKNOWN) {
-			target_if_debug("Invalid thermal target lvl");
-			return QDF_STATUS_E_INVAL;
-		}
-		status = rx_ops->notify_thermal_throttle_handler(psoc, info);
-		if (QDF_IS_STATUS_ERROR(status)) {
-			target_if_debug("notify thermal_throttle failed.");
-			return QDF_STATUS_E_INVAL;
-		}
-	} else {
-		target_if_debug("No notify thermal_throttle callback");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	return status;
-}
-
 /**
  * target_if_fwol_thermal_throttle_event_handler() - handler for thermal
  *  throttle event
@@ -481,7 +437,7 @@ target_if_fwol_register_thermal_throttle_handler(struct wlan_objmgr_psoc *psoc)
 }
 
 /**
- * target_if_fwol_unregister_thermal_throttle_handler() - Unregister handler for
+ * target_if_fwol_unregister_thermal_stats_handler() - Register handler for
  * thermal throttle stats firmware event
  * @psoc: psoc object
  *
@@ -499,6 +455,7 @@ target_if_fwol_unregister_thermal_throttle_handler(
 	if (QDF_IS_STATUS_ERROR(status))
 		target_if_debug("Failed to unregister thermal stats event cb");
 }
+
 #else
 static void
 target_if_fwol_register_thermal_throttle_handler(struct wlan_objmgr_psoc *psoc)
@@ -516,7 +473,7 @@ target_if_fwol_unregister_thermal_throttle_handler(
 /**
  * target_if_fwol_set_mdns_config() - Set mdns Config to FW
  * @psoc: pointer to PSOC object
- * @mdns_info: pointer to mdns config info
+ * @offload_info: pointer to mdns config info
  *
  * Return: QDF_STATUS_SUCCESS on success
  */

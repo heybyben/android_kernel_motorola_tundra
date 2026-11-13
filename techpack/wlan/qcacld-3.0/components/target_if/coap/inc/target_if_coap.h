@@ -33,7 +33,7 @@ target_if_coap_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops);
 
 /**
  * target_if_coap_get_tx_ops() - get tx ops
- * @psoc: pointer to psoc object
+ * @tx_ops: pointer to target_if tx ops
  *
  * API to retrieve the CoAP tx ops from the psoc context
  *

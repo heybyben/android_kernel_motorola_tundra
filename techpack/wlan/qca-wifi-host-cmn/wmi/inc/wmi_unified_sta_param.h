@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -43,13 +43,13 @@ struct sta_keep_alive_params {
 };
 
 /**
- * struct wmi_gtx_config - GTX config
+ * struct gtx_config_t - GTX config
  * @gtx_rt_mask: for HT and VHT rate masks
  * @gtx_usrcfg: host request for GTX mask
  * @gtx_threshold: PER Threshold (default: 10%)
  * @gtx_margin: PER margin (default: 2%)
- * @gtx_tpcstep: TPC step (default: 1)
- * @gtx_tpcmin: TPC min (default: 5)
+ * @gtx_tcpstep: TCP step (default: 1)
+ * @gtx_tpcMin: TCP min (default: 5)
  * @gtx_bwmask: BW mask (20/40/80/160 Mhz)
  */
 struct wmi_gtx_config {
@@ -91,7 +91,7 @@ struct wmi_gtx_config {
  *  bit 8-9: Reserve for roaming
  *  bit 10: Disable css power collapse if setting
  *  bit 11: Disable sys sleep if setting
- *  bit 12-31: Reserve for future usage
+ *  bit 12-31: Reserve for future useage
  * @vdev_id: vdev id
  * @force_reset: bit 0 used as force reset to override the latency level as
  * default for all the wlm clients
@@ -111,12 +111,10 @@ struct wlm_latency_level_param {
 
 /**
  * struct vdev_ie_info_param - IE info
- * @vdev_id: vdev for which the IE is being sent
- * @ie_id: ID of the IE
- * @length: length of the IE data
- * @ie_source:
- * @band:
- * @data: IE data
+ * @vdev_id - vdev for which the IE is being sent
+ * @ie_id - ID of the IE
+ * @length - length of the IE data
+ * @data - IE data
  *
  * This structure is used to store the IE information.
  */
@@ -237,7 +235,7 @@ struct wmi_unified_pmk_cache {
  * struct aggr_add_ts_param - ADDTS parameters
  * @tspecIdx: TSPEC handler uniquely identifying a TSPEC for a STA in a BSS
  * @tspec: tspec value
- * @status: QDF status
+ * @status: CDF status
  * @sessionId: session id
  * @vdev_id: vdev id
  */
@@ -268,7 +266,7 @@ struct periodic_tx_pattern {
 
 /**
  * struct flashing_req_params - led flashing parameter
- * @req_id: request id
+ * @reqId: request id
  * @pattern_id: pattern identifier. 0: disconnected 1: connected
  * @led_x0: led flashing parameter0
  * @led_x1: led flashing parameter1

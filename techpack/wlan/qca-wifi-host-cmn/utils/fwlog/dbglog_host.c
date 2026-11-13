@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -33,9 +32,9 @@
 #include <linux/netlink.h>
 #include <linux/vmalloc.h>
 
-#ifdef WLAN_DBGLOG_DEBUGFS
+#ifdef WLAN_OPEN_SOURCE
 #include <linux/debugfs.h>
-#endif /* WLAN_DBGLOG_DEBUGFS */
+#endif /* WLAN_OPEN_SOURCE */
 #include "wmi_unified_priv.h"
 
 #ifdef CNSS_GENL
@@ -1560,7 +1559,7 @@ skip_args_processing:
 
 }
 
-#ifdef WLAN_DBGLOG_DEBUGFS
+#ifdef WLAN_OPEN_SOURCE
 static int
 dbglog_debugfs_raw_data(wmi_unified_t wmi_handle, const uint8_t *buf,
 			uint32_t length, uint32_t dropped)
@@ -1598,15 +1597,14 @@ dbglog_debugfs_raw_data(wmi_unified_t wmi_handle, const uint8_t *buf,
 	/* drop oldest entries */
 	while (skb_queue_len(&fwlog->fwlog_queue) > ATH6KL_FWLOG_MAX_ENTRIES) {
 		skb = __skb_dequeue(&fwlog->fwlog_queue);
-		if (skb)
-			kfree_skb(skb);
+		kfree_skb(skb);
 	}
 
 	spin_unlock(&fwlog->fwlog_queue.lock);
 
 	return true;
 }
-#endif /* WLAN_DBGLOG_DEBUGFS */
+#endif /* WLAN_OPEN_SOURCE */
 
 /**
  * nl_srv_bcast_fw_logs() - Wrapper func to send bcast msgs to FW logs mcast grp
@@ -1627,10 +1625,10 @@ static int nl_srv_bcast_fw_logs(struct sk_buff *skb)
 }
 
 /**
- * send_fw_diag_nl_data() - pack the data from fw diag event handler
+ * send_fw_diag_nl_data - pack the data from fw diag event handler
  * @buffer:	buffer of diag event
  * @len:	length of the diag event
- * @event_type:	the event type
+ * @event:	the even type
  *
  * return: 0 if sent successfully, otherwise error code
  */
@@ -1881,7 +1879,7 @@ static int diag_fw_handler(ol_scn_t scn, uint8_t *data, uint32_t datalen)
 		AR_DEBUG_PRINTF(ATH_DEBUG_ERR, ("NULL Pointer assigned\n"));
 		return A_ERROR;
 	}
-	/* when fw assert occurs,host can't use TLV format. */
+	/* when fw asser occurs,host can't use TLV format. */
 	if (wma->is_fw_assert) {
 		datap = data;
 		len = datalen;
@@ -1938,7 +1936,7 @@ static int diag_fw_handler(ol_scn_t scn, uint8_t *data, uint32_t datalen)
 		return send_diag_netlink_data((uint8_t *) datap,
 					      len, DIAG_TYPE_FW_MSG);
 	}
-#ifdef WLAN_DBGLOG_DEBUGFS
+#ifdef WLAN_OPEN_SOURCE
 	if (dbglog_process_type == DBGLOG_PROCESS_POOL_RAW) {
 		if (!gprint_limiter) {
 			AR_DEBUG_PRINTF(ATH_DEBUG_ERR,
@@ -1947,7 +1945,7 @@ static int diag_fw_handler(ol_scn_t scn, uint8_t *data, uint32_t datalen)
 		}
 		return 0;
 	}
-#endif /* WLAN_DBGLOG_DEBUGFS */
+#endif /* WLAN_OPEN_SOURCE */
 	if (!gprint_limiter) {
 		AR_DEBUG_PRINTF(ATH_DEBUG_ERR,
 				("NOT Supported only supports net link socket\n"));
@@ -2003,7 +2001,7 @@ int dbglog_parse_debug_logs(ol_scn_t scn, uint8_t *data, uint32_t datalen)
 		AR_DEBUG_PRINTF(ATH_DEBUG_ERR, ("NULL Pointer assigned\n"));
 		return A_ERROR;
 	}
-	/*when fw assert occurs,host can't use TLV format. */
+	/*when fw asser occurs,host can't use TLV format. */
 	if (wma->is_fw_assert) {
 		datap = data;
 		len = datalen;
@@ -2046,13 +2044,13 @@ int dbglog_parse_debug_logs(ol_scn_t scn, uint8_t *data, uint32_t datalen)
 						   (uint8_t *) buffer,
 						   len, dropped);
 	}
-#ifdef WLAN_DBGLOG_DEBUGFS
+#ifdef WLAN_OPEN_SOURCE
 	if (dbglog_process_type == DBGLOG_PROCESS_POOL_RAW) {
 		return dbglog_debugfs_raw_data((wmi_unified_t) wma->wmi_handle,
 					       (uint8_t *) buffer, len,
 					       dropped);
 	}
-#endif /* WLAN_DBGLOG_DEBUGFS */
+#endif /* WLAN_OPEN_SOURCE */
 
 	while ((count + 2) < length) {
 		timestamp = DBGLOG_GET_TIME_STAMP(buffer[count]);
@@ -4041,7 +4039,7 @@ dbglog_pcielp_print_handler(uint32_t mod_id,
 	return true;
 }
 
-#ifdef WLAN_DBGLOG_DEBUGFS
+#ifdef WLAN_OPEN_SOURCE
 static int dbglog_block_open(struct inode *inode, struct file *file)
 {
 	struct fwdebug *fwlog = inode->i_private;
@@ -4137,12 +4135,10 @@ static const struct file_operations fops_dbglog_block = {
 	.llseek = default_llseek,
 };
 
+#ifdef WLAN_DEBUGFS
+
 static void dbglog_debugfs_init(wmi_unified_t wmi_handle)
 {
-
-	/* Initialize the fw debug log queue */
-	skb_queue_head_init(&wmi_handle->dbglog.fwlog_queue);
-	init_completion(&wmi_handle->dbglog.fwlog_completion);
 
 	wmi_handle->debugfs_phy = qdf_debugfs_create_dir(CLD_DEBUGFS_DIR, NULL);
 	if (!wmi_handle->debugfs_phy) {
@@ -4159,10 +4155,6 @@ static void dbglog_debugfs_init(wmi_unified_t wmi_handle)
 
 static void dbglog_debugfs_remove(wmi_unified_t wmi_handle)
 {
-	/* DeInitialize the fw debug log queue */
-	skb_queue_purge(&wmi_handle->dbglog.fwlog_queue);
-	complete(&wmi_handle->dbglog.fwlog_completion);
-
 	qdf_debugfs_remove_dir_recursive(wmi_handle->debugfs_phy);
 }
 
@@ -4176,7 +4168,9 @@ static void dbglog_debugfs_remove(wmi_unified_t wmi_handle)
 {
 }
 
-#endif /* WLAN_DBGLOG_DEBUGFS */
+#endif /* End of WLAN_DEBUGFS */
+
+#endif /* WLAN_OPEN_SOURCE */
 
 /**
  * cnss_diag_handle_crash_inject() - API to handle crash inject command
@@ -4286,13 +4280,15 @@ int cnss_diag_deactivate_service(void)
 #else
 
 /**
- *  cnss_diag_msg_callback() - Call back invoked by netlink service
- *  @skb: skb with netlink message
+ *  brief cnss_diag_msg_callback() - Call back invoked by netlink service
  *
- *  This function gets invoked by netlink service when a message is received
+ *  This function gets invoked by netlink service when a message is recevied
  *  from the cnss-diag application in user-space.
  *
- *  Return: 0 for success, non zero for failure
+ *  param -
+ *     - skb - skb with netlink message
+ *
+ *  return - 0 for success, non zero for failure
  */
 static int cnss_diag_msg_callback(struct sk_buff *skb)
 {
@@ -4536,8 +4532,14 @@ int dbglog_init(wmi_unified_t wmi_handle)
 	if (QDF_IS_STATUS_ERROR(res))
 		return A_ERROR;
 
+#ifdef WLAN_OPEN_SOURCE
+	/* Initialize the fw debug log queue */
+	skb_queue_head_init(&wmi_handle->dbglog.fwlog_queue);
+	init_completion(&wmi_handle->dbglog.fwlog_completion);
+
 	/* Initialize debugfs */
 	dbglog_debugfs_init(wmi_handle);
+#endif /* WLAN_OPEN_SOURCE */
 
 	return A_OK;
 }
@@ -4546,9 +4548,14 @@ int dbglog_deinit(wmi_unified_t wmi_handle)
 {
 	QDF_STATUS res;
 
+#ifdef WLAN_OPEN_SOURCE
+	/* DeInitialize the fw debug log queue */
+	skb_queue_purge(&wmi_handle->dbglog.fwlog_queue);
+	complete(&wmi_handle->dbglog.fwlog_completion);
+
 	/* Deinitialize the debugfs */
 	dbglog_debugfs_remove(wmi_handle);
-
+#endif /* WLAN_OPEN_SOURCE */
 	tgt_assert_enable = 0;
 	res =
 		wmi_unified_unregister_event_handler(wmi_handle,

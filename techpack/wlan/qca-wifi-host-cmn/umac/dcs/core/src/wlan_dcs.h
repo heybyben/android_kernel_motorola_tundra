@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -59,7 +58,7 @@ enum wlan_dcs_debug_level {
  * @dcs_ch_util_im_stats: chan utilization statistics
  * @im_intfr_cnt: number of times the interference is
  *                detected within detection window
- * @im_samp_cnt: sample counter
+ * @im_sample_cnt: sample counter
  */
 struct pdev_dcs_im_stats {
 	struct wlan_host_dcs_im_tgt_stats prev_dcs_im_stats;
@@ -135,58 +134,12 @@ struct pdev_dcs_timer_args {
 };
 
 /**
- * struct psoc_dcs_cbk - define dcs callback in psoc object
+ * struct psoc_dcs_cbk - define dcs callback in psoc oject
  * @cbk: callback
  * @arg: arguments
  */
 struct psoc_dcs_cbk {
 	dcs_callback cbk;
-	void *arg;
-};
-
-#define WLAN_DCS_MAX_STA_NUM  1
-#define WLAN_DCS_MAX_SAP_NUM  2
-#define WLAN_DCS_AFC_PREFER_BW  CH_WIDTH_80MHZ
-
-/**
- * struct connection_chan_info - define connection channel information
- * @freq: channel frequency
- * @bw: channel bandwidth
- * @vdev_id: connection vdev id
- */
-struct connection_chan_info {
-	qdf_freq_t freq;
-	enum phy_ch_width bw;
-	uint8_t vdev_id;
-};
-
-/**
- * struct wlan_dcs_conn_info - define arguments list for DCS when AFC updated
- * @sta_cnt: station count
- * @sap_5ghz_cnt: 5 GHz sap count
- * @sap_6ghz_cnt: 6 GHz sap count
- * @sta: connection info of station
- * @sap_5ghz: connection info of 5 GHz sap
- * @sap_6ghz: connection info of 6 GHz sap
- * @exit_condition: flag to exit iteration immediately
- */
-struct wlan_dcs_conn_info {
-	uint8_t sta_cnt;
-	uint8_t sap_5ghz_cnt;
-	uint8_t sap_6ghz_cnt;
-	struct connection_chan_info sta[WLAN_DCS_MAX_STA_NUM];
-	struct connection_chan_info sap_5ghz[WLAN_DCS_MAX_SAP_NUM];
-	struct connection_chan_info sap_6ghz[WLAN_DCS_MAX_SAP_NUM];
-	bool exit_condition;
-};
-
-/**
- * struct dcs_afc_select_chan_cbk - define sap afc select channel callback
- * @cbk: callback
- * @arg: argument supply by register
- */
-struct dcs_afc_select_chan_cbk {
-	dcs_afc_select_chan_cb cbk;
 	void *arg;
 };
 
@@ -215,7 +168,7 @@ struct dcs_pdev_priv_obj {
 };
 
 /**
- * enum wlan_dcs_chan_seg - Different segments in the channel band.
+ * wlan_dcs_chan_seg - Different segments in the channel band.
  * @WLAN_DCS_SEG_INVALID: invalid segment
  * @WLAN_DCS_SEG_PRI20: primary 20MHz
  * @WLAN_DCS_SEG_SEC20: secondary 20MHz
@@ -264,13 +217,11 @@ enum wlan_dcs_chan_seg {
  * @dcs_pdev_priv: dcs pdev priv
  * @dcs_cbk: dcs callback
  * @switch_chan_cb: callback for switching channel
- * @afc_sel_chan_cbk: callback for afc channel selection
  */
 struct dcs_psoc_priv_obj {
 	struct dcs_pdev_priv_obj dcs_pdev_priv[WLAN_DCS_MAX_PDEVS];
 	struct psoc_dcs_cbk dcs_cbk;
 	dcs_switch_chan_cb switch_chan_cb;
-	struct dcs_afc_select_chan_cbk afc_sel_chan_cbk;
 };
 
 /**
@@ -370,7 +321,7 @@ void wlan_dcs_set_algorithm_process(struct wlan_objmgr_psoc *psoc,
 				    uint32_t pdev_id,
 				    bool dcs_algorithm_process);
 
-/**
+/*
  * wlan_dcs_pdev_obj_lock() - private API to acquire spinlock at pdev
  * @dcs_pdev: pointer to dcs pdev object
  *
@@ -391,16 +342,4 @@ static inline void wlan_dcs_pdev_obj_unlock(struct dcs_pdev_priv_obj *dcs_pdev)
 {
 	qdf_spin_unlock_bh(&dcs_pdev->lock);
 }
-
-/**
- * wlan_dcs_switch_chan() - switch channel for vdev
- * @vdev: vdev ptr
- * @tgt_freq: target frequency
- * @tgt_width: target channel width
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS
-wlan_dcs_switch_chan(struct wlan_objmgr_vdev *vdev, qdf_freq_t tgt_freq,
-		     enum phy_ch_width tgt_width);
 #endif  /* _WLAN_DCS_H_ */

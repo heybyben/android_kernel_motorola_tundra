@@ -43,7 +43,8 @@
 static void lim_fils_data_dump(char *type, uint8_t *data, uint32_t len)
 {
 
-	pe_debug("%s : length %d", type, len);
+	QDF_TRACE(QDF_MODULE_ID_PE, QDF_TRACE_LEVEL_DEBUG,
+		 ("%s : length %d"), type, len);
 	qdf_trace_hex_dump(QDF_MODULE_ID_PE, QDF_TRACE_LEVEL_DEBUG, data, len);
 }
 #else
@@ -282,7 +283,7 @@ static QDF_STATUS lim_get_key_from_prf(uint8_t *type, uint8_t *secret,
 	uint16_t key_bit_length = keylen * 8;
 	uint8_t key_length[2];
 	uint32_t i = 0, remain_len;
-	uint16_t iteration;
+	uint16_t interation;
 	uint8_t crypto_digest_len = lim_get_crypto_digest_len(type);
 	uint8_t tmp_hash[SHA384_DIGEST_SIZE] = {0};
 
@@ -304,9 +305,9 @@ static QDF_STATUS lim_get_key_from_prf(uint8_t *type, uint8_t *secret,
 	addr[3] = key_length;
 	len[3] = sizeof(key_length);
 
-	for (iteration = 1; i < keylen; iteration++) {
+	for (interation = 1; i < keylen; interation++) {
 		remain_len = keylen - i;
-		qdf_mem_copy(count, &iteration, sizeof(iteration));
+		qdf_mem_copy(count, &interation, sizeof(interation));
 
 		if (remain_len >= crypto_digest_len)
 			remain_len = crypto_digest_len;
@@ -658,8 +659,8 @@ static void lim_generate_pmkid(struct pe_session *pe_session)
  */
 static void lim_generate_pmk(struct pe_session *pe_session)
 {
-	uint8_t nonce[2 * SIR_FILS_NONCE_LENGTH] = {0};
-	uint8_t nonce_len = 2 * SIR_FILS_NONCE_LENGTH;
+	uint8_t nounce[2 * SIR_FILS_NONCE_LENGTH] = {0};
+	uint8_t nounce_len = 2 * SIR_FILS_NONCE_LENGTH;
 	uint8_t *addr[1];
 	uint32_t len[1];
 	struct pe_fils_session *fils_info = pe_session->fils_info;
@@ -667,11 +668,11 @@ static void lim_generate_pmk(struct pe_session *pe_session)
 	if (!fils_info)
 		return;
 
-	/* Snonce */
-	qdf_mem_copy(nonce, pe_session->fils_info->fils_nonce,
+	/* Snounce */
+	qdf_mem_copy(nounce, pe_session->fils_info->fils_nonce,
 			SIR_FILS_NONCE_LENGTH);
-	/* anonce */
-	qdf_mem_copy(nonce + SIR_FILS_NONCE_LENGTH,
+	/* anounce */
+	qdf_mem_copy(nounce + SIR_FILS_NONCE_LENGTH,
 			pe_session->fils_info->auth_info.fils_nonce,
 			SIR_FILS_NONCE_LENGTH);
 	fils_info->fils_pmk_len = lim_get_pmk_length(fils_info->akm);
@@ -685,9 +686,9 @@ static void lim_generate_pmk(struct pe_session *pe_session)
 
 	addr[0] = fils_info->fils_rmsk;
 	len[0] = fils_info->fils_rmsk_len;
-	lim_fils_data_dump("Nonce", nonce, nonce_len);
-	if (qdf_get_hmac_hash(lim_get_hmac_crypto_type(fils_info->akm), nonce,
-			      nonce_len, 1, &addr[0], &len[0],
+	lim_fils_data_dump("Nonce", nounce, nounce_len);
+	if (qdf_get_hmac_hash(lim_get_hmac_crypto_type(fils_info->akm), nounce,
+			      nounce_len, 1, &addr[0], &len[0],
 			      fils_info->fils_pmk) < 0)
 		pe_err("failed to generate PMK");
 }
@@ -1047,11 +1048,11 @@ void lim_add_fils_data_to_auth_frame(struct pe_session *session,
 		}
 	}
 
-	/* ***Nonce*** */
+	/* ***Nounce*** */
 	/* Add element id */
 	*body = SIR_MAX_ELEMENT_ID;
 	body++;
-	/* Add nonce length + 1 for ext element id */
+	/* Add nounce length + 1 for ext element id */
 	*body = SIR_FILS_NONCE_LENGTH + 1;
 	body++;
 	/* Add ext element */
@@ -1069,7 +1070,7 @@ void lim_add_fils_data_to_auth_frame(struct pe_session *session,
 	/* Add element id */
 	*body = SIR_MAX_ELEMENT_ID;
 	body++;
-	/* Add nonce length + 1 for ext element id */
+	/* Add nounce length + 1 for ext element id */
 	*body = SIR_FILS_SESSION_LENGTH + 1;
 	body++;
 	/* Add ext element */
@@ -1618,7 +1619,7 @@ QDF_STATUS lim_create_fils_auth_data(struct mac_context *mac_ctx,
 
 	if (auth_frame->authAlgoNumber == SIR_FILS_SK_WITHOUT_PFS) {
 		frm_len += session->fils_info->rsn_ie_len;
-		/* FILS nonce */
+		/* FILS nounce */
 		frm_len += SIR_FILS_NONCE_LENGTH + EXTENDED_IE_HEADER_LEN;
 		/* FILS Session */
 		frm_len += SIR_FILS_SESSION_LENGTH + EXTENDED_IE_HEADER_LEN;
@@ -1949,8 +1950,8 @@ static QDF_STATUS find_ie_data_after_fils_session_ie(struct mac_context *mac_ctx
 		if (elem_len > left)
 			return QDF_STATUS_E_FAILURE;
 
-		if ((elem_id == WLAN_REQUEST_IE_MAX_LEN) &&
-		    (left >= 3 && ptr[2] == SIR_FILS_SESSION_EXT_EID)) {
+		if (elem_id == WLAN_REQUEST_IE_MAX_LEN &&
+			ptr[2] == SIR_FILS_SESSION_EXT_EID) {
 			(*ie) = ((&ptr[1]) + ptr[1] + 1);
 			(*ie_len) = (left - elem_len);
 			return QDF_STATUS_SUCCESS;
@@ -2151,7 +2152,7 @@ static int fils_aead_decrypt(const uint8_t *kek, unsigned int kek_len,
 	}
 
 	if (!own_mac || !bssid || !snonce ||
-	    !anonce || data_len == 0 || ciphered_text_len < AES_BLOCK_SIZE ||
+	    !anonce || data_len == 0 || ciphered_text_len == 0 ||
 	    !plain_text) {
 		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR,
 			  FL("Error missing params mac:%pK bssid:%pK snonce:%pK anonce:%pK data_len:%zu ciphered_text_len:%zu plain_text:%pK"),

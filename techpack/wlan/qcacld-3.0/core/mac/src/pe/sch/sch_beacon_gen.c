@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -42,7 +42,6 @@
 
 #include "parser_api.h"
 #include "wlan_utility.h"
-#include "lim_mlo.h"
 
 /* Offset of Channel Switch count field in CSA/ECSA IE */
 #define SCH_CSA_SWITCH_COUNT_OFFSET 2
@@ -463,71 +462,6 @@ sch_append_addn_ie(struct mac_context *mac_ctx, struct pe_session *session,
 	return status;
 }
 
-static void
-populate_channel_switch_ann(struct mac_context *mac_ctx,
-			    tDot11fBeacon2 *bcn,
-			    struct pe_session *pe_session)
-{
-	populate_dot11f_chan_switch_ann(mac_ctx, &bcn->ChanSwitchAnn,
-					pe_session);
-	if (!pe_session->dfsIncludeChanWrapperIe)
-		return;
-
-	populate_dot11f_chan_switch_wrapper(mac_ctx,
-					    &bcn->ChannelSwitchWrapper,
-					    pe_session);
-}
-
-/**
- * sch_get_tim_size() - Get TIM ie size
- * @max_aid: Max AID value
- *
- * Return: TIM ie size
- */
-static uint16_t sch_get_tim_size(uint32_t max_aid)
-{
-	uint16_t tim_size;
-	uint8_t N2;
-
-	/**
-	 * The TIM ie format:
-	 * +----------+------+----------+-------------------------------------------------+
-	 * |Element ID|Length|DTIM Count|DTIM Period|Bitmap Control|Partial Virtual Bitmap|
-	 * +----------+------+----------+-----------+--------------+----------------------+
-	 *   1 Byte    1 Byte  1Byte       1 Byte        1 Byte          0~255 Byte
-	 *
-	 * According to 80211 Spec, The Partial Virtual Bitmap field consists of octets
-	 * numbered N1 to N2 of the traffic indication virtual bitmap, where N1 is the
-	 * largest even number such that bits numbered 1 to (N1 * 8) – 1 in the traffic
-	 * indication virtual bitmap are all 0, and N2 is the smallest number such that
-	 * bits numbered (N2 + 1) * 8 to 2007 in the traffic indication virtual bitmap
-	 * are all 0. In this case, the Bitmap Offset subfield value contains the number
-	 * N1/2, and the Length field is set to (N2 – N1) + 4. Always start with AID 1 as
-	 * minimum, N1 = (1 / 8) = 0. TIM size = length + 1Byte Element ID + 1Byte Length.
-	 * The expression is reduced to (N2 - 0) + 4 + 2 = N2 + 6;
-	 */
-	N2 = max_aid / 8;
-	tim_size = N2 + 6;
-
-	return tim_size;
-}
-
-#ifdef SAP_MULTI_LINK_EMULATION
-static void omit_caps_for_2link_sap(tDot11fBeacon2 *bcn_2)
-{
-	qdf_mem_zero(&bcn_2->HTCaps, sizeof(bcn_2->HTCaps));
-	qdf_mem_zero(&bcn_2->EDCAParamSet, sizeof(bcn_2->EDCAParamSet));
-	qdf_mem_zero(&bcn_2->PowerConstraints, sizeof(bcn_2->PowerConstraints));
-	qdf_mem_zero(&bcn_2->TPCReport, sizeof(bcn_2->TPCReport));
-
-	pe_debug("Removed caps from beacon/probe rsp");
-}
-#else
-static inline void omit_caps_for_2link_sap(tDot11fBeacon2 *bcn_2)
-{
-}
-#endif
-
 /**
  * sch_set_fixed_beacon_fields() - sets the fixed params in beacon frame
  * @mac_ctx:       mac global context
@@ -564,18 +498,6 @@ sch_set_fixed_beacon_fields(struct mac_context *mac_ctx, struct pe_session *sess
 	tDot11fIEExtCap extracted_extcap;
 	bool extcap_present = true, addnie_present = false;
 	bool is_6ghz_chsw;
-	uint8_t *eht_op_ie = NULL, eht_op_ie_len = 0;
-	uint8_t *eht_cap_ie = NULL, eht_cap_ie_len = 0;
-	bool is_band_2g;
-	uint16_t ie_buf_size;
-	uint16_t mlo_ie_len = 0;
-	uint16_t tim_size;
-	uint8_t reg_cc[REG_ALPHA2_LEN + 1];
-	uint16_t tpe_ie_len = 0;
-	tDot11fIEtransmit_power_env *transmit_power_env = NULL;
-	uint16_t num_transmit_power_env = 0;
-
-	tim_size = sch_get_tim_size(HAL_NUM_STA);
 
 	bcn_1 = qdf_mem_malloc(sizeof(tDot11fBeacon1));
 	if (!bcn_1)
@@ -593,6 +515,9 @@ sch_set_fixed_beacon_fields(struct mac_context *mac_ctx, struct pe_session *sess
 		qdf_mem_free(bcn_2);
 		return QDF_STATUS_E_NOMEM;
 	}
+
+	pe_debug("Setting fixed beacon fields");
+
 	/*
 	 * First set the fixed fields:
 	 * set the TFP headers, set the mac header
@@ -618,7 +543,7 @@ sch_set_fixed_beacon_fields(struct mac_context *mac_ctx, struct pe_session *sess
 	populate_dot11f_capabilities(mac_ctx, &bcn_1->Capabilities, session);
 	if (session->ssidHidden) {
 		bcn_1->SSID.present = 1;
-		/* rest of the fields are 0 for hidden ssid */
+		/* rest of the fileds are 0 for hidden ssid */
 		if ((session->ssId.length) &&
 		    (session->ssidHidden == eHIDDEN_SSID_ZERO_CONTENTS))
 			bcn_1->SSID.num_ssid = session->ssId.length;
@@ -666,14 +591,16 @@ sch_set_fixed_beacon_fields(struct mac_context *mac_ctx, struct pe_session *sess
 			n_status);
 	}
 	session->schBeaconOffsetBegin = offset + (uint16_t) n_bytes;
+	pe_debug("Initialized beacon begin, offset %d fixed size %d", offset,
+		 session->schBeaconOffsetBegin);
+
 	/* Initialize the 'new' fields at the end of the beacon */
 	is_6ghz_chsw =
 		WLAN_REG_IS_6GHZ_CHAN_FREQ(session->curr_op_freq) ||
 		WLAN_REG_IS_6GHZ_CHAN_FREQ
 			(session->gLimChannelSwitch.sw_target_freq);
 	if (session->limSystemRole == eLIM_AP_ROLE &&
-	    (session->dfsIncludeChanSwIe == true ||
-	     session->bw_update_include_ch_sw_ie == true)) {
+	    session->dfsIncludeChanSwIe == true) {
 		if (!CHAN_HOP_ALL_BANDS_ENABLE ||
 		    session->lim_non_ecsa_cap_num == 0 || is_6ghz_chsw) {
 			tDot11fIEext_chan_switch_ann *ext_csa =
@@ -681,17 +608,20 @@ sch_set_fixed_beacon_fields(struct mac_context *mac_ctx, struct pe_session *sess
 			populate_dot_11_f_ext_chann_switch_ann(mac_ctx,
 							       ext_csa,
 							       session);
-			if (lim_is_session_eht_capable(session)) {
-				bcn_2->ChannelSwitchWrapper.present = 1;
-				populate_dot11f_bw_ind_element(mac_ctx,
-						session,
-				&bcn_2->ChannelSwitchWrapper.bw_ind_element);
-			}
+			pe_debug("ecsa: mode:%d reg:%d chan:%d count:%d",
+				 ext_csa->switch_mode,
+				 ext_csa->new_reg_class,
+				 ext_csa->new_channel,
+				 ext_csa->switch_count);
+		} else {
+			populate_dot11f_chan_switch_ann(mac_ctx,
+							&bcn_2->ChanSwitchAnn,
+							session);
+			pe_debug("csa: mode:%d chan:%d count:%d",
+				 bcn_2->ChanSwitchAnn.switchMode,
+				 bcn_2->ChanSwitchAnn.newChannel,
+				 bcn_2->ChanSwitchAnn.switchCount);
 		}
-		if (session->lim_non_ecsa_cap_num &&
-		    !is_6ghz_chsw)
-			populate_channel_switch_ann(mac_ctx, bcn_2, session);
-
 	}
 
 	populate_dot11_supp_operating_classes(mac_ctx,
@@ -706,10 +636,56 @@ sch_set_fixed_beacon_fields(struct mac_context *mac_ctx, struct pe_session *sess
 						  &bcn_2->PowerConstraints);
 		populate_dot11f_tpc_report(mac_ctx, &bcn_2->TPCReport, session);
 		/* Need to insert channel switch announcement here */
-		if ((LIM_IS_AP_ROLE(session) ||
-		     LIM_IS_P2P_DEVICE_GO(session)) &&
-		    session->dfsIncludeChanSwIe && !is_6ghz_chsw) {
-			populate_channel_switch_ann(mac_ctx, bcn_2, session);
+		if ((LIM_IS_AP_ROLE(session)
+		    || LIM_IS_P2P_DEVICE_GO(session))
+			&& session->dfsIncludeChanSwIe == true) {
+			/*
+			 * Channel switch announcement only if radar is detected
+			 * and SAP has instructed to announce channel switch IEs
+			 * in beacon and probe responses
+			 */
+			if (!is_6ghz_chsw) {
+				populate_dot11f_chan_switch_ann
+					(mac_ctx, &bcn_2->ChanSwitchAnn,
+					 session);
+				pe_debug("csa: mode:%d chan:%d count:%d",
+					 bcn_2->ChanSwitchAnn.switchMode,
+					 bcn_2->ChanSwitchAnn.newChannel,
+					 bcn_2->ChanSwitchAnn.switchCount);
+			}
+			/*
+			 * TODO: depending the CB mode, extended channel switch
+			 * announcement need to be called
+			 */
+			/*
+			populate_dot11f_ext_chan_switch_ann(mac_ctx,
+					&bcn_2->ExtChanSwitchAnn, session);
+			*/
+			/*
+			 * TODO: If in 11AC mode, wider bw channel switch
+			 * announcement needs to be called
+			 */
+			/*
+			populate_dot11f_wider_bw_chan_switch_ann(mac_ctx,
+					&bcn_2->WiderBWChanSwitchAnn, session);
+			*/
+			/*
+			 * Populate the Channel Switch Wrapper Element if
+			 * SAP operates in 40/80 Mhz Channel Width.
+			 */
+			if (!is_6ghz_chsw &&
+			    session->dfsIncludeChanWrapperIe == true) {
+				populate_dot11f_chan_switch_wrapper(mac_ctx,
+					&bcn_2->ChannelSwitchWrapper, session);
+				pe_debug("wrapper: width:%d f0:%d f1:%d",
+				      bcn_2->ChannelSwitchWrapper.
+					WiderBWChanSwitchAnn.newChanWidth,
+				      bcn_2->ChannelSwitchWrapper.
+					WiderBWChanSwitchAnn.newCenterChanFreq0,
+				      bcn_2->ChannelSwitchWrapper.
+					WiderBWChanSwitchAnn.newCenterChanFreq1
+					);
+			}
 		}
 	}
 
@@ -730,9 +706,6 @@ sch_set_fixed_beacon_fields(struct mac_context *mac_ctx, struct pe_session *sess
 	if (session->dot11mode != MLME_DOT11_MODE_11B)
 		populate_dot11f_erp_info(mac_ctx, &bcn_2->ERPInfo, session);
 
-	populate_dot11f_qcn_ie(mac_ctx, session, &bcn_2->qcn_ie,
-			       QCN_IE_ATTR_ID_ALL);
-
 	if (session->htCapability) {
 		populate_dot11f_ht_caps(mac_ctx, session, &bcn_2->HTCaps);
 		populate_dot11f_ht_info(mac_ctx, &bcn_2->HTInfo, session);
@@ -746,35 +719,31 @@ sch_set_fixed_beacon_fields(struct mac_context *mac_ctx, struct pe_session *sess
 		/*
 		populate_dot11f_vht_ext_bss_load( mac_ctx, &bcn2.VHTExtBssLoad);
 		*/
-	}
-
-	if (session->vhtCapability ||
-	    wlan_reg_is_6ghz_chan_freq(session->curr_op_freq)) {
-		transmit_power_env = qdf_mem_malloc(
-					WLAN_MAX_NUM_TPE_IE *
-					sizeof(tDot11fIEtransmit_power_env));
-		if (!transmit_power_env) {
-			status = QDF_STATUS_E_NOMEM;
-			goto free_and_exit;
-		}
 		populate_dot11f_tx_power_env(mac_ctx,
-					     transmit_power_env,
+					     &bcn_2->transmit_power_env[0],
 					     session->ch_width,
 					     session->curr_op_freq,
-					     &num_transmit_power_env,
+					     &bcn_2->num_transmit_power_env,
 					     false);
-		tpe_ie_len = lim_get_tpe_ie_length(session->ch_width,
-						   transmit_power_env,
-						   num_transmit_power_env);
+		populate_dot11f_qcn_ie(mac_ctx, session, &bcn_2->qcn_ie,
+				       QCN_IE_ATTR_ID_ALL);
+	}
+
+	if (wlan_reg_is_6ghz_chan_freq(session->curr_op_freq)) {
+		populate_dot11f_tx_power_env(mac_ctx,
+					     &bcn_2->transmit_power_env[0],
+					     session->ch_width,
+					     session->curr_op_freq,
+					     &bcn_2->num_transmit_power_env,
+					     false);
 	}
 
 	if (lim_is_session_he_capable(session)) {
+		pe_debug("Populate HE IEs");
 		populate_dot11f_he_caps(mac_ctx, session,
 					&bcn_2->he_cap);
 		populate_dot11f_he_operation(mac_ctx, session,
 					&bcn_2->he_op);
-		populate_dot11f_sr_info(mac_ctx, session,
-					&bcn_2->spatial_reuse);
 		populate_dot11f_he_6ghz_cap(mac_ctx, session,
 					    &bcn_2->he_6ghz_band_cap);
 		populate_dot11f_he_bss_color_change(mac_ctx, session,
@@ -782,12 +751,13 @@ sch_set_fixed_beacon_fields(struct mac_context *mac_ctx, struct pe_session *sess
 	}
 
 	if (lim_is_session_eht_capable(session)) {
+		pe_debug("Populate EHT IEs");
 		populate_dot11f_eht_caps(mac_ctx, session, &bcn_2->eht_cap);
 		populate_dot11f_eht_operation(mac_ctx, session, &bcn_2->eht_op);
 	}
 
 	populate_dot11f_ext_cap(mac_ctx, is_vht_enabled, &bcn_2->ExtCap,
-				session->vdev_id);
+				session);
 
 	populate_dot11f_ext_supp_rates(mac_ctx,
 				POPULATE_DOT11F_RATES_OPERATIONAL,
@@ -799,8 +769,6 @@ sch_set_fixed_beacon_fields(struct mac_context *mac_ctx, struct pe_session *sess
 		populate_dot11f_rsn_opaque(mac_ctx,
 					   &session->pLimStartBssReq->rsnIE,
 					   &bcn_2->RSNOpaque);
-		populate_dot11f_wapi(mac_ctx, &session->pLimStartBssReq->rsnIE,
-				     &bcn_2->WAPI);
 	}
 
 	if (session->limWmeEnabled)
@@ -838,7 +806,8 @@ sch_set_fixed_beacon_fields(struct mac_context *mac_ctx, struct pe_session *sess
 	if (LIM_IS_AP_ROLE(session)) {
 		if (wlan_vdev_mlme_is_mlo_ap(session->vdev)) {
 			lim_update_link_info(mac_ctx, session, bcn_1, bcn_2);
-			mlo_ie_len = lim_send_bcn_frame_mlo(mac_ctx, session);
+			populate_dot11f_bcn_mlo_ie(mac_ctx, session,
+						   &bcn_2->mlo_ie);
 			populate_dot11f_mlo_rnr(
 				mac_ctx, session,
 				&bcn_2->reduced_neighbor_report);
@@ -886,13 +855,14 @@ sch_set_fixed_beacon_fields(struct mac_context *mac_ctx, struct pe_session *sess
 		 */
 		lim_strip_he_ies_from_add_ies(mac_ctx, session);
 		lim_strip_eht_ies_from_add_ies(mac_ctx, session);
-		lim_strip_wapi_ies_from_add_ies(mac_ctx, session);
 
 		addn_ielen = session->add_ie_params.probeRespBCNDataLen;
 		addn_ie = qdf_mem_malloc(addn_ielen);
 		if (!addn_ie) {
-			status = QDF_STATUS_E_NOMEM;
-			goto free_and_exit;
+			qdf_mem_free(bcn_1);
+			qdf_mem_free(bcn_2);
+			qdf_mem_free(wsc_prb_res);
+			return QDF_STATUS_E_NOMEM;
 		}
 		qdf_mem_copy(addn_ie,
 			session->add_ie_params.probeRespBCNData_buff,
@@ -907,23 +877,10 @@ sch_set_fixed_beacon_fields(struct mac_context *mac_ctx, struct pe_session *sess
 			pe_debug("extcap not extracted");
 		}
 		/* merge extcap IE */
-		if (extcap_present) {
+		if (extcap_present)
 			lim_merge_extcap_struct(&bcn_2->ExtCap,
 						&extracted_extcap,
 						true);
-			populate_dot11f_bcn_prot_extcaps(mac_ctx, session,
-							 &bcn_2->ExtCap);
-
-			/*
-			 * TWT extended capabilities should be populated after
-			 * the intersection of beacon caps and self caps is done
-			 * because the bits for TWT are unique to STA and AP and
-			 * cannot be intersected.
-			 */
-			populate_dot11f_twt_extended_caps(mac_ctx,
-							  session->vdev_id,
-							  &bcn_2->ExtCap);
-		}
 	}
 
 	if (session->vhtCapability && session->gLimOperatingMode.present) {
@@ -934,107 +891,20 @@ sch_set_fixed_beacon_fields(struct mac_context *mac_ctx, struct pe_session *sess
 			     NULL, SIR_MAC_VHT_OPMODE_SIZE - 2);
 	}
 
-	omit_caps_for_2link_sap(bcn_2);
-
 	n_status = dot11f_pack_beacon2(mac_ctx, bcn_2,
 				       session->pSchBeaconFrameEnd,
 				       SIR_MAX_BEACON_SIZE, &n_bytes);
 	if (DOT11F_FAILED(n_status)) {
 		pe_err("Failed to packed a tDot11fBeacon2 (0x%08x)",
 			n_status);
-		status = QDF_STATUS_E_FAILURE;
-		goto free_and_exit;
+		qdf_mem_free(bcn_1);
+		qdf_mem_free(bcn_2);
+		qdf_mem_free(wsc_prb_res);
+		qdf_mem_free(addn_ie);
+		return QDF_STATUS_E_FAILURE;
 	} else if (DOT11F_WARNED(n_status)) {
 		pe_err("Warnings while packing a tDot11fBeacon2(0x%08x)",
 			n_status);
-	}
-
-	/* Strip EHT capabilities IE */
-	if (lim_is_session_eht_capable(session)) {
-		ie_buf_size = n_bytes;
-
-		eht_op_ie = qdf_mem_malloc(WLAN_MAX_IE_LEN + 2);
-		if (!eht_op_ie) {
-			pe_err("malloc failed for eht_op_ie");
-			status = QDF_STATUS_E_FAILURE;
-			goto free_and_exit;
-		}
-
-		status = lim_strip_eht_op_ie(mac_ctx,
-					     session->pSchBeaconFrameEnd,
-					     &ie_buf_size, eht_op_ie);
-		if (QDF_IS_STATUS_ERROR(status)) {
-			pe_err("Failed to strip EHT op IE");
-			qdf_mem_free(eht_op_ie);
-			status = QDF_STATUS_E_FAILURE;
-			goto free_and_exit;
-		}
-
-		lim_ieee80211_pack_ehtop(eht_op_ie, bcn_2->eht_op,
-					 bcn_2->VHTOperation,
-					 bcn_2->he_op,
-					 bcn_2->HTInfo);
-		eht_op_ie_len = eht_op_ie[1] + 2;
-
-		/* Copy the EHT operation IE to the end of the frame */
-		qdf_mem_copy(session->pSchBeaconFrameEnd + ie_buf_size,
-			     eht_op_ie, eht_op_ie_len);
-		qdf_mem_free(eht_op_ie);
-		n_bytes = ie_buf_size + eht_op_ie_len;
-
-		ie_buf_size = n_bytes;
-		eht_cap_ie = qdf_mem_malloc(WLAN_MAX_IE_LEN + 2);
-		if (!eht_cap_ie) {
-			pe_err("malloc failed for eht_cap_ie");
-			status = QDF_STATUS_E_FAILURE;
-			goto free_and_exit;
-		}
-		status = lim_strip_eht_cap_ie(mac_ctx,
-					      session->pSchBeaconFrameEnd,
-					      &ie_buf_size, eht_cap_ie);
-		if (QDF_IS_STATUS_ERROR(status)) {
-			pe_err("Failed to strip EHT cap IE");
-			qdf_mem_free(eht_cap_ie);
-			status = QDF_STATUS_E_FAILURE;
-			goto free_and_exit;
-		}
-
-		is_band_2g =
-			WLAN_REG_IS_24GHZ_CH_FREQ(session->curr_op_freq);
-
-		lim_ieee80211_pack_ehtcap(eht_cap_ie, bcn_2->eht_cap,
-					  bcn_2->he_cap, is_band_2g);
-		eht_cap_ie_len = eht_cap_ie[1] + 2;
-
-		/* Copy the EHT cap IE to the end of the frame */
-		qdf_mem_copy(session->pSchBeaconFrameEnd + ie_buf_size,
-			     eht_cap_ie, eht_cap_ie_len);
-
-		qdf_mem_free(eht_cap_ie);
-		n_bytes = ie_buf_size + eht_cap_ie_len;
-	}
-
-	if (tpe_ie_len) {
-		status = lim_fill_complete_tpe_ie(
-					session->ch_width, tpe_ie_len,
-					transmit_power_env,
-					num_transmit_power_env,
-					session->pSchBeaconFrameEnd + n_bytes);
-		if (QDF_IS_STATUS_ERROR(status)) {
-			pe_debug("assemble tpe ie error");
-			tpe_ie_len = 0;
-		}
-		n_bytes += tpe_ie_len;
-	}
-
-	if (mlo_ie_len) {
-		status = lim_fill_complete_mlo_ie(session, mlo_ie_len,
-					 session->pSchBeaconFrameEnd + n_bytes);
-		if (QDF_IS_STATUS_ERROR(status)) {
-			pe_debug("assemble ml ie error");
-			mlo_ie_len = 0;
-		}
-		n_bytes += mlo_ie_len;
 	}
 
 	/* Fill the CSA/ECSA count offsets if the IEs are present */
@@ -1048,18 +918,23 @@ sch_set_fixed_beacon_fields(struct mac_context *mac_ctx, struct pe_session *sess
 
 	if (csa_count_offset)
 		mac_ctx->sch.csa_count_offset =
-				session->schBeaconOffsetBegin + tim_size +
+				session->schBeaconOffsetBegin + TIM_IE_SIZE +
 				csa_count_offset;
 	if (ecsa_count_offset)
 		mac_ctx->sch.ecsa_count_offset =
-				session->schBeaconOffsetBegin + tim_size +
+				session->schBeaconOffsetBegin + TIM_IE_SIZE +
 				ecsa_count_offset;
+
+	pe_debug("vdev id %d csa_count_offset %d ecsa_count_offset %d",
+		 session->vdev_id,
+		 mac_ctx->sch.csa_count_offset,
+		 mac_ctx->sch.ecsa_count_offset);
 
 	if (wlan_vdev_mlme_is_mlo_ap(session->vdev))
 		lim_upt_mlo_partner_info(mac_ctx, session,
 					 session->pSchBeaconFrameEnd, n_bytes,
 					 session->schBeaconOffsetBegin +
-					 tim_size);
+					 TIM_IE_SIZE);
 
 	extra_ie = session->pSchBeaconFrameEnd + n_bytes;
 	extra_ie_offset = n_bytes;
@@ -1068,10 +943,11 @@ sch_set_fixed_beacon_fields(struct mac_context *mac_ctx, struct pe_session *sess
 	 * Max size left to append additional IE.= (MAX beacon size - TIM IE -
 	 * beacon fix size (bcn_1 + header) - beacon variable size (bcn_1).
 	 */
-	bcn_size_left = SIR_MAX_BEACON_SIZE - tim_size -
+	bcn_size_left = SIR_MAX_BEACON_SIZE - TIM_IE_SIZE -
 				session->schBeaconOffsetBegin -
 				(uint16_t)n_bytes;
-
+	pe_debug("max_bcn_size_left %d and addn_ielen %d", bcn_size_left,
+		 addn_ielen);
 	/* TODO: Append additional IE here. */
 	if (addn_ielen > 0)
 		sch_append_addn_ie(mac_ctx, session,
@@ -1086,40 +962,19 @@ sch_set_fixed_beacon_fields(struct mac_context *mac_ctx, struct pe_session *sess
 	if (QDF_STATUS_SUCCESS == status)
 		/* Update the P2P Ie Offset */
 		mac_ctx->sch.p2p_ie_offset =
-			session->schBeaconOffsetBegin + tim_size +
+			session->schBeaconOffsetBegin + TIM_IE_SIZE +
 			extra_ie_offset + p2p_ie_offset;
 	else
 		mac_ctx->sch.p2p_ie_offset = 0;
 
-	pe_debug("vdev %d: beacon begin offset %d fixed size %d csa_count_offset %d ecsa_count_offset %d max_bcn_size_left %d addn_ielen %d beacon end offset %d HT %d VHT %d HE %d EHT %d",
-		 session->vdev_id, offset, session->schBeaconOffsetBegin,
-		 mac_ctx->sch.csa_count_offset, mac_ctx->sch.ecsa_count_offset,
-		 bcn_size_left, addn_ielen, session->schBeaconOffsetEnd,
-		 bcn_2->HTCaps.present, bcn_2->VHTCaps.present,
-		 bcn_2->he_cap.present, bcn_2->eht_cap.present);
-	if (mac_ctx->sch.ecsa_count_offset || mac_ctx->sch.csa_count_offset) {
-		wlan_reg_read_current_country(mac_ctx->psoc, reg_cc);
-		pe_debug("ECSA/CSA : country:%s chan:%d freq %d width:%d reg:%d off:%d count %d mode %d",
-			 reg_cc, session->gLimChannelSwitch.primaryChannel,
-			 session->gLimChannelSwitch.sw_target_freq,
-			 session->gLimChannelSwitch.ch_width,
-			 bcn_2->ext_chan_switch_ann.present ?
-			 bcn_2->ext_chan_switch_ann.new_reg_class : 0,
-			 session->gLimChannelSwitch.sec_ch_offset,
-			 session->gLimChannelSwitch.switchCount,
-			 session->gLimChannelSwitch.switchMode);
-	}
+	pe_debug("Initialized beacon end, offset %d",
+		session->schBeaconOffsetEnd);
 	mac_ctx->sch.beacon_changed = 1;
-	status = QDF_STATUS_SUCCESS;
-
-free_and_exit:
 	qdf_mem_free(bcn_1);
 	qdf_mem_free(bcn_2);
 	qdf_mem_free(wsc_prb_res);
 	qdf_mem_free(addn_ie);
-	qdf_mem_free(transmit_power_env);
-
-	return status;
+	return QDF_STATUS_SUCCESS;
 }
 
 QDF_STATUS
@@ -1264,14 +1119,6 @@ void lim_update_probe_rsp_template_ie_bitmap_beacon2(struct mac_context *mac,
 			     sizeof(beacon2->RSNOpaque));
 	}
 
-	/* WAPI */
-	if (beacon2->WAPI.present) {
-		set_probe_rsp_ie_bitmap(DefProbeRspIeBitmap, WLAN_ELEMID_WAPI);
-		qdf_mem_copy((void *)&prb_rsp->WAPI,
-			     (void *)&beacon2->WAPI,
-			     sizeof(beacon2->WAPI));
-	}
-
 	/* EDCA Parameter set */
 	if (beacon2->EDCAParamSet.present) {
 		set_probe_rsp_ie_bitmap(DefProbeRspIeBitmap,
@@ -1344,15 +1191,6 @@ void lim_update_probe_rsp_template_ie_bitmap_beacon2(struct mac_context *mac,
 			     sizeof(beacon2->WMMCaps));
 	}
 
-	/* QCN IE - only for ll sap */
-	if (beacon2->qcn_ie.present) {
-		set_probe_rsp_ie_bitmap(DefProbeRspIeBitmap,
-					WLAN_ELEMID_VENDOR);
-		qdf_mem_copy((void *)&prb_rsp->qcn_ie,
-			     (void *)&beacon2->qcn_ie,
-			     sizeof(beacon2->qcn_ie));
-	}
-
 	/* Extended Capability */
 	if (beacon2->ExtCap.present) {
 		set_probe_rsp_ie_bitmap(DefProbeRspIeBitmap, DOT11F_EID_EXTCAP);
@@ -1374,14 +1212,6 @@ void lim_update_probe_rsp_template_ie_bitmap_beacon2(struct mac_context *mac,
 		qdf_mem_copy((void *)&prb_rsp->he_op,
 			     (void *)&beacon2->he_op,
 			     sizeof(beacon2->he_op));
-	}
-
-	if (beacon2->spatial_reuse.present) {
-		set_probe_rsp_ie_bitmap(DefProbeRspIeBitmap,
-					DOT11F_EID_SPATIAL_REUSE);
-		qdf_mem_copy((void *)&prb_rsp->spatial_reuse,
-			     (void *)&beacon2->spatial_reuse,
-			     sizeof(beacon2->spatial_reuse));
 	}
 
 	if (beacon2->he_6ghz_band_cap.present) {
@@ -1423,15 +1253,6 @@ void lim_update_probe_rsp_template_ie_bitmap_beacon2(struct mac_context *mac,
 			     (void *)&beacon2->reduced_neighbor_report,
 			     sizeof(beacon2->reduced_neighbor_report));
 	}
-
-	if (beacon2->TPCReport.present) {
-		set_probe_rsp_ie_bitmap(DefProbeRspIeBitmap,
-					WLAN_ELEMID_TPCREP);
-		qdf_mem_copy((void *)&prb_rsp->TPCReport,
-			     (void *)&beacon2->TPCReport,
-			     sizeof(beacon2->TPCReport));
-	}
-
 }
 
 void set_probe_rsp_ie_bitmap(uint32_t *IeBitmap, uint32_t pos)

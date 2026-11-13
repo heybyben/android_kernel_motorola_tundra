@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -20,7 +20,7 @@
  * DOC: Declare various struct, macros which are common for
  * various pmo related features.
  *
- * Note: This file shall not contain public API's prototype/declarations.
+ * Note: This file shall not contain public API's prototype/declartions.
  *
  */
 
@@ -78,7 +78,7 @@ enum pmo_vdev_param_id {
  * @pmo_ignore_dtim: fwr need to igonre dtime policy
  * @pmo_normal_dtim: fwr need to use normal dtime policy
  * @pmo_stick_dtim: fwr need to use stick dtime policy
- * @pmo_auto_dtim: fwr need to auto dtime policy
+ * @auto_dtim: fwr need to auto dtime policy
  */
 enum pmo_beacon_dtim_policy {
 	pmo_ignore_dtim = 0x01,
@@ -88,21 +88,19 @@ enum pmo_beacon_dtim_policy {
 };
 
 /**
- * enum pmo_sta_powersave_param - STA powersave parameters
  * @pmo_sta_ps_param_rx_wake_policy: Controls how frames are retrievd from AP
  *  while STA is sleeping.
  * @pmo_sta_ps_param_tx_wake_threshold: STA will go active after this many TX
  * @pmo_sta_ps_param_pspoll_count:No of PS-Poll to send before STA wakes up
  * @pmo_sta_ps_param_inactivity_time: TX/RX inactivity time in msec before
- *  going to sleep.
+    going to sleep.
  * @pmo_sta_ps_param_uapsd: Set uapsd configuration.
  * @pmo_sta_ps_param_advanced_power_pspoll_count: No of PS-Poll to send before
- *  STA wakes up in Advanced Power Save Mode.
+    STA wakes up in Advanced Power Save Mode.
  * @pmo_sta_ps_enable_advanced_power:  Enable Advanced Power Save
  * @pmo_sta_ps_param_advanced_power_max_tx_before_wake: Number of TX frames
- *  before the entering the Active state
+    before the entering the Active state
  * @pmo_sta_ps_param_ito_repeat_count: Indicates ito repeated count
- * @pmo_sta_ps_param_spec_wake_interval: OPM speculative wake interval
  */
 enum pmo_sta_powersave_param {
 	pmo_sta_ps_param_rx_wake_policy = 0,
@@ -114,11 +112,10 @@ enum pmo_sta_powersave_param {
 	pmo_sta_ps_enable_advanced_power = 6,
 	pmo_sta_ps_param_advanced_power_max_tx_before_wake = 7,
 	pmo_sta_ps_param_ito_repeat_count = 8,
-	pmo_sta_ps_param_spec_wake_interval = 9,
 };
 
 /**
- * enum pmo_wow_resume_trigger - resume trigger override setting values
+ * enum wow_resume_trigger - resume trigger override setting values
  * @PMO_WOW_RESUME_TRIGGER_DEFAULT: fw to use platform default resume trigger
  * @PMO_WOW_RESUME_TRIGGER_HTC_WAKEUP: force fw to use HTC Wakeup to resume
  * @PMO_WOW_RESUME_TRIGGER_GPIO: force fw to use GPIO to resume
@@ -134,7 +131,7 @@ enum pmo_wow_resume_trigger {
 };
 
 /**
- * enum pmo_wow_interface_pause - interface pause override setting values
+ * enum wow_interface_pause - interface pause override setting values
  * @PMO_WOW_INTERFACE_PAUSE_DEFAULT: use platform default iface pause setting
  * @PMO_WOW_INTERFACE_PAUSE_ENABLE: force interface pause setting to enabled
  * @PMO_WOW_INTERFACE_PAUSE_DISABLE: force interface pause setting to disabled
@@ -150,12 +147,12 @@ enum pmo_wow_interface_pause {
 };
 
 /**
- * enum pmo_wow_enable_type - used to enable/disable WoW.
+ * enum wow_enable_type - used to enable/disable WoW.
  * @PMO_WOW_DISABLE_BOTH: Disable both magic pattern match and pattern
  *  byte match.
  * @PMO_WOW_ENABLE_MAGIC_PATTERN: Enable magic pattern match on all interfaces.
  * @PMO_WOW_ENABLE_PATTERN_BYTE: Enable pattern byte match on all interfaces.
- * @PMO_WOW_ENABLE_BOTH: Enable both magic pattern and pattern byte match on
+ * @PMO_WOW_ENABLE_BOTH: Enable both magic patter and pattern byte match on
  *  all interfaces.
  */
 enum pmo_wow_enable_type {
@@ -169,12 +166,10 @@ enum pmo_wow_enable_type {
  * enum powersave_mode - powersave_mode
  * @PMO_PS_ADVANCED_POWER_SAVE_DISABLE: Disable advanced power save mode
  * @PMO_PS_ADVANCED_POWER_SAVE_ENABLE: Enable power save mode
- * @PMO_PS_ADVANCED_POWER_SAVE_USER_DEFINED: User Defined
  */
 enum powersave_mode {
 	PMO_PS_ADVANCED_POWER_SAVE_DISABLE = 0,
-	PMO_PS_ADVANCED_POWER_SAVE_ENABLE = 1,
-	PMO_PS_ADVANCED_POWER_SAVE_USER_DEFINED = 2
+	PMO_PS_ADVANCED_POWER_SAVE_ENABLE = 1
 };
 
 /**
@@ -182,13 +177,13 @@ enum powersave_mode {
  * @PMO_SUSPEND_NONE: Does not support suspend
  * @PMO_SUSPEND_LEGENCY: Legency PDEV suspend mode
  * @PMO_SUSPEND_WOW: WoW suspend mode
- * @PMO_SUSPEND_SHUTDOWN: Shutdown suspend mode. Shutdown while suspend
+ * @PMO_FULL_POWER_DOWN: Full power down while suspend
  */
 enum pmo_suspend_mode {
 	PMO_SUSPEND_NONE = 0,
 	PMO_SUSPEND_LEGENCY,
 	PMO_SUSPEND_WOW,
-	PMO_SUSPEND_SHUTDOWN
+	PMO_FULL_POWER_DOWN
 };
 
 #define PMO_TARGET_SUSPEND_TIMEOUT   (4000)
@@ -196,7 +191,7 @@ enum pmo_suspend_mode {
 #define PMO_RESUME_TIMEOUT           (4000)
 
 /**
- * struct pmo_wow_enable_params - A collection of wow enable override parameters
+ * struct wow_enable_params - A collection of wow enable override parameters
  * @is_unit_test: true to notify fw this is a unit-test suspend
  * @interface_pause: used to override the interface pause indication sent to fw
  * @resume_trigger: used to force fw to use a particular resume method
@@ -208,23 +203,14 @@ struct pmo_wow_enable_params {
 };
 
 /**
- * typedef pmo_psoc_suspend_handler() - psoc suspend handler
- * @psoc: psoc being suspended
- * @arg: iterator argument
- *
- * Return: QDF_STATUS_SUCCESS if suspended, QDF_STATUS_E_* if failure
+ * typedef for psoc suspend handler
  */
 typedef QDF_STATUS(*pmo_psoc_suspend_handler)
 	(struct wlan_objmgr_psoc *psoc, void *arg);
-
 /**
- * typedef pmo_psoc_resume_handler() - psoc resume handler
- * @psoc: psoc being resumed
- * @arg: iterator argument
- *
- * Return: QDF_STATUS_SUCCESS if resumed, QDF_STATUS_E_* if failure
+ * typedef for psoc resume handler
  */
-typedef QDF_STATUS (*pmo_psoc_resume_handler)
+typedef QDF_STATUS(*pmo_psoc_resume_handler)
 	(struct wlan_objmgr_psoc *psoc, void *arg);
 
 /**
@@ -235,7 +221,6 @@ typedef QDF_STATUS (*pmo_psoc_resume_handler)
  * @pmo_runtime_resume: trigger is runtime resume
  * @pmo_ipv4_change_notify: trigger is ipv4 change handler
  * @pmo_ipv6_change_notify: trigger is ipv6 change handler
- * @pmo_mc_list_change_notify: trigger is multicast list change
  * @pmo_ns_offload_dynamic_update: enable/disable ns offload on the fly
  * @pmo_peer_disconnect: trigger is peer disconnect
  * @pmo_mcbc_setting_dynamic_update: mcbc value update on the fly
@@ -260,7 +245,7 @@ enum pmo_offload_trigger {
 };
 
 /**
- * enum pmo_auto_pwr_detect_failure_mode - auto detect failure modes
+ * enum pmo_auto_pwr_detect_failure_mode_t - auto detect failure modes
  * @PMO_FW_TO_CRASH_ON_PWR_FAILURE: Don't register wow wakeup event and FW
  * crashes on power failure
  * @PMO_FW_TO_SEND_WOW_IND_ON_PWR_FAILURE: Register wow wakeup event and FW
@@ -311,7 +296,7 @@ enum pmo_gpio_wakeup_mode {
 #define ICMP_MAX_IPV6_ADDRESS 16
 
 /**
- * struct pmo_icmp_offload - structure to hold icmp param
+ * pmo_icmp_offload - structure to hold icmp param
  *
  * @vdev_id: vdev id
  * @enable: enable/disable
@@ -330,23 +315,6 @@ struct pmo_icmp_offload {
 	uint8_t ipv6_addr[ICMP_MAX_IPV6_ADDRESS][QDF_IPV6_ADDR_SIZE];
 };
 #endif
-
-/*
- * enum pmo_page_fault_action - Host action on FW page fault
- * @PMO_PF_HOST_ACTION_NO_OP: Host will ignore PF wakeup event.
- * @PMO_PF_HOST_ACTION_TRIGGER_SSR: Host will trigger SSR on PF threshold.
- * @PMO_PF_HOST_ACTION_NOTIFY_APPS: Host will notify APPS on PF threshold.
- *
- * @PMO_PF_HOST_ACTION_MAX: Reserved and invalid value
- */
-enum pmo_page_fault_action {
-	PMO_PF_HOST_ACTION_NO_OP = 0,
-	PMO_PF_HOST_ACTION_TRIGGER_SSR = 1,
-	PMO_PF_HOST_ACTION_NOTIFY_APPS = 2,
-
-	/* Keep it last */
-	PMO_PF_HOST_ACTION_MAX,
-};
 
 /**
  * struct pmo_psoc_cfg - user configuration required for pmo
@@ -369,14 +337,13 @@ enum pmo_page_fault_action {
  * @deauth_enable: true when wake up on deauth is enabled else false
  * @disassoc_enable:  true when wake up on disassoc is enabled else false
  * @lpass_enable: true when lpass is enabled else false
- * @max_ps_poll: max power save poll
+ * @max_ps:poll: max power save poll
  * @sta_dynamic_dtim: station dynamic DTIM value
  * @sta_mod_dtim: station modulated DTIM value
  * @sta_max_li_mod_dtim: station max listen interval DTIM value
  * @sta_forced_dtim: station forced DTIM value
  * @wow_enable: enable wow with majic pattern match or pattern byte match
  * @power_save_mode: power save mode for psoc
- * @default_power_save_mode: default power save mode for psoc
  * @suspend_mode: suspend mode for psoc
  * @runtime_pm_delay: set runtime pm's inactivity timer
  * @extwow_goto_suspend: true when extended WoW enabled else false
@@ -398,10 +365,8 @@ enum pmo_page_fault_action {
  * @wow_pulse_repeat_count: Pulse repeat count
  * @wow_pulse_init_state: Pulse init level
  * @packet_filters_bitmap: Packet filter bitmap configuration
- * @enable_sap_suspend: enable SoftAP suspend
  * @wow_data_inactivity_timeout: power save wow data inactivity timeout
  *  wow mode
- * @wow_spec_wake_interval: OPM speculatvie wkae interval in wow mode
  * @active_uc_apf_mode: Setting that determines how APF is applied in active
  *	mode for uc packets
  * @active_mc_bc_apf_mode: Setting that determines how APF is applied in
@@ -409,8 +374,6 @@ enum pmo_page_fault_action {
  * @ito_repeat_count: Indicates ito repeated count
  * @is_mod_dtim_on_sys_suspend_enabled: true when mod dtim is enabled for
  * system suspend wow else false
- * @is_bus_suspend_enabled_in_sap_mode: Can bus suspend in SoftAP mode
- * @is_bus_suspend_enabled_in_go_mode: Can bus suspend in P2P GO mode
  * @enable_gpio_wakeup: enable gpio wakeup
  * @gpio_wakeup_pin: gpio wakeup pin
  * @gpio_wakeup_mode: gpio wakeup mode
@@ -419,15 +382,13 @@ enum pmo_page_fault_action {
  * @disconnect_sap_tdls_in_wow: sap/p2p_go disconnect or teardown tdls link
  * @is_icmp_offload_enable: true if icmp offload is supported
  *	for psoc else false
- * @host_pf_action: Action to take on page fault
- * @min_pagefault_wakeups_for_action: Min number of pagefaults after which
- * host needs to start act upon.
+ * @enable_ssr_on_page_fault: Enable ssr on pagefault
+ * @max_pagefault_wakeups_for_ssr: Maximum number of pagefaults after which host
+ * needs to trigger SSR
  * @interval_for_pagefault_wakeup_counts: Time in ms in which max pagefault
  * wakeups needs to be monitored.
  * @ssr_frequency_on_pagefault: Time in ms in which SSR needs to be triggered
  * on max pagefault
- * @is_apf_configure_per_screen_state: Configure APF mode enable/disable
- * per screen off/on state
  */
 struct pmo_psoc_cfg {
 	bool ptrn_match_enable_all_vdev;
@@ -443,7 +404,7 @@ struct pmo_psoc_cfg {
 	bool ap_arpns_support;
 	bool d0_wow_supported;
 	bool ra_ratelimit_enable;
-#ifdef FEATURE_WLAN_RA_FILTERING
+#if FEATURE_WLAN_RA_FILTERING
 	uint16_t ra_ratelimit_interval;
 #endif
 	bool magic_ptrn_enable;
@@ -489,7 +450,6 @@ struct pmo_psoc_cfg {
 #endif
 	bool enable_sap_suspend;
 	uint8_t wow_data_inactivity_timeout;
-	uint8_t wow_spec_wake_interval;
 	enum active_apf_mode active_uc_apf_mode;
 	enum active_apf_mode active_mc_bc_apf_mode;
 	uint8_t ito_repeat_count;
@@ -509,16 +469,14 @@ struct pmo_psoc_cfg {
 #ifdef WLAN_FEATURE_ICMP_OFFLOAD
 	bool is_icmp_offload_enable;
 #endif
-	enum pmo_page_fault_action host_pf_action;
-	uint8_t min_pagefault_wakeups_for_action;
+	bool enable_ssr_on_page_fault;
+	uint8_t max_pagefault_wakeups_for_ssr;
 	uint32_t interval_for_pagefault_wakeup_counts;
 	uint32_t ssr_frequency_on_pagefault;
-	bool is_apf_configure_per_screen_state;
 };
 
 /**
- * struct pmo_device_caps - device capability flags (true if feature is
- *                          supported)
+ * pmo_device_caps - device capability flags (true if feature is supported)
  * @apf: Android Packet Filter (aka BPF)
  * @arp_ns_offload: APR/NS offload
  * @packet_filter: Legacy "Packet Filter"
@@ -536,7 +494,7 @@ struct pmo_device_caps {
 };
 
 /**
- * struct pmo_igmp_offload_req - structure to hold igmp param
+ * pmo_igmp_offload_req - structure to hold igmp param
  *
  * @vdev_id: vdev id
  * @enable: enable/disable
@@ -551,18 +509,5 @@ struct pmo_igmp_offload_req {
 	uint32_t version_support;
 	uint32_t num_grp_ip_address;
 	uint32_t grp_ip_address[MAX_MC_IP_ADDR];
-};
-
-/**
- * struct pmo_ps_params - structure to hold OPM params
- *
- * @opm_mode: OPM mode
- * @ps_ito: power save inactivity timeout
- * @spec_wake: OPM speculative wake interval
- */
-struct pmo_ps_params {
-	enum powersave_mode opm_mode;
-	uint16_t ps_ito;
-	uint16_t spec_wake;
 };
 #endif /* end  of _WLAN_PMO_COMMONP_STRUCT_H_ */

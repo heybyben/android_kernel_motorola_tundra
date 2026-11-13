@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -16,7 +15,7 @@
  */
 
 /**
- * DOC: wlan_vdev_mlme_ser.c
+ * @file wlan_vdev_mlme_ser.c
  * This file contains the APIs to support interface between vdev_mlme and
  * serialization module
  */
@@ -148,8 +147,8 @@ wlan_vdev_mlme_ser_vdev_restart(struct wlan_serialization_command *cmd)
 	return wlan_serialization_request(cmd);
 }
 
-static void wlan_mlme_restart_pdev_iter_cb(struct wlan_objmgr_pdev *pdev,
-					   void *object, void *arg)
+void wlan_mlme_restart_pdev_iter_cb(struct wlan_objmgr_pdev *pdev,
+				    void *object, void *arg)
 {
 	struct wlan_objmgr_vdev *vdev = (struct wlan_objmgr_vdev *)object;
 	uint8_t *pdev_restart_pending = (uint8_t *)arg;

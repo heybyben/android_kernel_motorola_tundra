@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -24,21 +23,12 @@
 #include <wmi_unified_api.h>
 #include <cdp_txrx_ctrl.h>
 
-#if defined(QCA_SUPPORT_SON)
+#if QCA_SUPPORT_SON
 
 u_int32_t son_ol_get_peer_rate(struct wlan_objmgr_peer *peer, u_int8_t type)
 {
 	return ol_if_peer_get_rate(peer, type);
 }
-#else
-
-u_int32_t son_ol_get_peer_rate(struct wlan_objmgr_peer *peer, u_int8_t type)
-{
-	return 0;
-}
-#endif
-
-#if defined(QCA_SUPPORT_SON) || defined(WLAN_FEATURE_SON)
 
 QDF_STATUS son_ol_send_null(struct wlan_objmgr_pdev *pdev,
 			 u_int8_t *macaddr,
@@ -62,7 +52,6 @@ QDF_STATUS son_ol_send_null(struct wlan_objmgr_pdev *pdev,
 	return wmi_unified_stats_request_send(wmi_handle, macaddr, &param);
 }
 
-#if defined(WMI_NON_TLV_SUPPORT) || defined(WMI_TLV_AND_NON_TLV_SUPPORT)
 QDF_STATUS son_ol_peer_ext_stats_enable(struct wlan_objmgr_pdev *pdev,
 					uint8_t *peer_addr,
 					struct wlan_objmgr_vdev *vdev,
@@ -99,7 +88,6 @@ QDF_STATUS son_ol_peer_ext_stats_enable(struct wlan_objmgr_pdev *pdev,
 
 	return wmi_set_peer_param_send(wmi_handle, peer_addr, &param);
 }
-#endif
 
 void target_if_son_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 {
@@ -111,6 +99,11 @@ void target_if_son_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 }
 
 #else
+
+u_int32_t son_ol_get_peer_rate(struct wlan_objmgr_peer *peer, u_int8_t type)
+{
+	return 0;
+}
 
 void target_if_son_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 {

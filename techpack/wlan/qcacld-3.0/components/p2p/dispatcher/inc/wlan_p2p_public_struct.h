@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2019, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -18,7 +18,7 @@
  */
 
 /**
- * DOC: Contains p2p public data structure definitions
+ * DOC: Contains p2p public data structure definations
  */
 
 #ifndef _WLAN_P2P_PUBLIC_STRUCT_H_
@@ -118,7 +118,7 @@ struct p2p_rx_mgmt_frame {
 	uint32_t vdev_id;
 	uint32_t frm_type;
 	uint32_t rx_rssi;
-	QDF_FLEX_ARRAY(uint8_t, buf);
+	uint8_t buf[1];
 };
 
 /**
@@ -157,6 +157,20 @@ struct p2p_mgmt_tx {
 	uint32_t dont_wait_for_ack;
 	uint32_t off_chan;
 	const uint8_t *buf;
+};
+
+/**
+ * struct p2p_set_mac_filter
+ * @vdev_id: Vdev id
+ * @mac: mac addr
+ * @freq: frequency
+ * @set: set or clear
+ */
+struct p2p_set_mac_filter {
+	uint32_t vdev_id;
+	uint8_t mac[QDF_MAC_ADDR_SIZE];
+	uint32_t freq;
+	bool set;
 };
 
 /**
@@ -249,7 +263,7 @@ struct noa_descriptor {
  * @opps_ps:           opps ps state of the AP
  * @ct_window:         ct window in TUs
  * @vdev_id:           vdev id
- * @num_desc:          number of NOA descriptors
+ * @num_descriptors:   number of NOA descriptors
  * @noa_desc:          noa descriptors
  */
 struct p2p_noa_info {
@@ -271,7 +285,7 @@ struct p2p_protocol_callbacks {
 
 /**
  * enum p2p_attr_id - enum for P2P attributes ID in P2P IE
- * @P2P_ATTR_STATUS: Attribute Status none
+ * @P2P_ATTR_STATUS - Attribute Status none
  * @P2P_ATTR_MINOR_REASON_CODE: Minor reason code attribute
  * @P2P_ATTR_CAPABILITY: Capability attribute
  * @P2P_ATTR_DEVICE_ID: device ID attribute
@@ -293,13 +307,13 @@ struct p2p_protocol_callbacks {
  * @P2P_ATTR_OOB_GO_NEG_CHANNEL: GO neg channel attribute
  * @P2P_ATTR_SERVICE_HASH: Service HASH attribute
  * @P2P_ATTR_SESSION_INFORMATION_DATA: Session Info data attribute
- * @P2P_ATTR_CONNECTION_CAPABILITY: Connection capability attribute
- * @P2P_ATTR_ADVERTISEMENT_ID: Advertisement ID attribute
- * @P2P_ATTR_ADVERTISED_SERVICE: Advertised Service attribute
- * @P2P_ATTR_SESSION_ID: Session ID attribute
- * @P2P_ATTR_FEATURE_CAPABILITY: Feature capability attribute
- * @P2P_ATTR_PERSISTENT_GROUP: Persistent group attribute
- * @P2P_ATTR_VENDOR_SPECIFIC: Vendor specific attribute
+ * @P2P_ATTR_CONNECTION_CAPABILITY = Connection capability attribute
+ * @P2P_ATTR_ADVERTISEMENT_ID = Advertisement ID attribute
+ * @P2P_ATTR_ADVERTISED_SERVICE = Advertised Service attribute
+ * @P2P_ATTR_SESSION_ID = Session ID attribute
+ * @P2P_ATTR_FEATURE_CAPABILITY = Feature capability attribute
+ * @P2P_ATTR_PERSISTENT_GROUP -Persistent group attribute
+ * @P2P_ATTR_VENDOR_SPECIFIC - Vendor specific attribute
  */
 enum p2p_attr_id {
 	P2P_ATTR_STATUS = 0,

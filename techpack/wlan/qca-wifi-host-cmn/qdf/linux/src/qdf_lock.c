@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -31,6 +30,14 @@
 #include <i_qdf_lock.h>
 #include <linux/suspend.h>
 
+/**
+ * qdf_mutex_create() - Initialize a mutex
+ * @m: mutex to initialize
+ *
+ * Returns: QDF_STATUS
+ * =0 success
+ * else fail status
+ */
 #undef qdf_mutex_create
 QDF_STATUS qdf_mutex_create(qdf_mutex_t *lock, const char *func, int line)
 {
@@ -67,6 +74,19 @@ QDF_STATUS qdf_mutex_create(qdf_mutex_t *lock, const char *func, int line)
 }
 qdf_export_symbol(qdf_mutex_create);
 
+/**
+ * qdf_mutex_acquire() - acquire a QDF lock
+ * @lock: Pointer to the opaque lock object to acquire
+ *
+ * A lock object is acquired by calling qdf_mutex_acquire().  If the lock
+ * is already locked, the calling thread shall block until the lock becomes
+ * available. This operation shall return with the lock object referenced by
+ * lock in the locked state with the calling thread as its owner.
+ *
+ * Return:
+ * QDF_STATUS_SUCCESS: lock was successfully initialized
+ * QDF failure reason codes: lock is not initialized and can't be used
+ */
 QDF_STATUS qdf_mutex_acquire(qdf_mutex_t *lock)
 {
 	int rc;
@@ -132,6 +152,20 @@ QDF_STATUS qdf_mutex_acquire(qdf_mutex_t *lock)
 }
 qdf_export_symbol(qdf_mutex_acquire);
 
+/**
+ * qdf_mutex_release() - release a QDF lock
+ * @lock: Pointer to the opaque lock object to be released
+ *
+ * qdf_mutex_release() function shall release the lock object
+ * referenced by 'lock'.
+ *
+ * If a thread attempts to release a lock that it unlocked or is not
+ * initialized, an error is returned.
+ *
+ * Return:
+ * QDF_STATUS_SUCCESS: lock was successfully initialized
+ * QDF failure reason codes: lock is not initialized and can't be used
+ */
 QDF_STATUS qdf_mutex_release(qdf_mutex_t *lock)
 {
 	/* check for invalid pointer */
@@ -247,6 +281,14 @@ static inline void qdf_wake_lock_dbg_untrack(qdf_wake_lock_t *lock,
 { }
 #endif /* WLAN_WAKE_LOCK_DEBUG */
 
+/**
+ * qdf_wake_lock_name() - This function returns the name of the wakelock
+ * @lock: Pointer to the wakelock
+ *
+ * This function returns the name of the wakelock
+ *
+ * Return: Pointer to the name if it is valid or a default string
+ */
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
 const char *qdf_wake_lock_name(qdf_wake_lock_t *lock)
 {
@@ -308,6 +350,15 @@ QDF_STATUS __qdf_wake_lock_create(qdf_wake_lock_t *lock, const char *name,
 #endif
 qdf_export_symbol(__qdf_wake_lock_create);
 
+/**
+ * qdf_wake_lock_acquire() - acquires a wake lock
+ * @lock: The wake lock to acquire
+ * @reason: Reason for wakelock
+ *
+ * Return:
+ * QDF status success: if wake lock is acquired
+ * QDF status failure: if wake lock was not acquired
+ */
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
 QDF_STATUS qdf_wake_lock_acquire(qdf_wake_lock_t *lock, uint32_t reason)
 {
@@ -326,6 +377,15 @@ QDF_STATUS qdf_wake_lock_acquire(qdf_wake_lock_t *lock, uint32_t reason)
 #endif
 qdf_export_symbol(qdf_wake_lock_acquire);
 
+/**
+ * qdf_wake_lock_timeout_acquire() - acquires a wake lock with a timeout
+ * @lock: The wake lock to acquire
+ * @reason: Reason for wakelock
+ *
+ * Return:
+ * QDF status success: if wake lock is acquired
+ * QDF status failure: if wake lock was not acquired
+ */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0)
 QDF_STATUS qdf_wake_lock_timeout_acquire(qdf_wake_lock_t *lock, uint32_t msec)
 {
@@ -349,6 +409,15 @@ QDF_STATUS qdf_wake_lock_timeout_acquire(qdf_wake_lock_t *lock, uint32_t msec)
 #endif /* LINUX_VERSION_CODE */
 qdf_export_symbol(qdf_wake_lock_timeout_acquire);
 
+/**
+ * qdf_wake_lock_release() - releases a wake lock
+ * @lock: the wake lock to release
+ * @reason: Reason for wakelock
+ *
+ * Return:
+ * QDF status success: if wake lock is acquired
+ * QDF status failure: if wake lock was not acquired
+ */
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
 QDF_STATUS qdf_wake_lock_release(qdf_wake_lock_t *lock, uint32_t reason)
 {
@@ -390,6 +459,11 @@ void __qdf_wake_lock_destroy(qdf_wake_lock_t *lock,
 #endif
 qdf_export_symbol(__qdf_wake_lock_destroy);
 
+/**
+ * qdf_pm_system_wakeup() - wakeup system
+ *
+ * Return: None
+ */
 void qdf_pm_system_wakeup(void)
 {
 	pm_system_wakeup();
@@ -399,123 +473,221 @@ qdf_export_symbol(qdf_pm_system_wakeup);
 
 #ifdef FEATURE_RUNTIME_PM
 /**
- * qdf_to_hif_convert_rtpm_id() - Convert QDF Runtime PM ID to HIF RTPM ID
- * @id: Client id
+ * qdf_runtime_pm_get() - do a get opperation on the device
  *
- * Return: HIF Runtime pm ID of client
+ * A get opperation will prevent a runtime suspend until a
+ * corresponding put is done.  This api should be used when sending
+ * data.
+ *
+ * CONTRARY TO THE REGULAR RUNTIME PM, WHEN THE BUS IS SUSPENDED,
+ * THIS API WILL ONLY REQUEST THE RESUME AND NOT TO A GET!!!
+ *
+ * return: success if the bus is up and a get has been issued
+ *   otherwise an error code.
  */
-static uint32_t qdf_to_hif_convert_rtpm_id(uint32_t id)
+QDF_STATUS qdf_runtime_pm_get(void)
 {
-	switch (id) {
-	case QDF_RTPM_ID_RESERVED:
-		return HIF_RTPM_ID_RESERVED;
-	case QDF_RTPM_ID_PM_QOS_NOTIFY:
-		return HIF_RTPM_ID_PM_QOS_NOTIFY;
-	case QDF_RTPM_ID_WIPHY_SUSPEND:
-		return HIF_RTPM_ID_WIPHY_SUSPEND;
-	default:
-		return HIF_RTPM_ID_MAX;
+	void *ol_sc;
+	int ret;
+
+	ol_sc = cds_get_context(QDF_MODULE_ID_HIF);
+
+	if (!ol_sc) {
+		QDF_ASSERT(0);
+		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR,
+			  "%s: HIF context is null!", __func__);
+		return QDF_STATUS_E_INVAL;
 	}
+
+	ret = hif_pm_runtime_get(ol_sc, RTPM_ID_RESVERD, false);
+
+	if (ret)
+		return QDF_STATUS_E_FAILURE;
+	return QDF_STATUS_SUCCESS;
 }
+qdf_export_symbol(qdf_runtime_pm_get);
 
 /**
- * qdf_to_hif_convert_rtpm_type() - Convert QDF Runtime PM call type to HIF
- *                                 call type
- * @type: call type
+ * qdf_runtime_pm_put() - do a put opperation on the device
  *
- * Return: HIF runtime PM call type
+ * A put opperation will allow a runtime suspend after a corresponding
+ * get was done.  This api should be used when sending data.
+ *
+ * This api will return a failure if the hif module hasn't been
+ * initialized
+ *
+ * return: QDF_STATUS_SUCCESS if the put is performed
  */
-static uint8_t qdf_to_hif_convert_rtpm_type(uint8_t type)
+QDF_STATUS qdf_runtime_pm_put(void)
 {
-	switch (type) {
-	case QDF_RTPM_GET:
-		return HIF_RTPM_GET_ASYNC;
-	case QDF_RTPM_GET_FORCE:
-		return HIF_RTPM_GET_FORCE;
-	case QDF_RTPM_GET_SYNC:
-		return HIF_RTPM_GET_SYNC;
-	case QDF_RTPM_GET_NORESUME:
-		return HIF_RTPM_GET_NORESUME;
-	case QDF_RTPM_PUT:
-		return HIF_RTPM_PUT_ASYNC;
-	case QDF_RTPM_PUT_SYNC_SUSPEND:
-		return HIF_RTPM_PUT_SYNC_SUSPEND;
-	case QDF_RTPM_PUT_NOIDLE:
-		return HIF_RTPM_PUT_NOIDLE;
-	default:
-		return QDF_STATUS_E_NOSUPPORT;
+	void *ol_sc;
+	int ret;
+
+	ol_sc = cds_get_context(QDF_MODULE_ID_HIF);
+
+	if (!ol_sc) {
+		QDF_ASSERT(0);
+		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR,
+			  "%s: HIF context is null!", __func__);
+		return QDF_STATUS_E_INVAL;
 	}
-}
 
-QDF_STATUS qdf_rtpm_register(uint32_t id, void (*hif_rpm_cbk)(void))
+	ret = hif_pm_runtime_put(ol_sc, RTPM_ID_RESVERD);
+
+	if (ret)
+		return QDF_STATUS_E_FAILURE;
+	return QDF_STATUS_SUCCESS;
+}
+qdf_export_symbol(qdf_runtime_pm_put);
+
+/**
+ * qdf_runtime_pm_prevent_suspend() - prevent a runtime bus suspend
+ * @lock: an opaque context for tracking
+ *
+ * The lock can only be acquired once per lock context and is tracked.
+ *
+ * return: QDF_STATUS_SUCCESS or failure code.
+ */
+QDF_STATUS qdf_runtime_pm_prevent_suspend(qdf_runtime_lock_t *lock)
 {
-	return hif_rtpm_register(qdf_to_hif_convert_rtpm_id(id), hif_rpm_cbk);
+	void *ol_sc;
+	int ret;
+
+	ol_sc = cds_get_context(QDF_MODULE_ID_HIF);
+
+	if (!ol_sc) {
+		QDF_ASSERT(0);
+		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR,
+			  "%s: HIF context is null!", __func__);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	ret = hif_pm_runtime_prevent_suspend(ol_sc, lock->lock);
+
+	if (ret)
+		return QDF_STATUS_E_FAILURE;
+	return QDF_STATUS_SUCCESS;
 }
+qdf_export_symbol(qdf_runtime_pm_prevent_suspend);
 
-qdf_export_symbol(qdf_rtpm_register);
-
-QDF_STATUS qdf_rtpm_deregister(uint32_t id)
+/**
+ * qdf_runtime_pm_allow_suspend() - prevent a runtime bus suspend
+ * @lock: an opaque context for tracking
+ *
+ * The lock can only be acquired once per lock context and is tracked.
+ *
+ * return: QDF_STATUS_SUCCESS or failure code.
+ */
+QDF_STATUS qdf_runtime_pm_allow_suspend(qdf_runtime_lock_t *lock)
 {
-	return hif_rtpm_deregister(qdf_to_hif_convert_rtpm_id(id));
-}
+	void *ol_sc;
+	int ret;
 
-qdf_export_symbol(qdf_rtpm_deregister);
+	ol_sc = cds_get_context(QDF_MODULE_ID_HIF);
+	if (!ol_sc) {
+		QDF_ASSERT(0);
+		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR,
+		"%s: HIF context is null!", __func__);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	ret = hif_pm_runtime_allow_suspend(ol_sc, lock->lock);
+	if (ret)
+		return QDF_STATUS_E_FAILURE;
+
+	return QDF_STATUS_SUCCESS;
+}
+qdf_export_symbol(qdf_runtime_pm_allow_suspend);
+
+/**
+ * qdf_runtime_lock_init() - initialize runtime lock
+ * @name: name of the runtime lock
+ *
+ * Initialize a runtime pm lock.  This lock can be used
+ * to prevent the runtime pm system from putting the bus
+ * to sleep.
+ *
+ * Return: runtime_pm_lock_t
+ */
+QDF_STATUS __qdf_runtime_lock_init(qdf_runtime_lock_t *lock, const char *name)
+{
+	int ret = hif_runtime_lock_init(lock, name);
+
+	if (ret)
+		return QDF_STATUS_E_NOMEM;
+
+	return QDF_STATUS_SUCCESS;
+}
+qdf_export_symbol(__qdf_runtime_lock_init);
+
+/**
+ * qdf_runtime_lock_deinit() - deinitialize runtime pm lock
+ * @lock: the lock to deinitialize
+ *
+ * Ensures the lock is released. Frees the runtime lock.
+ *
+ * Return: void
+ */
+void qdf_runtime_lock_deinit(qdf_runtime_lock_t *lock)
+{
+	void *hif_ctx = cds_get_context(QDF_MODULE_ID_HIF);
+
+	if (!hif_ctx)
+		return;
+
+	if (!lock)
+		return;
+
+	hif_runtime_lock_deinit(hif_ctx, lock->lock);
+}
+qdf_export_symbol(qdf_runtime_lock_deinit);
+
+#else
+
+QDF_STATUS qdf_runtime_pm_get(void)
+{
+	return QDF_STATUS_SUCCESS;
+}
+qdf_export_symbol(qdf_runtime_pm_get);
+
+QDF_STATUS qdf_runtime_pm_put(void)
+{
+	return QDF_STATUS_SUCCESS;
+}
+qdf_export_symbol(qdf_runtime_pm_put);
+
+QDF_STATUS qdf_runtime_pm_prevent_suspend(qdf_runtime_lock_t *lock)
+{
+	return QDF_STATUS_SUCCESS;
+}
+qdf_export_symbol(qdf_runtime_pm_prevent_suspend);
+
+QDF_STATUS qdf_runtime_pm_allow_suspend(qdf_runtime_lock_t *lock)
+{
+	return QDF_STATUS_SUCCESS;
+}
+qdf_export_symbol(qdf_runtime_pm_allow_suspend);
 
 QDF_STATUS __qdf_runtime_lock_init(qdf_runtime_lock_t *lock, const char *name)
 {
-	return hif_runtime_lock_init(lock, name);
+	return QDF_STATUS_SUCCESS;
 }
-
 qdf_export_symbol(__qdf_runtime_lock_init);
 
 void qdf_runtime_lock_deinit(qdf_runtime_lock_t *lock)
 {
-	hif_runtime_lock_deinit(lock->lock);
 }
 qdf_export_symbol(qdf_runtime_lock_deinit);
 
-QDF_STATUS qdf_rtpm_get(uint8_t type, uint32_t id)
-{
-	return hif_rtpm_get(qdf_to_hif_convert_rtpm_type(type),
-			    qdf_to_hif_convert_rtpm_id(id));
-}
+#endif /* FEATURE_RUNTIME_PM */
 
-qdf_export_symbol(qdf_rtpm_get);
-
-QDF_STATUS qdf_rtpm_put(uint8_t type, uint32_t id)
-{
-	return hif_rtpm_put(qdf_to_hif_convert_rtpm_type(type),
-			    qdf_to_hif_convert_rtpm_id(id));
-}
-
-qdf_export_symbol(qdf_rtpm_put);
-
-QDF_STATUS qdf_runtime_pm_prevent_suspend(qdf_runtime_lock_t *lock)
-{
-	return hif_pm_runtime_prevent_suspend(lock->lock);
-}
-
-qdf_export_symbol(qdf_runtime_pm_prevent_suspend);
-
-QDF_STATUS qdf_runtime_pm_prevent_suspend_sync(qdf_runtime_lock_t *lock)
-{
-	return hif_pm_runtime_prevent_suspend_sync(lock->lock);
-}
-
-qdf_export_symbol(qdf_runtime_pm_prevent_suspend_sync);
-
-QDF_STATUS qdf_runtime_pm_allow_suspend(qdf_runtime_lock_t *lock)
-{
-	return hif_pm_runtime_allow_suspend(lock->lock);
-}
-
-qdf_export_symbol(qdf_runtime_pm_allow_suspend);
-
-QDF_STATUS qdf_rtpm_sync_resume(void)
-{
-	return hif_rtpm_sync_resume();
-}
-#endif
+/**
+ * qdf_spinlock_acquire() - acquires a spin lock
+ * @lock: Spin lock to acquire
+ *
+ * Return:
+ * QDF status success: if wake lock is acquired
+ */
 QDF_STATUS qdf_spinlock_acquire(qdf_spinlock_t *lock)
 {
 	spin_lock(&lock->lock.spinlock);
@@ -524,6 +696,13 @@ QDF_STATUS qdf_spinlock_acquire(qdf_spinlock_t *lock)
 qdf_export_symbol(qdf_spinlock_acquire);
 
 
+/**
+ * qdf_spinlock_release() - release a spin lock
+ * @lock: Spin lock to release
+ *
+ * Return:
+ * QDF status success : if wake lock is acquired
+ */
 QDF_STATUS qdf_spinlock_release(qdf_spinlock_t *lock)
 {
 	spin_unlock(&lock->lock.spinlock);
@@ -531,6 +710,25 @@ QDF_STATUS qdf_spinlock_release(qdf_spinlock_t *lock)
 }
 qdf_export_symbol(qdf_spinlock_release);
 
+/**
+ * qdf_mutex_destroy() - destroy a QDF lock
+ * @lock: Pointer to the opaque lock object to be destroyed
+ *
+ * function shall destroy the lock object referenced by lock. After a
+ * successful return from qdf_mutex_destroy()
+ * the lock object becomes, in effect, uninitialized.
+ *
+ * A destroyed lock object can be reinitialized using qdf_mutex_create();
+ * the results of otherwise referencing the object after it has been destroyed
+ * are undefined.  Calls to QDF lock functions to manipulate the lock such
+ * as qdf_mutex_acquire() will fail if the lock is destroyed.  Therefore,
+ * don't use the lock after it has been destroyed until it has
+ * been re-initialized.
+ *
+ * Return:
+ * QDF_STATUS_SUCCESS: lock was successfully initialized
+ * QDF failure reason codes: lock is not initialized and can't be used
+ */
 QDF_STATUS qdf_mutex_destroy(qdf_mutex_t *lock)
 {
 	/* check for invalid pointer */
@@ -599,10 +797,9 @@ static qdf_atomic_t lock_cookie_untracked_num;
 
 /**
  * qdf_is_lock_cookie - check if memory is a valid lock cookie
- * @lock_cookie: lock cookie to check
  *
- * Return: true if the memory is within the range of the lock cookie
- *         memory.
+ * return true if the memory is within the range of the lock cookie
+ * memory.
  */
 static bool qdf_is_lock_cookie(struct qdf_lock_cookie *lock_cookie)
 {
@@ -618,8 +815,6 @@ static bool qdf_is_lock_cookie(struct qdf_lock_cookie *lock_cookie)
  * currently this is only true if the cookie is on the freelist.
  *
  * Checking for the function and line being NULL and 0 should also have worked.
- *
- * Return: true if the cookie is free
  */
 static bool qdf_is_lock_cookie_free(struct qdf_lock_cookie *lock_cookie)
 {
@@ -664,7 +859,7 @@ void qdf_lock_stats_init(void)
 		__qdf_put_lock_cookie(&lock_cookies[i]);
 
 	/* stats must be allocated for the spinlock before the cookie,
-	 * otherwise this qdf_lock_list_spinlock wouldn't get initialized
+	 * otherwise this qdf_lock_list_spinlock wouldnt get initialized
 	 * properly
 	 */
 	qdf_spinlock_create(&qdf_lock_list_spinlock);
@@ -711,8 +906,6 @@ void qdf_lock_stats_cookie_create(struct lock_stats *stats,
 	stats->cookie->u.cookie.line = line;
 }
 
-qdf_export_symbol(qdf_lock_stats_cookie_create);
-
 void qdf_lock_stats_cookie_destroy(struct lock_stats *stats)
 {
 	struct qdf_lock_cookie *cookie = stats->cookie;
@@ -734,6 +927,4 @@ void qdf_lock_stats_cookie_destroy(struct lock_stats *stats)
 
 	qdf_put_lock_cookie(cookie);
 }
-
-qdf_export_symbol(qdf_lock_stats_cookie_destroy);
 #endif

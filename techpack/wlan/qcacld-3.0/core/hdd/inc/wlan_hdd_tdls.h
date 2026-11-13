@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -33,10 +33,6 @@ struct hdd_context;
 extern const struct nla_policy
 	wlan_hdd_tdls_mode_configuration_policy
 	[QCA_WLAN_VENDOR_ATTR_TDLS_CONFIG_MAX + 1];
-
-extern const struct nla_policy
-	wlan_hdd_tdls_disc_rsp_policy
-	[QCA_WLAN_VENDOR_ATTR_TDLS_DISC_RSP_EXT_MAX + 1];
 
 #define FEATURE_TDLS_VENDOR_COMMANDS                                    \
 {                                                                       \
@@ -74,15 +70,6 @@ extern const struct nla_policy
 		 WIPHY_VENDOR_CMD_NEED_NETDEV,                         \
 	.doit = wlan_hdd_cfg80211_exttdls_get_status,                  \
 	vendor_command_policy(VENDOR_CMD_RAW_DATA, 0)                  \
-},                                                                     \
-{                                                                      \
-	.info.vendor_id = QCA_NL80211_VENDOR_ID,                       \
-	.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_TDLS_DISC_RSP_EXT,    \
-	.flags = WIPHY_VENDOR_CMD_NEED_WDEV |                          \
-		 WIPHY_VENDOR_CMD_NEED_NETDEV,                         \
-	.doit = wlan_hdd_cfg80211_exttdls_set_link_id,                 \
-	vendor_command_policy(wlan_hdd_tdls_disc_rsp_policy,           \
-			      QCA_WLAN_VENDOR_ATTR_TDLS_DISC_RSP_EXT_TX_LINK) \
 },
 
 /* Bit mask flag for tdls_option to FW */
@@ -108,21 +95,6 @@ int wlan_hdd_cfg80211_exttdls_get_status(struct wiphy *wiphy,
 					 const void *data,
 					 int data_len);
 
-/**
- * wlan_hdd_cfg80211_exttdls_set_link_id() - set link id
- * @wiphy:   pointer to wireless wiphy structure.
- * @wdev:    pointer to wireless_dev structure.
- * @data:    Pointer to the data to be passed via vendor interface
- * @data_len:Length of the data to be passed
- *
- * Return:   Return the Success or Failure code.
- */
-int
-wlan_hdd_cfg80211_exttdls_set_link_id(struct wiphy *wiphy,
-				      struct wireless_dev *wdev,
-				      const void *data,
-				      int data_len);
-
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0))
 int wlan_hdd_cfg80211_tdls_oper(struct wiphy *wiphy,
 				struct net_device *dev,
@@ -142,13 +114,6 @@ int wlan_hdd_cfg80211_tdls_mgmt(struct wiphy *wiphy,
 				uint16_t status_code, uint32_t peer_capability,
 				bool initiator, const uint8_t *buf,
 				size_t len, int link_id);
-#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0))
-int wlan_hdd_cfg80211_tdls_mgmt(struct wiphy *wiphy,
-				struct net_device *dev, const u8 *peer,
-				int link_id, u8 action_code,
-				u8 dialog_token, u16 status_code,
-				u32 peer_capability, bool initiator,
-				const u8 *buf, size_t len);
 #elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 17, 0))
 int wlan_hdd_cfg80211_tdls_mgmt(struct wiphy *wiphy,
 				struct net_device *dev, const uint8_t *peer,
@@ -191,47 +156,6 @@ int hdd_set_tdls_offchannel(struct hdd_context *hdd_ctx,
 			    int offchannel);
 
 /**
- * hdd_get_tdls_connected_peer_count() - Gets connected TDLS peer count.
- * @link_info: Pointer to link_info in hdd adapter
- *
- * This function return number of connected peer.
- *
- * Return: void
- */
-uint16_t
-hdd_get_tdls_connected_peer_count(struct wlan_hdd_link_info *link_info);
-
-/**
- * hdd_check_and_set_tdls_conn_params() - Sets and Overwrite netdev params if
- *                               stations is connected in 11A, 11B and 11G mode.
- * @vdev: Pointer to vdev objmgr
- *
- * This function updates the netdev params such as enabling checksum/tso
- * if the feature "disable checksum/tso for 11abg connections" is enabled via
- * INI. if INI is enabled then 11abg sta link will be created by disabling
- * checksum/tso which are needed to be enabled for better throughput
- * for TDLS connected in 11AX, 11AC, 11N mode
- *
- * Return: void
- */
-void hdd_check_and_set_tdls_conn_params(struct wlan_objmgr_vdev *vdev);
-
-/**
- * hdd_check_and_set_tdls_disconn_params() - Overwrite netdev params if BSS
- *                                           STA link is 11A, 11B and 11G mode
- *                                           when TDLS is disconnected
- * @vdev: Pointer to vdev objmgr
- *
- * During TDLS connection if STA-BSS link is in 11a, 11b, 11g mode, then
- * legacy netdev features such as checksum/tso are enabled. This function will
- * take care of disabling them during TDLS disconnection if the feature
- * "disable checksum/tso for 11abg connections" is enabled via INI.
- *
- * Return: void
- */
-void hdd_check_and_set_tdls_disconn_params(struct wlan_objmgr_vdev *vdev);
-
-/**
  * hdd_set_tdls_secoffchanneloffset() - set secondary tdls off-channel offset
  * @hdd_ctx:     Pointer to the HDD context
  * @adapter: Pointer to the HDD adapter
@@ -261,16 +185,8 @@ int hdd_set_tdls_offchannelmode(struct hdd_context *hdd_ctx,
 				struct hdd_adapter *adapter,
 				int offchanmode);
 int hdd_set_tdls_scan_type(struct hdd_context *hdd_ctx, int val);
-
-/**
- * wlan_hdd_tdls_antenna_switch() - Dynamic TDLS antenna  switch 1x1 <-> 2x2
- * antenna mode in standalone station
- * @link_info: Pointer to link_info in hdd adapter
- * @mode: enum antenna_mode
- *
- * Return: 0 if success else non zero
- */
-int wlan_hdd_tdls_antenna_switch(struct wlan_hdd_link_info *link_info,
+int wlan_hdd_tdls_antenna_switch(struct hdd_context *hdd_ctx,
+				 struct hdd_adapter *adapter,
 				 uint32_t mode);
 
 /**
@@ -312,9 +228,9 @@ void hdd_config_tdls_with_band_switch(struct hdd_context *hdd_ctx);
 
 #define FEATURE_TDLS_VENDOR_COMMANDS
 
-static inline int
-wlan_hdd_tdls_antenna_switch(struct wlan_hdd_link_info *link_info,
-			     uint32_t mode)
+static inline int wlan_hdd_tdls_antenna_switch(struct hdd_context *hdd_ctx,
+					       struct hdd_adapter *adapter,
+					       uint32_t mode)
 {
 	return 0;
 }
@@ -342,20 +258,5 @@ static inline void hdd_config_tdls_with_band_switch(struct hdd_context *hdd_ctx)
 {
 }
 
-static inline uint16_t
-hdd_get_tdls_connected_peer_count(struct wlan_hdd_link_info *link_info)
-{
-	return 0;
-}
-
-static inline void
-hdd_check_and_set_tdls_conn_params(struct wlan_objmgr_vdev *vdev)
-{
-}
-
-static inline void
-hdd_check_and_set_tdls_disconn_params(struct wlan_objmgr_vdev *vdev)
-{
-}
 #endif /* End of FEATURE_WLAN_TDLS */
 #endif /* __HDD_TDLS_H */

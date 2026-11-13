@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -38,65 +37,12 @@ int wlan_cfg80211_set_default_key(struct wlan_objmgr_vdev *vdev,
 				  struct qdf_mac_addr *bssid);
 
 /**
- * wlan_cfg80211_translate_ml_sta_key - Translate the cfg80211 keys
- * to internal for ml sta key
- * @key_index: key index
- * @key_type: key type
- * @mac_addr: mac addr
- * @params: params
- * @crypto_key: crypto keys
- *
- * Return: None
- */
-void wlan_cfg80211_translate_ml_sta_key(uint8_t key_index,
-					enum wlan_crypto_key_type key_type,
-					const u8 *mac_addr,
-					struct key_params *params,
-					struct wlan_crypto_key *crypto_key);
-/**
- * wlan_cfg80211_translate_key() - Translate the cfg80211 keys to
- * internal
- * @vdev: Pointer to vdev object
- * @key_index: Key index
- * @key_type: key type
- * @mac_addr: mac address
- * @params: Params
- * @crypto_key: Crypto keys
- *
- * Return: None
- */
-void wlan_cfg80211_translate_key(struct wlan_objmgr_vdev *vdev,
-				 uint8_t key_index,
-				 enum wlan_crypto_key_type key_type,
-				 const u8 *mac_addr,
-				 struct key_params *params,
-				 struct wlan_crypto_key *crypto_key);
-
-/**
- * wlan_cfg80211_store_link_key() - store link key info
- * @psoc: psoc handler
- * @key_index: key index
- * @key_type: key type
- * @mac_addr: mac address
- * @params: params
- * @link_addr: link address
- * @link_id: link id
- *
- */
-int wlan_cfg80211_store_link_key(struct wlan_objmgr_psoc *psoc,
-				 uint8_t key_index,
-				 enum wlan_crypto_key_type key_type,
-				 const u8 *mac_addr, struct key_params *params,
-				 struct qdf_mac_addr *link_addr,
-				 uint8_t link_id);
-
-/**
  * wlan_cfg80211_store_key() - Store the key
  * @vdev: VDEV Object pointer
  * @key_index: Index to be set as the default
  * @key_type: denotes if the key is pairwise or group key
  * @mac_addr: BSSID for which the key is to be set
- * @params: Key params received from the kernel
+ * @key_params: Params received from the kernel
  *
  * Return: Zero for success and negative for failure.
  */
@@ -108,7 +54,6 @@ int wlan_cfg80211_store_key(struct wlan_objmgr_vdev *vdev,
 /**
  * wlan_cfg80211_crypto_add_key() - Add key for the specified vdev
  * @vdev: vdev object
- * @peer_mac: MAC address of the crypto key entity
  * @key_type: denotes if the add key request is for pairwise or group key
  * @key_index: Index of the key that needs to be added
  * @sync: flag to indicate whether or not to add key synchronously.
@@ -117,7 +62,6 @@ int wlan_cfg80211_store_key(struct wlan_objmgr_vdev *vdev,
  * Return: Zero on Success, negative value on failure
  */
 int wlan_cfg80211_crypto_add_key(struct wlan_objmgr_vdev *vdev,
-				 const uint8_t *peer_mac,
 				 enum wlan_crypto_key_type key_type,
 				 uint8_t key_index, bool sync);
 #endif

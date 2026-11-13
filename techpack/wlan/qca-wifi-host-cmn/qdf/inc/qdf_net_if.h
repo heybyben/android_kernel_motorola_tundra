@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -31,6 +31,14 @@
 
 struct qdf_net_if;
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0))
+#define netif_napi_add_ni(net_device, napi, poll, weight) \
+	netif_napi_add_weight(net_device, napi, poll, weight)
+#else
+#define netif_napi_add_ni(net_device, napi, poll, weight) \
+	netif_napi_add(net_device, napi, poll, weight)
+#endif
+
 #ifdef ENHANCED_OS_ABSTRACTION
 /**
  * qdf_net_if_create_dummy_if() - create dummy interface
@@ -41,18 +49,7 @@ struct qdf_net_if;
  * Return: QDF_STATUS_SUCCESS on success
  */
 QDF_STATUS
-qdf_net_if_create_dummy_if(struct qdf_net_if **nif);
-
-/**
- * qdf_net_if_destroy_dummy_if() - destroy dummy interface
- * @nif: interface handle
- *
- * This function will destroy a dummy network interface
- *
- * Return: None
- */
-void
-qdf_net_if_destroy_dummy_if(struct qdf_net_if *nif);
+qdf_net_if_create_dummy_if(struct qdf_net_if *nif);
 
 /**
  * qdf_net_if_get_dev_by_name() - Find a network device by its name
@@ -77,57 +74,6 @@ QDF_STATUS
 qdf_net_if_release_dev(struct qdf_net_if *nif);
 
 /**
- * qdf_net_if_hold_dev() - Hold reference to network device
- * @nif: network device
- *
- * This function holds reference to the network device
- *
- * Return: QDF_STATUS_SUCCESS on success
- */
-QDF_STATUS
-qdf_net_if_hold_dev(struct qdf_net_if *nif);
-
-/**
- * qdf_napi_enable() - Enable the napi schedule
- * @napi: NAPI context
- *
- * This function resume NAPI from being scheduled on this context
- *
- * Return: NONE
- */
-void qdf_napi_enable(struct napi_struct *napi);
-
-/**
- * qdf_napi_disable() - Disable the napi schedule
- * @napi: NAPI context
- *
- * This function suspends NAPI from being scheduled on this context
- *
- * Return: NONE
- */
-void qdf_napi_disable(struct napi_struct *napi);
-
-/**
- * qdf_netif_napi_add - initialize a NAPI context
- * @netdev:  network device
- * @napi: NAPI context
- * @poll: polling function
- * @weight: default weight
- *
- * Return: NONE
- */
-void qdf_netif_napi_add(struct net_device *netdev, struct napi_struct *napi,
-			int (*poll)(struct napi_struct *, int), int weight);
-
-/**
- *  qdf_netif_napi_del - remove a NAPI context
- *  @napi: NAPI context
- *
- *  Return: NONE
- */
-void qdf_netif_napi_del(struct napi_struct *napi);
-
-/**
  * qdf_net_update_net_device_dev_addr() - update net_device dev_addr
  * @ndev: net_device
  * @src_addr: source mac address
@@ -143,15 +89,9 @@ qdf_net_update_net_device_dev_addr(struct net_device *ndev,
 				   size_t len);
 #else /* ENHANCED_OS_ABSTRACTION */
 static inline QDF_STATUS
-qdf_net_if_create_dummy_if(struct qdf_net_if **nif)
+qdf_net_if_create_dummy_if(struct qdf_net_if *nif)
 {
 	return __qdf_net_if_create_dummy_if(nif);
-}
-
-static inline void
-qdf_net_if_destroy_dummy_if(struct qdf_net_if *nif)
-{
-	__qdf_net_if_destroy_dummy_if(nif);
 }
 
 static inline struct qdf_net_if *
@@ -164,12 +104,6 @@ static inline QDF_STATUS
 qdf_net_if_release_dev(struct qdf_net_if *nif)
 {
 	return __qdf_net_if_release_dev(nif);
-}
-
-static inline QDF_STATUS
-qdf_net_if_hold_dev(struct qdf_net_if *nif)
-{
-	return __qdf_net_if_hold_dev(nif);
 }
 
 /**
@@ -188,31 +122,6 @@ qdf_net_update_net_device_dev_addr(struct net_device *ndev,
 				   size_t len)
 {
 	__qdf_net_update_net_device_dev_addr(ndev, src_addr, len);
-}
-
-static inline void
-qdf_napi_enable(struct napi_struct *napi)
-{
-	__qdf_napi_enable(napi);
-}
-
-static inline void
-qdf_napi_disable(struct napi_struct *napi)
-{
-	__qdf_napi_disable(napi);
-}
-
-static inline void
-qdf_netif_napi_add(struct net_device *netdev, struct napi_struct *napi,
-		   int (*poll)(struct napi_struct *, int), int weight)
-{
-	__qdf_netif_napi_add(netdev, napi, poll, weight);
-}
-
-static inline void
-qdf_netif_napi_del(struct napi_struct *napi)
-{
-	__qdf_netif_napi_del(napi);
 }
 #endif /* ENHANCED_OS_ABSTRACTION */
 

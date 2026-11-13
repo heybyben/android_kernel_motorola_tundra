@@ -73,12 +73,8 @@
 /* Max vdev_id */
 #define WLAN_UMAC_VDEV_ID_MAX 0xFF
 
-/* Number of AID values to be reserved for 11az TBR RSTA ranging*/
-#define WLAN_RTT_11AZ_NUM_RSID 16
-
-/* MAX AID */
-/* Reserving AID value 1992-2007 from AID pool for 11az TBR RSTA ranging. */
-#define WLAN_UMAC_MAX_AID (2008 - WLAN_RTT_11AZ_NUM_RSID - 1)
+/* TODO: MAX AID */
+#define WLAN_UMAC_MAX_AID 2048
 
 /* Invalid pdev_id */
 #define WLAN_INVALID_PDEV_ID 0xFFFFFFFF
@@ -261,7 +257,6 @@
  * @WLAN_UMAC_COMP_P2P:           P2P
  * @WLAN_UMAC_COMP_POLICY_MGR:    Policy Manager
  * @WLAN_UMAC_COMP_CONFIG:        Configuration
- * @WLAN_TARGET_IF_COMP_DIRECT_BUF_RX: Direct Buffer RX
  * @WLAN_UMAC_COMP_WIFI_POS:      WIFI Positioning
  * @WLAN_UMAC_COMP_TDLS:          TDLS
  * @WLAN_UMAC_COMP_ATF:           Airtime Fairness
@@ -283,10 +278,9 @@
  * @WLAN_UMAC_COMP_IPA:           IPA
  * @WLAN_UMAC_COMP_CP_STATS:      Control Plane Statistics
  * @WLAN_UMAC_COMP_ACTION_OUI:    ACTION OUI
- * @WLAN_UMAC_COMP_FWOL:          FW Offload
- * @WLAN_UMAC_COMP_CFR:           CFR component
- * @WLAN_UMAC_COMP_INTEROP_ISSUES_AP: interop issues ap component
- * @WLAN_UMAC_COMP_DENYLIST_MGR:  Denylist mgr component
+ * @WLAN_UMAC_COMP_FWOL           FW Offload
+ * @WLAN_UMAC_COMP_INTEROP_ISSUES_AP       interop issues ap component
+ * @WLAN_UMAC_COMP_BLACKLIST_MGR:      Blacklist mgr component
  * @WLAN_UMAC_COMP_COEX:          Coex config component
  * @WLAN_UMAC_COMP_FTM_TIME_SYNC: WLAN FTM TIMESYNC
  * @WLAN_UMAC_COMP_PKT_CAPTURE:   Packet capture component
@@ -299,14 +293,8 @@
  * @WLAN_UMAC_COMP_MBSS:          MBSS Framework
  * @WLAN_UMAC_COMP_WIFI_RADAR:    WIFI RADAR component
  * @WLAN_UMAC_COMP_TWT:           Target Wake Time (TWT) Component
- * @WLAN_UMAC_COMP_PRE_CAC:       PRE CAC component
  * @WLAN_COMP_DP:                 DP component
- * @WLAN_COMP_TELEMETRY_AGENT:    Telemetry Agent component
  * @WLAN_UMAC_COMP_COAP:          Constrained Application Protocol component
- * @WLAN_UMAC_COMP_QMI:           QMI component
- * @WLAN_UMAC_COMP_AFC:           AFC component
- * @WLAN_UMAC_COMP_SAWF:          SAWF component
- * @WLAN_UMAC_COMP_LL_SAP:        LL SAP component
  * @WLAN_UMAC_COMP_ID_MAX:        Maximum components in UMAC
  *
  * This id is static.
@@ -345,7 +333,7 @@ enum wlan_umac_comp_id {
 	WLAN_UMAC_COMP_FWOL               = 29,
 	WLAN_UMAC_COMP_CFR                = 30,
 	WLAN_UMAC_COMP_INTEROP_ISSUES_AP  = 31,
-	WLAN_UMAC_COMP_DENYLIST_MGR       = 32,
+	WLAN_UMAC_COMP_BLACKLIST_MGR      = 32,
 	WLAN_UMAC_COMP_COEX               = 33,
 	WLAN_UMAC_COMP_FTM_TIME_SYNC      = 34,
 	WLAN_UMAC_COMP_PKT_CAPTURE        = 35,
@@ -358,14 +346,8 @@ enum wlan_umac_comp_id {
 	WLAN_UMAC_COMP_MBSS               = 42,
 	WLAN_UMAC_COMP_WIFI_RADAR         = 43,
 	WLAN_UMAC_COMP_TWT                = 44,
-	WLAN_UMAC_COMP_PRE_CAC            = 45,
 	WLAN_COMP_DP                      = 46,
-	WLAN_COMP_TELEMETRY_AGENT         = 47,
 	WLAN_UMAC_COMP_COAP               = 48,
-	WLAN_UMAC_COMP_QMI                = 49,
-	WLAN_UMAC_COMP_AFC                = 50,
-	WLAN_UMAC_COMP_SAWF               = 51,
-	WLAN_UMAC_COMP_LL_SAP             = 52,
 	WLAN_UMAC_COMP_ID_MAX,
 };
 
@@ -522,7 +504,6 @@ enum wlan_phymode {
 	((mode) == WLAN_PHYMODE_11BEA_EHT320); })
 
 #else
-#define IS_WLAN_PHYMODE_320MHZ(_mode) 0
 
 #define IS_WLAN_PHYMODE_160MHZ(_mode) ({typeof(_mode) mode = (_mode); \
 	((mode) == WLAN_PHYMODE_11AC_VHT80_80) || \
@@ -549,8 +530,6 @@ enum wlan_phymode {
 	((mode) == WLAN_PHYMODE_11AXG_HE40)  || \
 	((mode) == WLAN_PHYMODE_11AXG_HE40PLUS)  || \
 	((mode) == WLAN_PHYMODE_11AXG_HE40MINUS); })
-
-#define IS_WLAN_PHYMODE_EHT(_mode) 0
 #endif
 
 #define IS_WLAN_PHYMODE_HT(_mode) ({typeof(_mode) mode = (_mode); \
@@ -587,14 +566,14 @@ enum wlan_phymode {
 
 /**
  * enum phy_ch_width - channel width
- * @CH_WIDTH_20MHZ: 20 MHz width
- * @CH_WIDTH_40MHZ: 40 MHz width
- * @CH_WIDTH_80MHZ: 80 MHz width
- * @CH_WIDTH_160MHZ: 160 MHz width
- * @CH_WIDTH_80P80MHZ: 80+80 MHz width
- * @CH_WIDTH_5MHZ: 5 MHz width
- * @CH_WIDTH_10MHZ: 10 MHz width
- * @CH_WIDTH_320MHZ: 320 MHz width
+ * @CH_WIDTH_20MHZ: 20 mhz width
+ * @CH_WIDTH_40MHZ: 40 mhz width
+ * @CH_WIDTH_80MHZ: 80 mhz width
+ * @CH_WIDTH_160MHZ: 160 mhz width
+ * @CH_WIDTH_80P80HZ: 80+80 mhz width
+ * @CH_WIDTH_5MHZ: 5 mhz width
+ * @CH_WIDTH_10MHZ: 10 mhz width
+ * @CH_WIDTH_320MHZ: 320 mhz width
  * @CH_WIDTH_INVALID: invalid width
  * @CH_WIDTH_MAX: max possible width
  */
@@ -606,7 +585,9 @@ enum phy_ch_width {
 	CH_WIDTH_80P80MHZ,
 	CH_WIDTH_5MHZ,
 	CH_WIDTH_10MHZ,
+#ifdef WLAN_FEATURE_11BE
 	CH_WIDTH_320MHZ,
+#endif
 	CH_WIDTH_INVALID,
 	CH_WIDTH_MAX
 };
@@ -640,8 +621,6 @@ enum wifi_traffic_ac {
  * @WLAN_PEER_IBSS:     IBSS Peer
  * @WLAN_PEER_NDP:      NDP Peer
  * @WLAN_PEER_MLO_TEMP: MLO Peer Temp (host only node)
- * @WLAN_PEER_RTT_PASN: Ranging PASN peer
- * @WLAN_PEER_MLO_BRIDGE: MLO Bridge peer
  */
 enum wlan_peer_type {
 	WLAN_PEER_SELF     = 1,
@@ -655,8 +634,6 @@ enum wlan_peer_type {
 	WLAN_PEER_IBSS     = 9,
 	WLAN_PEER_NDP      = 10,
 	WLAN_PEER_MLO_TEMP = 11,
-	WLAN_PEER_RTT_PASN = 12,
-	WLAN_PEER_MLO_BRIDGE = 13,
 };
 
 /**
@@ -688,10 +665,10 @@ enum wlan_bss_type {
 };
 
 /**
- * enum wlan_pmf_cap - pmf capability
- * @WLAN_PMF_DISABLED: PMF is disabled
- * @WLAN_PMF_CAPABLE: PMF is supported
- * @WLAN_PMF_REQUIRED: PMF is mandatory
+ * enum wlan_pmf_cap: pmf capability
+ * @PMF_DISABLED: PMF is disabled
+ * @PMF_CAPABLE: PMF is supported
+ * @PMF_REQUIRED: PMF is mandatory
  */
 enum wlan_pmf_cap {
 	WLAN_PMF_DISABLED,
@@ -718,30 +695,16 @@ struct wlan_ssid {
 #define PSOC_HOST_MAX_NUM_SS (8)
 #define PSOC_HOST_MAX_PHY_SIZE (3)
 #define PSOC_HOST_MAX_MAC_SIZE (2)
-#define PSOC_MAX_HW_MODE (4)
-#define PSOC_MAX_MAC_PHY_CAP (8)
+#define PSOC_MAX_HW_MODE (3)
+#define PSOC_MAX_MAC_PHY_CAP (5)
 #define PSOC_MAX_PHY_REG_CAP (3)
 #define PSOC_MAX_CHAINMASK_TABLES (5)
 
-#ifdef WLAN_RCC_ENHANCED_AOA_SUPPORT
-#define PSOC_MAX_NUM_AGC_GAIN_TBLS 8
-#endif
-
 #ifdef WLAN_FEATURE_11BE
 #define PSOC_HOST_MAX_EHT_MAC_SIZE 1
-#define PSOC_HOST_MAX_EHT_PHY_SIZE 3
+#define PSOC_HOST_MAX_EHT_PHY_SIZE 2
 #define PSOC_HOST_EHT_MCS_NSS_MAP_2G_SIZE 2
 #define PSOC_HOST_EHT_MCS_NSS_MAP_5G_SIZE 4
 #endif
-
-/**
- * enum host_edca_param_type - Host edca param type
- * @HOST_EDCA_PARAM_TYPE_AGGRESSIVE: Aggressive type
- * @HOST_EDCA_PARAM_TYPE_PIFS: Pifs type
- */
-enum host_edca_param_type {
-	HOST_EDCA_PARAM_TYPE_AGGRESSIVE = 0,
-	HOST_EDCA_PARAM_TYPE_PIFS = 1,
-};
 
 #endif /* _WLAN_OBJMGR_CMN_H_*/

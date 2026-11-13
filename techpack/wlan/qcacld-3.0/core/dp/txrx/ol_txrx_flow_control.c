@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2015-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -59,7 +58,7 @@ ol_tx_register_global_mgmt_pool(struct ol_txrx_pdev_t *pdev)
 	pdev->mgmt_pool = ol_tx_create_flow_pool(TX_FLOW_MGMT_POOL_ID,
 						 TX_FLOW_MGMT_POOL_SIZE);
 	if (!pdev->mgmt_pool)
-		ol_txrx_err("Management pool creation failed");
+		ol_txrx_err("Management pool creation failed\n");
 }
 
 /**
@@ -127,7 +126,7 @@ void ol_tx_set_desc_global_pool_size(uint32_t num_msdu_desc)
 	pdev->num_msdu_desc = num_msdu_desc;
 	if (!ol_tx_get_is_mgmt_over_wmi_enabled())
 		pdev->num_msdu_desc += TX_FLOW_MGMT_POOL_SIZE;
-	ol_txrx_info_high("Global pool size: %d", pdev->num_msdu_desc);
+	ol_txrx_info_high("Global pool size: %d\n", pdev->num_msdu_desc);
 }
 
 /**
@@ -192,7 +191,7 @@ void ol_tx_deregister_flow_control(struct ol_txrx_pdev_t *pdev)
 		if (!pool)
 			break;
 		qdf_spin_unlock_bh(&pdev->tx_desc.flow_pool_list_lock);
-		ol_txrx_info("flow pool list is not empty %d!!!", i++);
+		ol_txrx_info("flow pool list is not empty %d!!!\n", i++);
 
 		if (i == 1)
 			ol_tx_dump_flow_pool_info(soc);
@@ -725,7 +724,7 @@ int ol_tx_free_invalid_flow_pool(struct ol_tx_flow_pool_t *pool)
 		return -EINVAL;
 	}
 
-	/* directly distribute to other deficient pools */
+	/* direclty distribute to other deficient pools */
 	ol_tx_distribute_descs_to_deficient_pools(pool);
 
 	qdf_spin_lock_bh(&pool->flow_pool_lock);
@@ -1006,7 +1005,7 @@ int ol_tx_distribute_descs_to_deficient_pools_from_global_pool(void)
 	if (!desc_move_count)
 		return 0;
 
-	/* distribute desc to deficient pool */
+	/* destribute desc to deficient pool */
 	qdf_spin_lock_bh(&pdev->tx_desc.flow_pool_list_lock);
 	TAILQ_FOREACH(dst_pool, &pdev->tx_desc.flow_pool_list,
 		      flow_pool_list_elem) {

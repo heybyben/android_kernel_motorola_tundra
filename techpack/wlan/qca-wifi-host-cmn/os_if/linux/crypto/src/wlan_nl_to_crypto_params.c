@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -39,7 +38,7 @@
 #include "wlan_crypto_global_def.h"
 
 /**
- * struct osif_akm_type_crypto_mapping - mapping akm type received from
+ * struct osif_akm_crypto_mapping - mapping akm type received from
  *                                 NL to internal crypto type
  * @akm_suite: NL akm type
  * @akm_type_crypto: akm crypto type
@@ -66,8 +65,8 @@ struct osif_cipher_crypto_mapping {
 	u32 cipher_len;
 };
 
-/*
- * mapping table for auth type received from NL and crypto auth type
+/**
+ * mapping table for auth type received from NL and cryto auth type
  */
 static const wlan_crypto_auth_mode
 	osif_auth_type_crypto_mapping[] = {
@@ -84,7 +83,7 @@ static const wlan_crypto_auth_mode
 	[NL80211_AUTHTYPE_SAE] = WLAN_CRYPTO_AUTH_SAE,
 };
 
-/* mapping table for akm type received from NL and crypto akm type */
+/* mapping table for akm type received from NL and cryto akm type */
 static const struct osif_akm_type_crypto_mapping
 	osif_akm_type_crypto_mapping[] = {
 	{
@@ -197,23 +196,9 @@ static const struct osif_akm_type_crypto_mapping
 		.akm_suite = WLAN_AKM_SUITE_DPP,
 		.akm_type_crypto = WLAN_CRYPTO_KEY_MGMT_DPP,
 	},
-	{
-#ifndef WLAN_AKM_SUITE_SAE_EXT_KEY
-#define WLAN_AKM_SUITE_SAE_EXT_KEY 0x000FAC18
-#endif
-		.akm_suite = WLAN_AKM_SUITE_SAE_EXT_KEY,
-		.akm_type_crypto = WLAN_CRYPTO_KEY_MGMT_SAE_EXT_KEY,
-	},
-	{
-#ifndef WLAN_AKM_SUITE_FT_SAE_EXT_KEY
-#define WLAN_AKM_SUITE_FT_SAE_EXT_KEY 0x000FAC19
-#endif
-		.akm_suite = WLAN_AKM_SUITE_FT_SAE_EXT_KEY,
-		.akm_type_crypto = WLAN_CRYPTO_KEY_MGMT_FT_SAE_EXT_KEY,
-	},
 };
 
-/* mapping table for cipher type received from NL and crypto cipher type */
+/* mapping table for cipher type received from NL and cryto cipher type */
 static const struct osif_cipher_crypto_mapping
 	osif_cipher_crypto_mapping[] = {
 	{

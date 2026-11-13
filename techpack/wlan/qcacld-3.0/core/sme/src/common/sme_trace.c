@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -123,6 +122,7 @@ static uint8_t *sme_trace_get_rx_msg_string(uint32_t code)
 		CASE_RETURN_STRING(TRACE_CODE_SME_RX_HDD_RESET_PW5G);
 		CASE_RETURN_STRING(TRACE_CODE_SME_RX_HDD_UPDATE_RP5G);
 		CASE_RETURN_STRING(TRACE_CODE_SME_RX_HDD_SET_ROAMIBAND);
+		CASE_RETURN_STRING(TRACE_CODE_SME_RX_HDD_GET_ROAMIBAND);
 		CASE_RETURN_STRING(TRACE_CODE_SME_RX_HDD_UPDATE_RSSIDIFF);
 		CASE_RETURN_STRING(TRACE_CODE_SME_RX_HDD_UPDATE_IMMRSSIDIFF);
 		CASE_RETURN_STRING(TRACE_CODE_SME_RX_HDD_UPDATE_FTENABLED);
@@ -166,7 +166,6 @@ static uint8_t *sme_trace_get_command_string(uint32_t command)
 		CASE_RETURN_STRING(e_sme_command_nss_update);
 		CASE_RETURN_STRING(e_sme_command_set_dual_mac_config);
 		CASE_RETURN_STRING(e_sme_command_set_antenna_mode);
-		CASE_RETURN_STRING(e_sme_command_sap_ch_width_update);
 	default:
 		return "UNKNOWN";
 	}

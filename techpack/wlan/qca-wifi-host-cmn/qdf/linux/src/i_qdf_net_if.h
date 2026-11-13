@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -32,7 +32,6 @@
 
 struct qdf_net_if;
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0))
 /**
  * __qdf_net_if_create_dummy_if() - create dummy interface
  * @nif: interface handle
@@ -42,46 +41,17 @@ struct qdf_net_if;
  * Return: QDF_STATUS_SUCCESS on success
  */
 static inline QDF_STATUS
-__qdf_net_if_create_dummy_if(struct qdf_net_if **nif)
+__qdf_net_if_create_dummy_if(struct qdf_net_if *nif)
 {
-	*nif = (struct qdf_net_if *)alloc_netdev_dummy(0);
+	int ret;
 
-	if (!(*nif))
-		return QDF_STATUS_E_NOMEM;
-	return QDF_STATUS_SUCCESS;
+	ret = init_dummy_netdev((struct net_device *)nif);
+
+	return qdf_status_from_os_return(ret);
 }
 
 /**
- * __qdf_net_if_destroy_dummy_if() - destroy dummy interface
- * @nif: interface handle
- *
- * This function will destroy a dummy network interface
- *
- * Return: None
- */
-static inline void
-__qdf_net_if_destroy_dummy_if(struct qdf_net_if *nif)
-{
-	if (nif)
-		free_netdev((struct net_device *)nif);
-}
-#else
-static inline QDF_STATUS
-__qdf_net_if_create_dummy_if(struct qdf_net_if **nif)
-{
-	init_dummy_netdev((struct net_device *)*nif);
-
-	return qdf_status_from_os_return(0);
-}
-
-static inline void
-__qdf_net_if_destroy_dummy_if(struct qdf_net_if *nif)
-{
-}
-#endif
-
-/**
- * __qdf_net_if_get_dev_by_name() - Find a network device by its name
+ * qdf_net_if_get_dev_by_name() - Find a network device by its name
  * @nif_name: network device name
  *
  * This function retrieves the network device by its name
@@ -98,7 +68,7 @@ __qdf_net_if_get_dev_by_name(char *nif_name)
 }
 
 /**
- * __qdf_net_if_release_dev() - Release reference to network device
+ * qdf_net_if_release_dev() - Release reference to network device
  * @nif: network device
  *
  * This function releases reference to the network device
@@ -116,28 +86,9 @@ __qdf_net_if_release_dev(struct qdf_net_if  *nif)
 	return QDF_STATUS_SUCCESS;
 }
 
-/**
- * __qdf_net_if_hold_dev() - hold reference to network device
- * @nif: network device
- *
- * This function holds reference to the network device
- *
- * Return: QDF_STATUS_SUCCESS on success
- */
-static inline QDF_STATUS
-__qdf_net_if_hold_dev(struct qdf_net_if  *nif)
-{
-	if (!nif)
-		return QDF_STATUS_E_INVAL;
-
-	dev_hold((struct net_device *)nif);
-
-	return QDF_STATUS_SUCCESS;
-}
-
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0))
 /**
- * __qdf_net_update_net_device_dev_addr() - update net_device dev_addr
+ * qdf_net_update_net_device_dev_addr() - update net_device dev_addr
  * @ndev: net_device
  * @src_addr: source mac address
  * @len: length
@@ -156,7 +107,7 @@ __qdf_net_update_net_device_dev_addr(struct net_device *ndev,
 }
 #else /* (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0)) */
 /**
- * __qdf_net_update_net_device_dev_addr() - update net_device dev_addr
+ * qdf_net_update_net_device_dev_addr() - update net_device dev_addr
  * @ndev: net_device
  * @src_addr: source mac address
  * @len: length
@@ -173,79 +124,5 @@ __qdf_net_update_net_device_dev_addr(struct net_device *ndev,
 	memcpy(ndev->dev_addr, src_addr, len);
 }
 #endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0)) */
-
-/**
- * __qdf_napi_enable() - Enable the napi schedule
- * @napi: NAPI context
- *
- * This function resume NAPI from being scheduled on this context
- *
- * Return: NONE
- */
-static inline void
-__qdf_napi_enable(struct napi_struct *napi)
-{
-	napi_enable(napi);
-}
-
-/**
- * __qdf_napi_disable() - Disable the napi schedule
- * @napi: NAPI context
- *
- * This function suspends NAPI from being scheduled on this context
- *
- * Return: NONE
- */
-static inline void
-__qdf_napi_disable(struct napi_struct *napi)
-{
-	napi_disable(napi);
-}
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 19, 0))
-/**
- * __qdf_netif_napi_add - initialize a NAPI context
- * @netdev:  network device
- * @napi: NAPI context
- * @poll: polling function
- * @weight: default weight
- *
- * Upstream commit b48b89f9c189 ("net: drop the weight argument from
- * netif_napi_add") was introduced in Linux 6.1.  As described by the
- * subject, this removes the weight argument from netif_napi_add().
- *
- * This was preceded by commit 58caed3dacb4 ("netdev: reshuffle
- * netif_napi_add() APIs to allow dropping weight") in Linux 5.19
- * which added new APIs to call when a non-default weight wishes to be
- * sent.
- *
- * Return: NONE
- */
-static inline void
-__qdf_netif_napi_add(struct net_device *netdev, struct napi_struct *napi,
-		     int (*poll)(struct napi_struct *, int), int weight)
-{
-	netif_napi_add_weight(netdev, napi, poll, weight);
-}
-#else
-static inline void
-__qdf_netif_napi_add(struct net_device *netdev, struct napi_struct *napi,
-		     int (*poll)(struct napi_struct *, int), int weight)
-{
-	netif_napi_add(netdev, napi, poll, weight);
-}
-#endif
-
-/**
- * __qdf_netif_napi_del: remove a NAPI context
- * @napi: NAPI context
- *
- * Return: NONE
- */
-static inline void
-__qdf_netif_napi_del(struct napi_struct *napi)
-{
-	netif_napi_del(napi);
-}
 
 #endif /*__I_QDF_NET_IF_H */

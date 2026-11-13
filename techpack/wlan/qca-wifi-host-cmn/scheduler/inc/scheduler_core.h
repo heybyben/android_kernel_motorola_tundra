@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -130,7 +129,7 @@ struct scheduler_ctx {
 };
 
 /**
- * scheduler_core_msg_dup() - duplicate the given scheduler message
+ * scheduler_core_msg_dup() duplicate the given scheduler message
  * @msg: the message to duplicated
  *
  * Note: Duplicated messages must be freed using scheduler_core_msg_free().
@@ -235,11 +234,11 @@ QDF_STATUS scheduler_queues_init(struct scheduler_ctx *sched_ctx);
  *
  * Return: QDF_STATUS based on success of failure
  */
-QDF_STATUS scheduler_queues_deinit(struct scheduler_ctx *sched_ctx);
+QDF_STATUS scheduler_queues_deinit(struct scheduler_ctx *gp_sch_ctx);
 
 /**
  * scheduler_queues_flush() - flush all of the scheduler queues
- * @sched_ctx: pointer to scheduler context
+ * @sch_ctx: pointer to scheduler context
  *
  * This routine  is used to clean the module's queues
  *

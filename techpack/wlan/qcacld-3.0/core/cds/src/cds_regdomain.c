@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2011,2013-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -282,7 +281,7 @@ static const struct country_code_to_reg_dmn g_all_countries[] = {
 	{CTRY_TRINIDAD_Y_TOBAGO, FCC3_WORLD, "TT", "TRINIDAD AND TOBAGO"},
 	{CTRY_TUNISIA, ETSI3_WORLD, "TN", "TUNISIA"},
 	{CTRY_TURKEY, ETSI1_WORLD, "TR", "TURKEY"},
-	{CTRY_TURKS_AND_CAICOS, FCC3_WORLD, "TC", "TURKS AND CAICOS"},
+	{CTRY_TURKS_AND_CAICOS, FCC3_WORLD, "TC" "TURKS AND CAICOS"},
 	{CTRY_UGANDA, FCC3_WORLD, "UG", "UGANDA"},
 	{CTRY_UKRAINE, ETSI9_WORLD, "UA", "UKRAINE"},
 	{CTRY_UAE, FCC3_WORLD, "AE", "UNITED ARAB EMIRATES"},
@@ -294,7 +293,7 @@ static const struct country_code_to_reg_dmn g_all_countries[] = {
 	{CTRY_VENEZUELA, FCC2_ETSIC, "VE", "VENEZUELA"},
 	{CTRY_VIET_NAM, FCC3_WORLD, "VN", "VIETNAM"},
 	{CTRY_VIRGIN_ISLANDS, FCC3_FCCA, "VI", "VIRGIN ISLANDS"},
-	{CTRY_WALLIS_AND_FUTUNA, ETSI1_WORLD, "WF", "WALLIS"},
+	{CTRY_WALLIS_AND_FUTUNA, ETSI1_WORLD, "WF" "WALLIS"},
 	{CTRY_YEMEN, NULL1_WORLD, "YE", "YEMEN"},
 	{CTRY_ZIMBABWE, ETSI1_WORLD, "ZW", "ZIMBABWE"},
 	{CTRY_JAPAN15, MKK5_MKKC, "JP", "JAPAN"},
@@ -646,7 +645,7 @@ int32_t cds_fill_some_regulatory_info(struct regulatory *reg)
 
 	reg->regpair = get_reg_dmn_pair(reg_dmn);
 	if (!reg->regpair) {
-		cds_err("no regpair is found, can not proceed");
+		cds_err("no regpair is found, can not proceeed");
 		return -EINVAL;
 	}
 

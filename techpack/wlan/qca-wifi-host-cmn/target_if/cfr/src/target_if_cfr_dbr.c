@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -403,7 +402,6 @@ static void dump_cfr_peer_tx_event(wmi_cfr_peer_tx_event_param *event)
  * prepare_cfr_header_txstatus() - Prepare CFR metadata for TX failures
  * @tx_evt_param: ptr to WMI TX completion event
  * @header: pointer to metadata
- * @target_type: target type
  *
  * Return: none
  */
@@ -645,9 +643,9 @@ target_if_peer_capture_event(ol_scn_t sc, uint8_t *data, uint32_t datalen)
 #endif
 
 /**
- * target_if_register_tx_completion_event_handler() - register TX completion
- *                                                    handler
- * @psoc: pointer to psoc object
+ * target_if_register_tx_completion_event_handler()
+ * register TX completion handler
+ * @pdev: pointer to pdev object
  *
  * Return: Status
  */
@@ -670,7 +668,7 @@ target_if_register_tx_completion_event_handler(struct wlan_objmgr_psoc *psoc)
 						 WMI_RX_UMAC_CTX);
 	/*
 	 * Event registration is called per pdev
-	 * Ignore error if event is already registered.
+	 * Ignore erorr if event is alreday registred.
 	 */
 	if (ret == QDF_STATUS_E_FAILURE)
 		ret = QDF_STATUS_SUCCESS;
@@ -679,9 +677,9 @@ target_if_register_tx_completion_event_handler(struct wlan_objmgr_psoc *psoc)
 }
 
 /**
- * target_if_unregister_tx_completion_event_handler() - unregister TX
- *                                                      completion handler
- * @psoc: pointer to psoc object
+ * target_if_unregister_tx_completion_event_handler
+ * unregister TX completion handler
+ * @pdev: pointer to pdev object
  *
  * Return: Status
  */

@@ -188,6 +188,9 @@ static int cnss_stats_show_state(struct seq_file *s,
 		case CNSS_POWER_OFF:
 			seq_puts(s, "POWER OFF");
 			continue;
+		case CNSS_SHUTDOWN_DEVICE:
+			seq_puts(s, "SHUTDOWN DEVICE");
+			continue;
 		}
 
 		seq_printf(s, "UNKNOWN-%d", i);
@@ -337,10 +340,6 @@ static int cnss_dev_boot_debug_show(struct seq_file *s, void *data)
 	seq_puts(s, "\npdc_update usage:");
 	seq_puts(s, "1. echo pdc_update {class: wlan_pdc ss: <pdc_ss>, res: <vreg>.<mode>, <seq>: <val>} > <debugfs_path>/cnss/dev_boot\n");
 	seq_puts(s, "2. echo pdc_update {class: wlan_pdc ss: <pdc_ss>, res: pdc, enable: <val>} > <debugfs_path>/cnss/dev_boot\n");
-	seq_puts(s, "assert_host_sol: Assert host sol\n");
-	seq_puts(s, "deassert_host_sol: Deassert host sol\n");
-	seq_puts(s, "dev_check: Check whether HW is disabled or not\n");
-	seq_puts(s, "dev_enable: Enable HW\n");
 
 	return 0;
 }
@@ -796,6 +795,8 @@ static ssize_t cnss_control_params_debug_write(struct file *fp,
 		plat_priv->ctrl_params.mhi_m2_timeout = val;
 	else if (strcmp(cmd, "qmi_timeout") == 0)
 		plat_priv->ctrl_params.qmi_timeout = val;
+	else if (strcmp(cmd, "req_fw_timeout") == 0)
+		plat_priv->ctrl_params.req_fw_timeout = val;
 	else if (strcmp(cmd, "bdf_type") == 0)
 		plat_priv->ctrl_params.bdf_type = val;
 	else if (strcmp(cmd, "time_sync_period") == 0)
@@ -887,6 +888,7 @@ static int cnss_control_params_debug_show(struct seq_file *s, void *data)
 	seq_puts(s, "quirks: Debug quirks for driver\n");
 	seq_puts(s, "mhi_timeout: Timeout for MHI operation in milliseconds\n");
 	seq_puts(s, "qmi_timeout: Timeout for QMI message in milliseconds\n");
+	seq_puts(s, "req_fw_timeout: Timeout for request FW in milliseconds\n");
 	seq_puts(s, "bdf_type: Type of board data file to be downloaded\n");
 	seq_puts(s, "time_sync_period: Time period to do time sync with device in milliseconds\n");
 
@@ -896,6 +898,7 @@ static int cnss_control_params_debug_show(struct seq_file *s, void *data)
 	seq_printf(s, "mhi_m2_timeout: %u\n",
 		   cnss_priv->ctrl_params.mhi_m2_timeout);
 	seq_printf(s, "qmi_timeout: %u\n", cnss_priv->ctrl_params.qmi_timeout);
+	seq_printf(s, "req_fw_timeout: %u\n", cnss_priv->ctrl_params.req_fw_timeout);
 	seq_printf(s, "bdf_type: %u\n", cnss_priv->ctrl_params.bdf_type);
 	seq_printf(s, "time_sync_period: %u\n",
 		   cnss_priv->ctrl_params.time_sync_period);
@@ -1001,7 +1004,7 @@ static const struct file_operations cnss_smmu_fault_timestamp_fops = {
 	.llseek = seq_lseek,
 };
 
-#if defined(CONFIG_DEBUG_FS) && !defined(CONFIG_DEBUG_FS_ALLOW_NONE)
+#ifdef CONFIG_DEBUG_FS
 #ifdef CONFIG_CNSS2_DEBUG
 static int cnss_create_debug_only_node(struct cnss_plat_data *plat_priv)
 {

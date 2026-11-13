@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -93,7 +93,7 @@ tgt_send_coap_offload_periodic_tx_disable(struct wlan_objmgr_vdev *vdev,
 					  uint32_t req_id);
 
 /**
- * tgt_send_coap_offload_cache_get() - get cached CoAP messages
+ * wlan_coap_offload_cache_get() - get cached CoAP messages
  * @vdev: pointer to vdev object
  * @req_id: request id
  *

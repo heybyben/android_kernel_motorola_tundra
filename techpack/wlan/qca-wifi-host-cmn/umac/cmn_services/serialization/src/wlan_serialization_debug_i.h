@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2018-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -32,7 +31,7 @@
 #define WLAN_SER_LINE "--------------------"\
 		      "--------------------"
 
-#define WLAN_SER_HISTORY_HEADER "               TIME|CMD_TYPE|CMD_ID|VDEV_ID|"\
+#define WLAN_SER_HISTORY_HEADER "CMD_TYPE|CMD_ID|VDEV_ID|"\
 				"BLOCKING|PRIORITY|ACTION|"\
 				"  QUEUE|           REASON|"
 
@@ -61,7 +60,6 @@ struct ser_data {
 		ser_reason:5;
 
 		uint16_t vdev_id;
-		uint64_t time;
 };
 
 struct ser_history {

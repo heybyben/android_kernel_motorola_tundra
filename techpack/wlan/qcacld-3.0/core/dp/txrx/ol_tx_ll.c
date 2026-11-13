@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2011-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -187,32 +186,13 @@ ol_tx_non_std_ll(struct ol_txrx_vdev_t *vdev,
 	return NULL;            /* all MSDUs were accepted */
 }
 
-void ol_tx_trace_pkt(qdf_nbuf_t skb, uint16_t msdu_id, uint8_t vdev_id,
-		     enum QDF_OPMODE op_mode)
-{
-	DPTRACE(qdf_dp_trace_ptr(skb,
-				 QDF_DP_TRACE_TXRX_FAST_PACKET_PTR_RECORD,
-				 QDF_TRACE_DEFAULT_PDEV_ID,
-				 qdf_nbuf_data_addr(skb),
-				 sizeof(qdf_nbuf_data(skb)),
-				 msdu_id, vdev_id, 0,
-				 op_mode));
-
-	qdf_dp_trace_log_pkt(vdev_id, skb, QDF_TX, QDF_TRACE_DEFAULT_PDEV_ID,
-			     op_mode);
-
-	DPTRACE(qdf_dp_trace_data_pkt(skb, QDF_TRACE_DEFAULT_PDEV_ID,
-				      QDF_DP_TRACE_TX_PACKET_RECORD,
-				      msdu_id, QDF_TX));
-}
-
 #if defined(HELIUMPLUS)
 void ol_txrx_dump_frag_desc(char *msg, struct ol_tx_desc_t *tx_desc)
 {
 	uint32_t                *frag_ptr_i_p;
 	int                     i;
 
-	ol_txrx_err("OL TX Descriptor 0x%pK msdu_id %d",
+	ol_txrx_err("OL TX Descriptor 0x%pK msdu_id %d\n",
 		    tx_desc, tx_desc->id);
 	ol_txrx_err("HTT TX Descriptor vaddr: 0x%pK paddr: %pad",
 		    tx_desc->htt_tx_desc, &tx_desc->htt_tx_desc_paddr);
@@ -414,7 +394,7 @@ uint8_t ol_tx_prepare_tso(ol_txrx_vdev_handle vdev,
 					= tso_seg;
 				num_seg--;
 			} else {
-				/* Free above allocated TSO segments till now */
+				/* Free above alocated TSO segements till now */
 				msdu_info->tso_info.curr_seg =
 					msdu_info->tso_info.tso_seg_list;
 				ol_free_remaining_tso_segs(vdev, msdu_info,
@@ -506,7 +486,7 @@ uint32_t ol_tx_tso_get_stats_idx(struct ol_txrx_pdev_t *pdev)
 /**
  * ol_tso_seg_list_init() - function to initialise the tso seg freelist
  * @pdev: the data physical device sending the data
- * @num_seg: number of segments needs to be initialized
+ * @num_seg: number of segments needs to be intialised
  *
  * Return: none
  */
@@ -620,7 +600,7 @@ void ol_tso_seg_list_deinit(struct ol_txrx_pdev_t *pdev)
  *				use to count the num of tso segments in jumbo
  *				skb packet freelist
  * @pdev: the data physical device sending the data
- * @num_seg: number of elements needs to be initialized
+ * @num_seg: number of elements needs to be intialised
  *
  * Return: none
  */
@@ -727,7 +707,7 @@ void ol_txrx_stats_display_tso(ol_txrx_pdev_handle pdev)
 	int seg_idx;
 
 	txrx_nofl_info("TSO Statistics:");
-	txrx_nofl_info("TSO pkts %lld, bytes %lld",
+	txrx_nofl_info("TSO pkts %lld, bytes %lld\n",
 		       pdev->stats.pub.tx.tso.tso_pkts.pkts,
 		       pdev->stats.pub.tx.tso.tso_pkts.bytes);
 

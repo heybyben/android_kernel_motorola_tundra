@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2019, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -44,6 +44,10 @@ static inline void hal_update_stats_counter_index(uint32_t *reo_queue_desc,
 #endif
 
 /* Proto-types */
+void hal_get_ba_aging_timeout_be(hal_soc_handle_t hal_soc_hdl, uint8_t ac,
+				 uint32_t *value);
+void hal_set_ba_aging_timeout_be(hal_soc_handle_t hal_soc_hdl, uint8_t ac,
+				 uint32_t value);
 uint32_t hal_get_reo_reg_base_offset_be(void);
 
 int hal_reo_send_cmd_be(hal_soc_handle_t hal_soc_hdl,
@@ -82,8 +86,8 @@ hal_reo_rx_update_queue_status_be(hal_ring_desc_t ring_desc,
 /**
  * hal_reo_init_cmd_ring_be() - Initialize descriptors of REO command SRNG
  * with command number
- * @hal_soc_hdl: Handle to HAL SoC structure
- * @hal_ring_hdl: Handle to HAL SRNG structure
+ * @hal_soc: Handle to HAL SoC structure
+ * @hal_ring: Handle to HAL SRNG structure
  *
  * Return: none
  */

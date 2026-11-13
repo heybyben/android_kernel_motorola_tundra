@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -231,7 +231,7 @@ static void pkt_capture_tx_get_phy_info(
  * pkt capture mode(normal tx + offloaded tx) to prepare radiotap header
  * @pdev: device handler
  * @tx_status: tx status to be updated
- * @pktcapture_hdr: tx data header
+ * @mon_hdr: tx data header
  *
  * Return: none
  */
@@ -656,7 +656,6 @@ void pkt_capture_msdu_process_pkts(
 #ifdef WLAN_FEATURE_PKT_CAPTURE_V2
 /**
  * pkt_capture_dp_rx_skip_tlvs() - Skip TLVs len + L2 hdr_offset, save in nbuf
- * @soc: DP soc context
  * @nbuf: nbuf to be updated
  * @l3_padding: l3_padding
  *
@@ -808,7 +807,7 @@ uint8_t pkt_capture_get_rx_rtap_flags(struct hal_rx_pkt_capture_flags *flags)
 /**
  * pkt_capture_rx_mon_get_rx_status() - Get rx status
  * @context: objmgr vdev
- * @dp_soc: dp_soc handle
+ * @psoc: dp_soc handle
  * @desc: Pointer to struct rx_pkt_tlvs
  * @rx_status: Pointer to struct mon_rx_status
  *
@@ -957,6 +956,9 @@ pkt_capture_rx_data_cb(
 		/* need to update this to fill rx_status*/
 		htt_rx_mon_get_rx_status(pdev, rx_desc, &rx_status);
 		rx_status.chan_noise_floor = NORMALIZED_TO_NOISE_FLOOR;
+		rx_status.tx_status = status;
+		rx_status.tx_retry_cnt = tx_retry_cnt;
+		rx_status.add_rtap_ext = true;
 
 		/* clear IEEE80211_RADIOTAP_F_FCS flag*/
 		rx_status.rtap_flags &= ~(BIT(4));
@@ -1063,6 +1065,9 @@ pkt_capture_rx_data_cb(
 		/* need to update this to fill rx_status*/
 		pkt_capture_rx_mon_get_rx_status(vdev, psoc,
 						 rx_tlv_hdr, &rx_status);
+		rx_status.tx_status = status;
+		rx_status.tx_retry_cnt = tx_retry_cnt;
+		rx_status.add_rtap_ext = true;
 
 		/* clear IEEE80211_RADIOTAP_F_FCS flag*/
 		rx_status.rtap_flags &= ~(BIT(4));
@@ -1102,14 +1107,14 @@ free_buf:
 /**
  * pkt_capture_tx_data_cb() - process data tx and rx packets
  * for pkt capture mode. (normal tx/rx + offloaded tx/rx)
- * @context: capture context (unused)
- * @ppdev: pdev handle
- * @nbuf_list: netbuf list
  * @vdev_id: vdev id for which packet is captured
+ * @mon_buf_list: netbuf list
+ * @type: data process type
  * @tid:  tid number
  * @status: Tx status
- * @pkt_format: Frame format
+ * @pktformat: Frame format
  * @bssid: bssid
+ * @pdev: pdev handle
  * @tx_retry_cnt: tx retry count
  *
  * Return: none

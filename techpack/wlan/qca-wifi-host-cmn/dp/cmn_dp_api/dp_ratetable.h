@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -23,6 +22,19 @@
 #define CMN_DP_ASSERT(__bool)
 
 /*
+ *Band Width Types
+ */
+enum CMN_BW_TYPES {
+	CMN_BW_20MHZ,
+	CMN_BW_40MHZ,
+	CMN_BW_80MHZ,
+	CMN_BW_160MHZ,
+	CMN_BW_80_80MHZ,
+	CMN_BW_CNT,
+	CMN_BW_IDLE = 0xFF, /*default BW state */
+};
+
+/*
  * Modes Types
  */
 enum CMN_MODE_TYPES {
@@ -38,10 +50,6 @@ enum CMN_MODE_TYPES {
 	CMN_IEEE80211_MODE_AXA,
 	CMN_IEEE80211_MODE_AXG,
 	CMN_IEEE80211_MODE_AX,
-#ifdef WLAN_FEATURE_11BE
-	CMN_IEEE80211_MODE_BEA,
-	CMN_IEEE80211_MODE_BEG,
-#endif
 	CMN_IEEE80211_MODE_MAX
 };
 
@@ -53,9 +61,6 @@ enum CMN_MODE_TYPES {
 #define NUM_VHT_MCS 12
 
 #define NUM_HE_MCS 14
-#ifdef WLAN_FEATURE_11BE
-#define NUM_EHT_MCS 16
-#endif
 
 #define NUM_SPATIAL_STREAM 4
 #define NUM_SPATIAL_STREAMS 8
@@ -143,63 +148,12 @@ static inline int dp_ath_rate_out(uint64_t _i)
 #define HE_80_RATE_TABLE_INDEX (HE_40_RATE_TABLE_INDEX + NUM_HE_RIX_PER_BW)
 
 #define HE_160_RATE_TABLE_INDEX (HE_80_RATE_TABLE_INDEX + NUM_HE_RIX_PER_BW)
-#define HE_LAST_RIX_PLUS_ONE (HE_160_RATE_TABLE_INDEX + NUM_HE_RIX_FOR_160MHZ)
-
-#ifdef WLAN_FEATURE_11BE
-#define NUM_EHT_SPATIAL_STREAM 4
-#define NUM_EHT_RIX_PER_BW (NUM_EHT_MCS * NUM_EHT_SPATIAL_STREAM)
-
-#define EHT_20_RATE_TABLE_INDEX HE_LAST_RIX_PLUS_ONE
-#define EHT_40_RATE_TABLE_INDEX (EHT_20_RATE_TABLE_INDEX + NUM_EHT_RIX_PER_BW)
-#define EHT_60_RATE_TABLE_INDEX (EHT_40_RATE_TABLE_INDEX + NUM_EHT_RIX_PER_BW)
-#define EHT_80_RATE_TABLE_INDEX (EHT_60_RATE_TABLE_INDEX + NUM_EHT_RIX_PER_BW)
-#define EHT_120_RATE_TABLE_INDEX (EHT_80_RATE_TABLE_INDEX + NUM_EHT_RIX_PER_BW)
-#define EHT_140_RATE_TABLE_INDEX (EHT_120_RATE_TABLE_INDEX + NUM_EHT_RIX_PER_BW)
-#define EHT_160_RATE_TABLE_INDEX (EHT_140_RATE_TABLE_INDEX + NUM_EHT_RIX_PER_BW)
-#define EHT_200_RATE_TABLE_INDEX (EHT_160_RATE_TABLE_INDEX + NUM_EHT_RIX_PER_BW)
-#define EHT_240_RATE_TABLE_INDEX (EHT_200_RATE_TABLE_INDEX + NUM_EHT_RIX_PER_BW)
-#define EHT_280_RATE_TABLE_INDEX (EHT_240_RATE_TABLE_INDEX + NUM_EHT_RIX_PER_BW)
-#define EHT_320_RATE_TABLE_INDEX (EHT_280_RATE_TABLE_INDEX + NUM_EHT_RIX_PER_BW)
-#define EHT_LAST_RIX_PLUS_ONE (EHT_320_RATE_TABLE_INDEX + NUM_EHT_RIX_PER_BW)
-#endif
-
-#ifdef WLAN_FEATURE_11BE
-#define DP_RATE_TABLE_SIZE EHT_LAST_RIX_PLUS_ONE
-#else
-#define DP_RATE_TABLE_SIZE HE_LAST_RIX_PLUS_ONE
-#endif
-
-#define INVALID_RATE_ERR -1
-#define NUM_LEGACY_MCS 1
-
-/*
- * The order of the rate types are jumbled below since the current code
- * implementation is mapped in such way already.
- *
- * @DP_HT_RATE: HT Ratetype
- * @DP_VHT_RATE: VHT Ratetype
- * @DP_11B_CCK_RATE: 11B CCK Ratetype
- * @DP_11A_OFDM_RATE: 11A OFDM Ratetype
- * @DP_11G_CCK_OFDM_RATE: 11G CCK + OFDM Ratetype
- * @DP_HE_RATE: HE Ratetype
- */
-enum DP_CMN_RATE_TYPE {
-	DP_HT_RATE = 2,
-	DP_VHT_RATE,
-	DP_11B_CCK_RATE,
-	DP_11A_OFDM_RATE,
-	DP_11G_CCK_OFDM_RATE,
-	DP_HE_RATE
-};
-
-#define DP_RATEKBPS_SGI(i) (dp_11abgnratetable.info[i].ratekbpssgi)
-#define DP_RATEKBPS(i) (dp_11abgnratetable.info[i].ratekbps)
-#define RATE_ROUNDOUT(rate) (((rate) / 1000) * 1000)
+#define DP_RATE_TABLE_SIZE (HE_160_RATE_TABLE_INDEX + NUM_HE_RIX_FOR_160MHZ)
 
 /* The following would span more than one octet
  * when 160MHz BW defined for VHT
  * Also it's important to maintain the ordering of
- * this enum else it would break other rate adaptation functions.
+ * this enum else it would break other rate adapation functions.
  */
 enum DP_CMN_MODULATION_TYPE {
 	   DP_CMN_MOD_IEEE80211_T_DS,   /* direct sequence spread spectrum */
@@ -214,19 +168,6 @@ enum DP_CMN_MODULATION_TYPE {
 	   DP_CMN_MOD_IEEE80211_T_HE_40,
 	   DP_CMN_MOD_IEEE80211_T_HE_80,
 	   DP_CMN_MOD_IEEE80211_T_HE_160,
-#ifdef WLAN_FEATURE_11BE
-	   DP_CMN_MOD_IEEE80211_T_EHT_20,
-	   DP_CMN_MOD_IEEE80211_T_EHT_40,
-	   DP_CMN_MOD_IEEE80211_T_EHT_60,
-	   DP_CMN_MOD_IEEE80211_T_EHT_80,
-	   DP_CMN_MOD_IEEE80211_T_EHT_120,
-	   DP_CMN_MOD_IEEE80211_T_EHT_140,
-	   DP_CMN_MOD_IEEE80211_T_EHT_160,
-	   DP_CMN_MOD_IEEE80211_T_EHT_200,
-	   DP_CMN_MOD_IEEE80211_T_EHT_240,
-	   DP_CMN_MOD_IEEE80211_T_EHT_280,
-	   DP_CMN_MOD_IEEE80211_T_EHT_320,
-#endif
 	   DP_CMN_MOD_IEEE80211_T_MAX_PHY
 };
 
@@ -239,47 +180,23 @@ enum HW_RATECODE_PREAM_TYPE {
 	HW_RATECODE_PREAM_HT,
 	HW_RATECODE_PREAM_VHT,
 	HW_RATECODE_PREAM_HE,
-#ifdef WLAN_FEATURE_11BE
-	HW_RATECODE_PREAM_EHT,
-#endif
 };
 
-#ifdef WLAN_FEATURE_11BE
-enum BW_TYPES_FP {
-	BW_20MHZ_F = 0,
-	BW_40MHZ_F,
-	BW_60MHZ_P,
-	BW_80MHZ_F,
-	BW_120MHZ_P,
-	BW_140MHZ_P,
-	BW_160MHZ_F,
-	BW_200MHZ_P,
-	BW_240MHZ_P,
-	BW_280MHZ_P,
-	BW_320MHZ_F,
-	BW_FP_CNT,
-	BW_FP_LAST = BW_320MHZ_F,
-};
-#endif
-
-enum DP_CMN_MODULATION_TYPE dp_getmodulation(uint16_t pream_type,
-					     uint8_t width,
-					     uint8_t punc_mode);
+enum DP_CMN_MODULATION_TYPE dp_getmodulation(
+		uint16_t pream_type,
+		uint8_t width);
 
 uint32_t
 dp_getrateindex(uint32_t gi, uint16_t mcs, uint8_t nss, uint8_t preamble,
-		uint8_t bw, uint8_t punc_bw, uint32_t *rix, uint16_t *ratecode);
+		uint8_t bw, uint32_t *rix, uint16_t *ratecode);
 
 int dp_rate_idx_to_kbps(uint8_t rate_idx, uint8_t gintval);
 
 #if ALL_POSSIBLE_RATES_SUPPORTED
 int dp_get_supported_rates(int mode, int shortgi, int **rates);
-int dp_get_kbps_to_mcs(int kbps_rate, int shortgi, int htflag);
 #else
 int dp_get_supported_rates(int mode, int shortgi, int nss,
 			   int ch_width, int **rates);
-int dp_get_kbps_to_mcs(int kbps_rate, int shortgi, int htflag,
-		       int nss, int ch_width);
 #endif
 
 #endif /*_DP_RATES_H_*/

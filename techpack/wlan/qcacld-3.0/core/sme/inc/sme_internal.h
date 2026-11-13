@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -54,6 +54,7 @@ typedef enum eSmeCommandType {
 	eSmeCsrCommandMask = 0x10000,
 	eSmeCommandRoam,
 	eSmeCommandWmStatusChange,
+	eSmeCommandGetdisconnectStats,
 	/* QOS */
 	eSmeQosCommandMask = 0x40000,   /* To identify Qos commands */
 	eSmeCommandAddTs,
@@ -62,7 +63,6 @@ typedef enum eSmeCommandType {
 	e_sme_command_nss_update,
 	e_sme_command_set_dual_mac_config,
 	e_sme_command_set_antenna_mode,
-	e_sme_command_sap_ch_width_update,
 } eSmeCommandType;
 
 typedef enum eSmeState {
@@ -394,6 +394,7 @@ struct sme_context {
 	/* following pointer contains array of pointers for tSmeCmd* */
 	void **sme_cmd_buf_addr;
 	tDblLinkList sme_cmd_freelist;    /* preallocated roam cmd list */
+	enum QDF_OPMODE curr_device_mode;
 	void *ll_stats_context;
 	link_layer_stats_cb link_layer_stats_cb;
 	void (*link_layer_stats_ext_cb)(hdd_handle_t callback_ctx,
@@ -502,12 +503,9 @@ struct sme_context {
 			(const struct oem_data *oem_event_data,
 			 uint8_t vdev_id);
 	uint8_t oem_data_vdev_id;
-	/* async oem event callback */
-	void (*oem_data_async_event_handler_cb)
-			(const struct oem_data *oem_event_data);
 #endif
 
-	QDF_STATUS (*pagefault_action_cb)(void *buf, uint32_t data);
+	void (*ssr_on_pagefault_cb)(void);
 
 #ifdef MULTI_CLIENT_LL_SUPPORT
 	void (*latency_level_event_handler_cb)
@@ -523,8 +521,6 @@ struct sme_context {
 #if defined(CLD_PM_QOS) && defined(WLAN_FEATURE_LL_MODE)
 	void (*beacon_latency_event_cb)(uint32_t latency_level);
 #endif
-	QDF_STATUS (*sme_vdev_del_cb)(mac_handle_t mac_handle,
-				      struct wlan_objmgr_vdev *vdev);
 };
 
 #endif /* #if !defined( __SMEINTERNAL_H ) */

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -91,20 +91,12 @@ QDF_STATUS cm_abort_fw_roam(struct cnx_mgr *cm_ctx,
 			    wlan_cm_id cm_id)
 {
 	QDF_STATUS status;
-	enum wlan_cm_source source = CM_SOURCE_INVALID;
-	struct cm_roam_req *roam_req;
-	struct qdf_mac_addr bssid = QDF_MAC_ADDR_ZERO_INIT;
-
-	roam_req = cm_get_first_roam_command(cm_ctx->vdev);
-	if (roam_req) {
-		source = roam_req->req.source;
-		bssid = roam_req->req.bssid;
-	}
 
 	mlme_cm_osif_roam_abort_ind(cm_ctx->vdev);
 	status = cm_sm_deliver_event(cm_ctx->vdev,
 				     WLAN_CM_SM_EV_ROAM_ABORT,
 				     sizeof(wlan_cm_id), &cm_id);
+
 	if (QDF_IS_STATUS_ERROR(status))
 		cm_remove_cmd(cm_ctx, &cm_id);
 
@@ -355,10 +347,6 @@ QDF_STATUS cm_fw_roam_abort_req(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id)
 		status = wlan_cm_roam_state_change(pdev, vdev_id,
 						   WLAN_ROAM_RSO_ENABLED,
 						   REASON_ROAM_ABORT);
-	else if (MLME_IS_MLO_ROAM_SYNCH_IN_PROGRESS(psoc, vdev_id))
-		status = wlan_cm_roam_state_change(pdev, vdev_id,
-						   WLAN_ROAM_DEINIT,
-						   REASON_ROAM_ABORT);
 
 	cm_abort_fw_roam(cm_ctx, cm_id);
 rel_ref:
@@ -393,7 +381,6 @@ cm_roam_sync_frame_event_handler(struct wlan_objmgr_psoc *psoc,
 	struct rso_config *rso_cfg;
 	struct roam_synch_frame_ind *sync_frame_ind = frame_ind;
 	struct roam_synch_frame_ind *roam_synch_frame_ind;
-	struct roam_scan_candidate_frame roam_candidate = {0};
 	uint8_t vdev_id;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 
@@ -412,7 +399,7 @@ cm_roam_sync_frame_event_handler(struct wlan_objmgr_psoc *psoc,
 	rso_cfg = wlan_cm_get_rso_config(vdev);
 	if (!rso_cfg) {
 		status = QDF_STATUS_E_FAILURE;
-		goto complete;
+		goto err;
 	}
 
 	roam_synch_frame_ind = &rso_cfg->roam_sync_frame_ind;
@@ -421,7 +408,7 @@ cm_roam_sync_frame_event_handler(struct wlan_objmgr_psoc *psoc,
 		mlme_err("Ignoring this event as it is unexpected");
 		wlan_cm_free_roam_synch_frame_ind(rso_cfg);
 		status = QDF_STATUS_E_FAILURE;
-		goto complete;
+		goto err;
 	}
 
 	if (sync_frame_ind->bcn_probe_rsp_len) {
@@ -429,28 +416,13 @@ cm_roam_sync_frame_event_handler(struct wlan_objmgr_psoc *psoc,
 			sync_frame_ind->bcn_probe_rsp_len;
 		roam_synch_frame_ind->is_beacon =
 			sync_frame_ind->is_beacon;
-		if (roam_synch_frame_ind->bcn_probe_rsp)
-			qdf_mem_free(roam_synch_frame_ind->bcn_probe_rsp);
 		roam_synch_frame_ind->bcn_probe_rsp =
 			sync_frame_ind->bcn_probe_rsp;
-	}
-
-	if (sync_frame_ind->link_bcn_probe_rsp_len) {
-		roam_synch_frame_ind->link_bcn_probe_rsp_len =
-			sync_frame_ind->link_bcn_probe_rsp_len;
-		roam_synch_frame_ind->is_link_beacon =
-			sync_frame_ind->is_link_beacon;
-		if (roam_synch_frame_ind->link_bcn_probe_rsp)
-			qdf_mem_free(roam_synch_frame_ind->link_bcn_probe_rsp);
-		roam_synch_frame_ind->link_bcn_probe_rsp =
-			sync_frame_ind->link_bcn_probe_rsp;
 	}
 
 	if (sync_frame_ind->reassoc_req_len) {
 		roam_synch_frame_ind->reassoc_req_len =
 				sync_frame_ind->reassoc_req_len;
-		if (roam_synch_frame_ind->reassoc_req)
-			qdf_mem_free(roam_synch_frame_ind->reassoc_req);
 		roam_synch_frame_ind->reassoc_req =
 			sync_frame_ind->reassoc_req;
 	}
@@ -458,65 +430,14 @@ cm_roam_sync_frame_event_handler(struct wlan_objmgr_psoc *psoc,
 	if (sync_frame_ind->reassoc_rsp_len) {
 		roam_synch_frame_ind->reassoc_rsp_len =
 				sync_frame_ind->reassoc_rsp_len;
-		if (roam_synch_frame_ind->reassoc_rsp)
-			qdf_mem_free(roam_synch_frame_ind->reassoc_rsp);
 		roam_synch_frame_ind->reassoc_rsp =
 			sync_frame_ind->reassoc_rsp;
 	}
 
-	if (!sync_frame_ind->bcn_probe_rsp_len &&
-	    !sync_frame_ind->link_bcn_probe_rsp_len)
-		goto complete;
-
-	roam_candidate.vdev_id = vdev_id;
-
-	if (sync_frame_ind->bcn_probe_rsp_len) {
-		roam_candidate.frame_length = sync_frame_ind->bcn_probe_rsp_len;
-		roam_candidate.frame = sync_frame_ind->bcn_probe_rsp;
-		roam_candidate.rssi = sync_frame_ind->rssi;
-		roam_candidate.roam_offload_candidate_frm = false;
-		wlan_cm_add_all_link_probe_rsp_to_scan_db(psoc,
-							  &roam_candidate);
-	}
-
-	if (sync_frame_ind->link_bcn_probe_rsp_len) {
-		roam_candidate.frame_length =
-					sync_frame_ind->link_bcn_probe_rsp_len;
-		roam_candidate.frame = sync_frame_ind->link_bcn_probe_rsp;
-		roam_candidate.rssi = sync_frame_ind->rssi;
-		roam_candidate.roam_offload_candidate_frm = false;
-		wlan_cm_add_all_link_probe_rsp_to_scan_db(psoc,
-							  &roam_candidate);
-	}
-
-complete:
+err:
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_MLME_SB_ID);
 	return status;
 }
-
-#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_FEATURE_ROAM_OFFLOAD)
-QDF_STATUS cm_roam_sync_key_event_handler(struct wlan_objmgr_psoc *psoc,
-					  struct wlan_crypto_key_entry *keys,
-					  uint8_t num_keys)
-{
-	QDF_STATUS status = QDF_STATUS_SUCCESS;
-	uint8_t i;
-
-	for (i = 0; i < num_keys; i++) {
-		status = wlan_crypto_add_key_entry(psoc, &keys[i]);
-		if (QDF_IS_STATUS_ERROR(status)) {
-			mlme_err("Failed to add key entry for link:%d",
-				 keys[i].link_id);
-			wlan_crypto_free_key(&keys[i].keys);
-			qdf_mem_zero(&keys[i],
-				     sizeof(struct wlan_crypto_key_entry));
-			qdf_mem_free(&keys[i]);
-		}
-	}
-
-	return status;
-}
-#endif
 
 QDF_STATUS cm_roam_sync_event_handler_cb(struct wlan_objmgr_vdev *vdev,
 					 uint8_t *event,
@@ -530,6 +451,7 @@ QDF_STATUS cm_roam_sync_event_handler_cb(struct wlan_objmgr_vdev *vdev,
 	uint8_t vdev_id;
 
 	sync_ind = (struct roam_offload_synch_ind *)event;
+
 	if (!sync_ind) {
 		mlme_err("Roam Sync ind ptr is NULL");
 		return QDF_STATUS_E_NULL_VALUE;
@@ -553,7 +475,8 @@ QDF_STATUS cm_roam_sync_event_handler_cb(struct wlan_objmgr_vdev *vdev,
 
 	wlan_roam_debug_log(sync_ind->roamed_vdev_id, DEBUG_ROAM_SYNCH_IND,
 			    DEBUG_INVALID_PEER_ID, sync_ind->bssid.bytes, NULL,
-			    0, 0);
+			    0,
+			    0);
 	DPTRACE(qdf_dp_trace_record_event(QDF_DP_TRACE_EVENT_RECORD,
 					  sync_ind->roamed_vdev_id,
 					  QDF_TRACE_DEFAULT_PDEV_ID,
@@ -562,68 +485,37 @@ QDF_STATUS cm_roam_sync_event_handler_cb(struct wlan_objmgr_vdev *vdev,
 
 	if (MLME_IS_ROAM_SYNCH_IN_PROGRESS(psoc, sync_ind->roamed_vdev_id) &&
 	    !is_multi_link_roam(sync_ind)) {
-		mlme_err("vdev:%d Ignoring RSI as its already in progress on roamed vdev:%d",
-			 vdev_id, sync_ind->roamed_vdev_id);
-		return QDF_STATUS_E_FAILURE;
+		mlme_err("Ignoring RSI since one is already in progress");
+		status = QDF_STATUS_E_FAILURE;
+		goto err;
 	}
 
-	status = cm_fw_roam_sync_start_ind(vdev, sync_ind);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		mlme_err("LFR3: vdev:%d CSR Roam synch cb failed", vdev_id);
+	if (!QDF_IS_STATUS_SUCCESS(cm_fw_roam_sync_start_ind(vdev,
+							     sync_ind))) {
+		mlme_err("LFR3: CSR Roam synch cb failed");
 		wlan_cm_free_roam_synch_frame_ind(rso_cfg);
-		return status;
+		goto err;
 	}
 
 	/* 24 byte MAC header and 12 byte to ssid IE */
-	if (wlan_vdev_mlme_is_mlo_link_vdev(vdev) &&
-	    sync_ind->link_beacon_probe_resp_length) {
-		if (sync_ind->link_beacon_probe_resp_length >
-		    (QDF_IEEE80211_3ADDR_HDR_LEN + MAC_B_PR_SSID_OFFSET)) {
-			ie_len = MAX_MGMT_MPDU_LEN -
-			(QDF_IEEE80211_3ADDR_HDR_LEN + MAC_B_PR_SSID_OFFSET);
-		} else {
-			mlme_err("LFR3: MLO: vdev:%d Invalid link Beacon Length",
-				 vdev_id);
-			return QDF_STATUS_E_FAILURE;
-		}
-	} else if (sync_ind->beacon_probe_resp_length >
+	if (sync_ind->beaconProbeRespLength >
 			(QDF_IEEE80211_3ADDR_HDR_LEN + MAC_B_PR_SSID_OFFSET)) {
-		/*
-		 * When STA roams to an MLO AP, non-assoc link might be superior
-		 * in features compared to  assoc link and the per-STA profile
-		 * info may carry corresponding IEs. These IEs are extracted
-		 * and added to IE list of link probe response while generating
-		 * it. So, the link probe response generated from assoc link
-		 * probe response might be of more size than assoc link probe
-		 * rsp. Allocate buffer for the bss descriptor to accommodate
-		 * all of the IEs got generated as part of link probe rsp
-		 * generation. Allocate MAX_MGMT_MPDU_LEN bytes for IEs as the
-		 * max frame size that can be received from AP is
-		 * MAX_MGMT_MPDU_LEN bytes.
-		 */
-		if (is_multi_link_roam(sync_ind))
-			ie_len = MAX_MGMT_MPDU_LEN -
+		ie_len = sync_ind->beaconProbeRespLength -
 			(QDF_IEEE80211_3ADDR_HDR_LEN + MAC_B_PR_SSID_OFFSET);
-		else
-			ie_len = sync_ind->beacon_probe_resp_length -
-			(QDF_IEEE80211_3ADDR_HDR_LEN + MAC_B_PR_SSID_OFFSET);
-
 	} else {
-		mlme_err("LFR3: vdev:%d Invalid Beacon Length:%d", vdev_id,
-			 sync_ind->beacon_probe_resp_length);
-		return QDF_STATUS_E_FAILURE;
+		mlme_err("LFR3: Invalid Beacon Length");
+		goto err;
 	}
 
-	if (QDF_IS_STATUS_ERROR(cm_roam_pe_sync_callback(sync_ind, vdev_id,
+	if (QDF_IS_STATUS_ERROR(cm_roam_pe_sync_callback(sync_ind,
+							 vdev_id,
 							 ie_len))) {
-		mlme_err("LFR3: vdev:%d PE roam synch cb failed", vdev_id);
-		return QDF_STATUS_E_BUSY;
+		mlme_err("LFR3: PE roam synch cb failed");
+		status = QDF_STATUS_E_BUSY;
+		goto err;
 	}
 
-	status = cm_roam_update_vdev(vdev, sync_ind);
-	if (QDF_IS_STATUS_ERROR(status))
-		return status;
-
+	cm_roam_update_vdev(sync_ind, vdev_id);
 	/*
 	 * update phy_mode in wma to avoid mismatch in phymode between host and
 	 * firmware. The phymode stored in peer->peer_mlme.phymode is
@@ -632,11 +524,126 @@ QDF_STATUS cm_roam_sync_event_handler_cb(struct wlan_objmgr_vdev *vdev,
 	 * processing beacon. Any mismatch of this value with firmware phymode
 	 * results in firmware assert.
 	 */
-	cm_update_phymode_on_roam(vdev_id,
-				  sync_ind);
-	status = cm_fw_roam_sync_propagation(psoc,
-					     vdev_id,
-					     sync_ind);
+	cm_update_phymode_on_roam(sync_ind->roamed_vdev_id,
+				  sync_ind->bssid.bytes,
+				  &sync_ind->chan);
+	cm_fw_roam_sync_propagation(psoc,
+				    vdev_id,
+				    sync_ind);
 
+err:
+	if (QDF_IS_STATUS_ERROR(status)) {
+		wlan_mlo_roam_abort_on_link(psoc, sync_ind);
+		cm_fw_roam_abort_req(psoc, sync_ind->roamed_vdev_id);
+		cm_roam_stop_req(psoc, sync_ind->roamed_vdev_id,
+				 REASON_ROAM_SYNCH_FAILED,
+				 NULL, false);
+	}
 	return status;
+}
+
+QDF_STATUS
+cm_roam_candidate_event_handler(struct wlan_objmgr_psoc *psoc,
+				struct roam_scan_candidate_frame *candidate)
+{
+	struct wlan_objmgr_vdev *vdev;
+	struct wlan_objmgr_pdev *pdev;
+	struct cnx_mgr *cm_ctx;
+	uint32_t ie_offset, ie_len;
+	uint8_t *ie_ptr = NULL;
+	uint8_t *extracted_ie = NULL;
+	uint8_t primary_channel, band;
+	qdf_freq_t op_freq;
+
+	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, candidate->vdev_id,
+						    WLAN_MLME_CM_ID);
+	if (!vdev) {
+		mlme_err("vdev object is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	pdev = wlan_vdev_get_pdev(vdev);
+	if (!pdev) {
+		mlme_err("pdev object is NULL");
+		goto err;
+	}
+
+	cm_ctx = cm_get_cm_ctx(vdev);
+	if (!cm_ctx) {
+		mlme_err("cm ctx is NULL");
+		goto err;
+	}
+
+	QDF_TRACE_HEX_DUMP(QDF_MODULE_ID_MLME, QDF_TRACE_LEVEL_DEBUG,
+			   candidate->frame, candidate->frame_length);
+	/* Fixed parameters offset */
+	ie_offset = sizeof(struct wlan_frame_hdr) + MAC_B_PR_SSID_OFFSET;
+
+	if (candidate->frame_length <= ie_offset) {
+		mlme_err("Invalid frame length");
+		goto err;
+	}
+
+	ie_ptr = candidate->frame + ie_offset;
+	ie_len = candidate->frame_length - ie_offset;
+
+	/* For 2.4GHz,5GHz get channel from DS IE */
+	extracted_ie = (uint8_t *)wlan_get_ie_ptr_from_eid(WLAN_ELEMID_DSPARMS,
+							   ie_ptr, ie_len);
+	if (extracted_ie && extracted_ie[0] == WLAN_ELEMID_DSPARMS &&
+	    extracted_ie[1] == WLAN_DS_PARAM_IE_MAX_LEN) {
+		band = BIT(REG_BAND_2G) | BIT(REG_BAND_5G);
+		primary_channel = *(extracted_ie + 2);
+		mlme_debug("Extracted primary channel from DS : %d",
+			   primary_channel);
+		goto update_beacon;
+	}
+
+	/* For HT, VHT and non-6GHz HE, get channel from HTINFO IE */
+	extracted_ie = (uint8_t *)
+			wlan_get_ie_ptr_from_eid(WLAN_ELEMID_HTINFO_ANA,
+						 ie_ptr, ie_len);
+	if (extracted_ie && extracted_ie[0] == WLAN_ELEMID_HTINFO_ANA &&
+	    extracted_ie[1] == sizeof(struct wlan_ie_htinfo_cmn)) {
+		band = BIT(REG_BAND_2G) | BIT(REG_BAND_5G);
+		primary_channel =
+			((struct wlan_ie_htinfo *)extracted_ie)->
+						hi_ie.hi_ctrlchannel;
+		mlme_debug("Extracted primary channel from HT INFO : %d",
+			   primary_channel);
+		goto update_beacon;
+	}
+	/* For 6GHz, get channel from HE OP IE */
+	extracted_ie = (uint8_t *)
+			wlan_get_ext_ie_ptr_from_ext_id(WLAN_HEOP_OUI_TYPE,
+							(uint8_t)
+							WLAN_HEOP_OUI_SIZE,
+							ie_ptr, ie_len);
+	if (extracted_ie && !qdf_mem_cmp(&extracted_ie[2], WLAN_HEOP_OUI_TYPE,
+					 WLAN_HEOP_OUI_SIZE) &&
+	    extracted_ie[1] <= WLAN_MAX_HEOP_IE_LEN) {
+		band = BIT(REG_BAND_6G);
+		primary_channel = util_scan_get_6g_oper_channel(extracted_ie);
+		mlme_debug("Extracted primary channel from HE OP : %d",
+			   primary_channel);
+		if (primary_channel)
+			goto update_beacon;
+	}
+
+	mlme_err("Primary channel was not found in the candidate scan entry");
+	goto err;
+
+update_beacon:
+	op_freq = wlan_reg_chan_band_to_freq(pdev, primary_channel, band);
+	mlme_debug("Roaming candidate frequency : %d", op_freq);
+	cm_inform_bcn_probe(cm_ctx, candidate->frame, candidate->frame_length,
+			    op_freq,
+			    0, /* Real RSSI will be updated by Roam synch ind */
+			    cm_ctx->active_cm_id);
+
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_MLME_CM_ID);
+	return QDF_STATUS_SUCCESS;
+err:
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_MLME_CM_ID);
+	return QDF_STATUS_E_FAILURE;
 }

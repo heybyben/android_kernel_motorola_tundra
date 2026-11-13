@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -53,7 +53,6 @@ QDF_STATUS cm_check_and_prepare_roam_req(struct cnx_mgr *cm_ctx,
 	QDF_STATUS status;
 	struct wlan_cm_connect_req *req;
 	struct qdf_mac_addr bssid;
-	struct qdf_mac_addr bss_mld_addr = {0};
 	struct wlan_ssid ssid;
 	struct cm_req *cm_req, *req_ptr;
 	qdf_freq_t freq = 0;
@@ -73,24 +72,19 @@ QDF_STATUS cm_check_and_prepare_roam_req(struct cnx_mgr *cm_ctx,
 	 * Reject re-assoc unless freq along with prev bssid and one
 	 * of bssid or bssid hint is present.
 	 */
-	if (!cm_is_connect_req_reassoc(req))
+	if (!freq || qdf_is_macaddr_zero(&req->prev_bssid) ||
+	    (qdf_is_macaddr_zero(&req->bssid) &&
+	     qdf_is_macaddr_zero(&req->bssid_hint)))
 		return QDF_STATUS_E_FAILURE;
 
 	wlan_vdev_get_bss_peer_mac(cm_ctx->vdev, &bssid);
+
 	/* Reject re-assoc unless prev_bssid matches the current BSSID. */
 	if (!qdf_is_macaddr_equal(&req->prev_bssid, &bssid)) {
 		mlme_debug("BSSID didn't matched: bssid: "QDF_MAC_ADDR_FMT " prev bssid: " QDF_MAC_ADDR_FMT,
 			   QDF_MAC_ADDR_REF(bssid.bytes),
 			   QDF_MAC_ADDR_REF(req->prev_bssid.bytes));
-		status = wlan_vdev_get_bss_peer_mld_mac(cm_ctx->vdev,
-							&bss_mld_addr);
-		if (!(QDF_IS_STATUS_SUCCESS(status) &&
-		      qdf_is_macaddr_equal(&req->prev_bssid, &bss_mld_addr))) {
-			mlme_debug("BSSID didn't matched: bss mld: "QDF_MAC_ADDR_FMT " prev bssid: " QDF_MAC_ADDR_FMT,
-				   QDF_MAC_ADDR_REF(bss_mld_addr.bytes),
-				   QDF_MAC_ADDR_REF(req->prev_bssid.bytes));
-			return QDF_STATUS_E_FAILURE;
-		}
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	status = wlan_vdev_mlme_get_ssid(cm_ctx->vdev, ssid.ssid, &ssid.length);
@@ -102,9 +96,9 @@ QDF_STATUS cm_check_and_prepare_roam_req(struct cnx_mgr *cm_ctx,
 	/* Reject re-assoc unless ssid matches. */
 	if (ssid.length != req->ssid.length ||
 	    qdf_mem_cmp(ssid.ssid, req->ssid.ssid, ssid.length)) {
-		mlme_debug("SSID didn't matched: self ssid: \"" QDF_SSID_FMT "\", ssid in req: \"" QDF_SSID_FMT "\"",
-			   QDF_SSID_REF(ssid.length, ssid.ssid),
-			   QDF_SSID_REF(req->ssid.length, req->ssid.ssid));
+		mlme_debug("SSID didn't matched: self ssid: \"%.*s\", ssid in req: \"%.*s\"",
+			   ssid.length, ssid.ssid, req->ssid.length,
+			   req->ssid.ssid);
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -157,9 +151,6 @@ cm_fill_bss_info_in_roam_rsp_by_cm_id(struct cnx_mgr *cm_ctx,
 	struct cm_req *cm_req;
 	uint32_t prefix = CM_ID_GET_PREFIX(cm_id);
 	struct wlan_cm_roam_req *req;
-	QDF_STATUS status = QDF_STATUS_E_FAILURE;
-	struct scan_cache_node *candidate;
-	struct scan_cache_entry *entry;
 
 	if (prefix != ROAM_REQ_PREFIX)
 		return QDF_STATUS_E_INVAL;
@@ -170,34 +161,25 @@ cm_fill_bss_info_in_roam_rsp_by_cm_id(struct cnx_mgr *cm_ctx,
 		qdf_list_peek_next(&cm_ctx->req_list, cur_node, &next_node);
 		cm_req = qdf_container_of(cur_node, struct cm_req, node);
 
-		if (cm_req->cm_id != cm_id) {
-			cur_node = next_node;
-			next_node = NULL;
-			continue;
+		if (cm_req->cm_id == cm_id) {
+			req = &cm_req->roam_req.req;
+			resp->freq = req->chan_freq;
+			wlan_vdev_mlme_get_ssid(cm_ctx->vdev, resp->ssid.ssid,
+						&resp->ssid.length);
+
+			if (!qdf_is_macaddr_zero(&req->bssid))
+				qdf_copy_macaddr(&resp->bssid, &req->bssid);
+
+			cm_req_lock_release(cm_ctx);
+			return QDF_STATUS_SUCCESS;
 		}
 
-		status = QDF_STATUS_SUCCESS;
-
-		req = &cm_req->roam_req.req;
-		resp->freq = req->chan_freq;
-		wlan_vdev_mlme_get_ssid(cm_ctx->vdev, resp->ssid.ssid,
-					&resp->ssid.length);
-
-		if (qdf_is_macaddr_zero(&req->bssid))
-			break;
-
-		candidate = cm_req->roam_req.cur_candidate;
-		qdf_copy_macaddr(&resp->bssid, &req->bssid);
-		if (candidate) {
-			entry = candidate->entry;
-			cm_connect_resp_fill_mld_addr_from_candidate(cm_ctx->vdev,
-								     entry, resp);
-		}
-		break;
+		cur_node = next_node;
+		next_node = NULL;
 	}
 	cm_req_lock_release(cm_ctx);
 
-	return status;
+	return QDF_STATUS_E_FAILURE;
 }
 
 bool cm_is_roam_enabled(struct wlan_objmgr_psoc *psoc)

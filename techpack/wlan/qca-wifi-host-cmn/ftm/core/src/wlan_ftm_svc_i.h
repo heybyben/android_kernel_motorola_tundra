@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2018 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -48,7 +47,7 @@ struct ftm_seg_hdr_info {
  * @pdev: pdev pointer
  * @arg_list: argument list
  *
- * Return: QDF_STATUS_SUCCESS for success or error code
+ * return: QDF_STATUS_SUCCESS for success or error code
  */
 QDF_STATUS wlan_ftm_pdev_obj_create_notification(struct wlan_objmgr_pdev *pdev,
 							void *arg_list);
@@ -58,7 +57,7 @@ QDF_STATUS wlan_ftm_pdev_obj_create_notification(struct wlan_objmgr_pdev *pdev,
  * @pdev: pdev pointer
  * @arg_list: argument list
  *
- * Return: QDF_STATUS_SUCCESS for success or error code
+ * return: QDF_STATUS_SUCCESS for success or error code
  */
 QDF_STATUS wlan_ftm_pdev_obj_destroy_notification(struct wlan_objmgr_pdev *pdev,
 							void *arg_list);
@@ -68,9 +67,8 @@ QDF_STATUS wlan_ftm_pdev_obj_destroy_notification(struct wlan_objmgr_pdev *pdev,
  * @pdev: pdev pointer
  * @buf: data buffer
  * @len: event length
- * @pdev_id: pdev id
  *
- * Return: QDF_STATUS_SUCCESS for success or error code
+ * return: QDF_STATUS_SUCCESS for success or error code
  */
 QDF_STATUS wlan_ftm_cmd_send(struct wlan_objmgr_pdev *pdev, uint8_t *buf,
 				uint32_t len, uint8_t pdev_id);

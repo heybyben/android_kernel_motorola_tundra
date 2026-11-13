@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2012-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -152,9 +151,19 @@ struct peer_status_info {
 };
 
 /**
+ * enum oem_capability_mask - mask field for userspace client capabilities
+ * @OEM_CAP_RM_FTMRR: FTM range report mask bit
+ * @OEM_CAP_RM_LCI: LCI capability mask bit
+ */
+enum oem_capability_mask {
+	OEM_CAP_RM_FTMRR = (1 << (0)),
+	OEM_CAP_RM_LCI = (1 << (1)),
+};
+
+/**
  * struct oem_get_capability_rsp - capabilities set by userspace and target.
  * @target_cap: target capabilities
- * @cap: capabilities set by userspace via set request
+ * @client_capabilities: capabilities set by userspace via set request
  */
 struct oem_get_capability_rsp {
 	struct oem_data_cap target_cap;
@@ -207,10 +216,10 @@ int oem_deactivate_service(void);
 void hdd_send_oem_data_rsp_msg(struct oem_data_rsp *oem_rsp);
 
 /**
- * hdd_update_channel_bw_info() - set bandwidth info for the chan
+ * update_channel_bw_info() - set bandwidth info for the chan
  * @hdd_ctx: hdd context
  * @chan_freq: channel freq for which info are required
- * @hdd_chan_info: struct where the bandwidth info is filled
+ * @chan_info: struct where the bandwidth info is filled
  *
  * This function finds the maximum bandwidth allowed, secondary
  * channel offset and center freq for the channel as per regulatory
@@ -241,7 +250,7 @@ static inline void hdd_update_channel_bw_info(struct hdd_context *hdd_ctx,
 #endif /* FEATURE_OEM_DATA_SUPPORT */
 
 #ifdef FEATURE_OEM_DATA
-#define OEM_DATA_MAX_SIZE 1500
+#define OEM_DATA_MAX_SIZE 1024
 /**
  * wlan_hdd_cfg80211_oem_data_handler() - the handler for oem data
  * @wiphy: wiphy structure pointer
@@ -276,14 +285,6 @@ extern const struct nla_policy
 
 #ifdef FEATURE_OEM_DATA
 /**
- * hdd_oem_event_async_cb() - callback for oem data async event
- * @oem_event_data: oem data received in the event from the FW
- *
- * Return: None
- */
-void hdd_oem_event_async_cb(const struct oem_data *oem_event_data);
-
-/**
  * hdd_oem_event_handler_cb() - callback for oem data event
  * @oem_event_data: oem data received in the event from the FW
  * @vdev_id: vdev id
@@ -297,9 +298,6 @@ static inline void hdd_oem_event_handler_cb(void *oem_event_data,
 					    uint8_t vdev_id)
 {
 }
-
-static inline void hdd_oem_event_async_cb(void *oem_event_data)
-{
-}
 #endif
+
 #endif /* __WLAN_HDD_OEM_DATA_H__ */

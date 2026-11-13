@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -499,99 +499,19 @@ static QDF_STATUS target_if_vdev_mgr_start_send(
 }
 
 static QDF_STATUS target_if_vdev_mgr_delete_response_send(
-				struct wlan_objmgr_psoc *psoc,
-				uint8_t vdev_id,
+				struct wlan_objmgr_vdev *vdev,
 				struct wlan_lmac_if_mlme_rx_ops *rx_ops)
 {
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	struct wlan_objmgr_psoc *psoc = wlan_vdev_get_psoc(vdev);
 	struct vdev_delete_response rsp = {0};
 
-	rsp.vdev_id = vdev_id;
+	rsp.vdev_id = wlan_vdev_get_id(vdev);
 	status = rx_ops->vdev_mgr_delete_response(psoc, &rsp);
 	target_if_wake_lock_timeout_release(psoc, DELETE_WAKELOCK);
 
 	return status;
 }
-
-#ifdef SERIALIZE_VDEV_RESP
-static QDF_STATUS
-target_if_vdev_mgr_del_rsp_post_flush_cb(struct scheduler_msg *msg)
-{
-	/* Dummy */
-	return QDF_STATUS_SUCCESS;
-}
-
-static QDF_STATUS
-target_if_vdev_mgr_del_rsp_post_cb(struct scheduler_msg *msg)
-{
-	struct wlan_objmgr_psoc *psoc;
-	struct wlan_lmac_if_mlme_rx_ops *rx_ops;
-	uint8_t vdev_id;
-
-	if (!msg || !msg->bodyptr) {
-		mlme_err("Msg or Msg bodyptr is NULL");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	psoc = msg->bodyptr;
-
-	vdev_id = msg->bodyval;
-	if (vdev_id >= WLAN_UMAC_PSOC_MAX_VDEVS) {
-		mlme_err("Invalid VDEV_ID %d", vdev_id);
-		return QDF_STATUS_E_INVAL;
-	}
-
-	rx_ops = target_if_vdev_mgr_get_rx_ops(psoc);
-	if (!rx_ops) {
-		mlme_err("No Rx Ops");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	/* Don't try to get vdev as it's already deleted */
-	target_if_vdev_mgr_delete_response_send(psoc, vdev_id, rx_ops);
-
-	return QDF_STATUS_SUCCESS;
-}
-
-static void target_if_vdev_mgr_delete_rsp_post_ctx(
-				struct wlan_objmgr_psoc *psoc,
-				uint8_t vdev_id)
-{
-	struct scheduler_msg msg = {0};
-
-	msg.callback = target_if_vdev_mgr_del_rsp_post_cb;
-	msg.bodyptr = psoc;
-	msg.bodyval = vdev_id;
-	msg.flush_callback =
-			target_if_vdev_mgr_del_rsp_post_flush_cb;
-
-	if (scheduler_post_message(QDF_MODULE_ID_TARGET_IF,
-				   QDF_MODULE_ID_TARGET_IF,
-				   QDF_MODULE_ID_TARGET_IF, &msg) ==
-				   QDF_STATUS_SUCCESS)
-		return;
-
-	mlme_err("Failed to enqueue vdev delete response");
-}
-
-static void
-target_if_vdev_mgr_delete_rsp_handler(
-				struct wlan_objmgr_psoc *psoc,
-				uint8_t vdev_id,
-				struct wlan_lmac_if_mlme_rx_ops *rx_ops)
-{
-	target_if_vdev_mgr_delete_rsp_post_ctx(psoc, vdev_id);
-}
-#else
-static void
-target_if_vdev_mgr_delete_rsp_handler(
-				struct wlan_objmgr_psoc *psoc,
-				uint8_t vdev_id,
-				struct wlan_lmac_if_mlme_rx_ops *rx_ops)
-{
-	target_if_vdev_mgr_delete_response_send(psoc, vdev_id, rx_ops);
-}
-#endif
 
 static QDF_STATUS target_if_vdev_mgr_delete_send(
 					struct wlan_objmgr_vdev *vdev,
@@ -647,8 +567,7 @@ static QDF_STATUS target_if_vdev_mgr_delete_send(
 					       WLAN_SOC_F_TESTMODE_ENABLE)) {
 			target_if_vdev_mgr_rsp_timer_stop(psoc, vdev_rsp,
 							  DELETE_RESPONSE_BIT);
-			target_if_vdev_mgr_delete_rsp_handler(psoc, vdev_id,
-							      rx_ops);
+			target_if_vdev_mgr_delete_response_send(vdev, rx_ops);
 		}
 	} else {
 		vdev_rsp->expire_time = 0;
@@ -711,7 +630,7 @@ static QDF_STATUS target_if_vdev_mgr_stop_send(
 	target_if_wake_lock_timeout_release(psoc, START_WAKELOCK);
 	target_if_wake_lock_timeout_acquire(psoc, STOP_WAKELOCK);
 
-	status = wmi_unified_vdev_stop_send(wmi_handle, param);
+	status = wmi_unified_vdev_stop_send(wmi_handle, param->vdev_id);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		vdev_rsp->expire_time = 0;
 		vdev_rsp->timer_status = QDF_STATUS_E_CANCELED;
@@ -1259,11 +1178,6 @@ static QDF_STATUS target_if_vdev_mgr_peer_delete_all_send(
 	}
 
 	vdev_rsp->expire_time = PEER_DELETE_ALL_RESPONSE_TIMER;
-	vdev_rsp->peer_type_bitmap = param->peer_type_bitmap;
-
-	mlme_debug("VDEV_%d: PSOC_%d vdev delete all: bitmap:%d", vdev_id,
-		   wlan_psoc_get_id(psoc), vdev_rsp->peer_type_bitmap);
-
 	target_if_vdev_mgr_rsp_timer_start(psoc, vdev_rsp,
 					   PEER_DELETE_ALL_RESPONSE_BIT);
 
@@ -1320,13 +1234,8 @@ target_if_vdev_mgr_set_mac_address_send(struct qdf_mac_addr mac_addr,
 					struct qdf_mac_addr mld_addr,
 					struct wlan_objmgr_vdev *vdev)
 {
-	QDF_STATUS status;
-	struct wlan_objmgr_psoc *psoc;
-	struct vdev_response_timer *vdev_rsp;
-	struct wlan_lmac_if_mlme_rx_ops *rx_ops;
 	struct set_mac_addr_params params = {0};
 	struct wmi_unified *wmi_handle;
-	uint8_t vdev_id = wlan_vdev_get_id(vdev);
 
 	wmi_handle = target_if_vdev_mgr_wmi_handle_get(vdev);
 	if (!wmi_handle) {
@@ -1334,40 +1243,7 @@ target_if_vdev_mgr_set_mac_address_send(struct qdf_mac_addr mac_addr,
 		return QDF_STATUS_E_INVAL;
 	}
 
-	if (!wlan_vdev_mlme_is_mlo_link_switch_in_progress(vdev))
-		goto send_req;
-
-	psoc = wlan_vdev_get_psoc(vdev);
-	if (!psoc) {
-		mlme_err("PSOC NULL");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	rx_ops = target_if_vdev_mgr_get_rx_ops(psoc);
-	if (!rx_ops || !rx_ops->psoc_get_vdev_response_timer_info) {
-		mlme_err("VDEV_%d: PSOC_%d No Rx Ops", vdev_id,
-			 wlan_psoc_get_id(psoc));
-		return QDF_STATUS_E_INVAL;
-	}
-
-	vdev_rsp = rx_ops->psoc_get_vdev_response_timer_info(psoc, vdev_id);
-	if (!vdev_rsp) {
-		mlme_err("VDEV_%d: PSOC_%d No vdev rsp timer", vdev_id,
-			 wlan_psoc_get_id(psoc));
-		return QDF_STATUS_E_INVAL;
-	}
-
-	vdev_rsp->expire_time = WLAN_SET_MAC_ADDR_TIMEOUT;
-	status = target_if_vdev_mgr_rsp_timer_start(psoc, vdev_rsp,
-						    UPDATE_MAC_ADDR_RESPONSE_BIT);
-
-	if (QDF_IS_STATUS_ERROR(status)) {
-		mlme_err("Start VDEV response timer failed");
-		return status;
-	}
-
-send_req:
-	params.vdev_id = vdev_id;
+	params.vdev_id = wlan_vdev_get_id(vdev);
 	params.mac_addr = mac_addr;
 	params.mld_addr = mld_addr;
 
@@ -1386,123 +1262,6 @@ static void target_if_vdev_register_set_mac_address(
 {
 }
 #endif
-
-wmi_host_channel_width
-target_if_phy_ch_width_to_wmi_chan_width(enum phy_ch_width ch_width)
-{
-	switch (ch_width) {
-	case CH_WIDTH_20MHZ:
-		return WMI_HOST_CHAN_WIDTH_20;
-	case CH_WIDTH_40MHZ:
-		return WMI_HOST_CHAN_WIDTH_40;
-	case CH_WIDTH_80MHZ:
-		return WMI_HOST_CHAN_WIDTH_80;
-	case CH_WIDTH_160MHZ:
-		return WMI_HOST_CHAN_WIDTH_160;
-	case CH_WIDTH_80P80MHZ:
-		return WMI_HOST_CHAN_WIDTH_80P80;
-	case CH_WIDTH_5MHZ:
-		return WMI_HOST_CHAN_WIDTH_5;
-	case CH_WIDTH_10MHZ:
-		return WMI_HOST_CHAN_WIDTH_10;
-	case CH_WIDTH_320MHZ:
-		return WMI_HOST_CHAN_WIDTH_320;
-	default:
-		return WMI_HOST_CHAN_WIDTH_20;
-	}
-}
-
-enum phy_ch_width
-target_if_wmi_chan_width_to_phy_ch_width(wmi_host_channel_width ch_width)
-{
-	switch (ch_width) {
-	case WMI_HOST_CHAN_WIDTH_20:
-		return CH_WIDTH_20MHZ;
-	case WMI_HOST_CHAN_WIDTH_40:
-		return CH_WIDTH_40MHZ;
-	case WMI_HOST_CHAN_WIDTH_80:
-		return CH_WIDTH_80MHZ;
-	case WMI_HOST_CHAN_WIDTH_160:
-		return CH_WIDTH_160MHZ;
-	case WMI_HOST_CHAN_WIDTH_80P80:
-		return CH_WIDTH_80P80MHZ;
-	case WMI_HOST_CHAN_WIDTH_5:
-		return CH_WIDTH_5MHZ;
-	case WMI_HOST_CHAN_WIDTH_10:
-		return CH_WIDTH_10MHZ;
-	case WMI_HOST_CHAN_WIDTH_320:
-		return CH_WIDTH_320MHZ;
-	default:
-		return CH_WIDTH_20MHZ;
-	}
-}
-
-/**
- * target_if_vdev_peer_mlme_param_2_wmi() - convert peer parameter from mlme to
- *                                          wmi
- * @mlme_id: peer parameter id in mlme layer
- * @param_value: peer parameter value in mlme layer
- * @param: pointer to peer_set_params
- *
- * Return: peer parameter id in wmi layer
- */
-static void
-target_if_vdev_peer_mlme_param_2_wmi(enum wlan_mlme_peer_param_id mlme_id,
-				     uint32_t param_value,
-				     struct peer_set_params *param)
-{
-	enum phy_ch_width bw;
-
-	switch (mlme_id) {
-	case WLAN_MLME_PEER_BW_PUNCTURE:
-		param->param_id = WMI_HOST_PEER_CHWIDTH_PUNCTURE_20MHZ_BITMAP;
-		param->param_value = param_value;
-		bw = QDF_GET_BITS(param_value, 0, 8);
-		QDF_SET_BITS(param->param_value, 0, 8,
-			     target_if_phy_ch_width_to_wmi_chan_width(bw));
-		break;
-	default:
-		param->param_id = mlme_id;
-		param->param_value = param_value;
-		break;
-	}
-}
-
-/**
- * target_if_vdev_peer_set_param_send() - send peer param
- * @vdev: Pointer to vdev object.
- * @peer_mac_addr: peer mac address
- * @param_id: peer param id
- * @param_value: peer param value
- *
- * Return: QDF_STATUS
- */
-static QDF_STATUS target_if_vdev_peer_set_param_send(
-						struct wlan_objmgr_vdev *vdev,
-						uint8_t *peer_mac_addr,
-						uint32_t param_id,
-						uint32_t param_value)
-{
-	struct peer_set_params param;
-	wmi_unified_t wmi_handle;
-
-	if (!peer_mac_addr || !vdev) {
-		mlme_err("invalid input");
-		return QDF_STATUS_E_INVAL;
-	}
-	wmi_handle = target_if_vdev_mgr_wmi_handle_get(vdev);
-	if (!wmi_handle) {
-		mlme_err("Failed to get WMI handle!");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	qdf_mem_zero(&param, sizeof(param));
-
-	target_if_vdev_peer_mlme_param_2_wmi(param_id, param_value, &param);
-	param.vdev_id = wlan_vdev_get_id(vdev);
-
-	return wmi_set_peer_param_send(wmi_handle, peer_mac_addr, &param);
-}
 
 QDF_STATUS
 target_if_vdev_mgr_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
@@ -1573,7 +1332,5 @@ target_if_vdev_mgr_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 	mlme_tx_ops->vdev_mgr_rsp_timer_stop =
 			target_if_vdev_mgr_rsp_timer_stop;
 	target_if_vdev_register_set_mac_address(mlme_tx_ops);
-	mlme_tx_ops->vdev_peer_set_param_send =
-			target_if_vdev_peer_set_param_send;
 	return QDF_STATUS_SUCCESS;
 }

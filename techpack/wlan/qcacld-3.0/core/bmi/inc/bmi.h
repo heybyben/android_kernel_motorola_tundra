@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -32,7 +31,7 @@
 struct ol_context;
 
 /**
- * struct ol_config_info - Place Holder for offload configuration
+ * struct hif_config_info - Place Holder for hif confiruation
  * @enable_uart_print: UART Print
  * @enable_self_recovery: Self Recovery
  * @enable_fw_log:      To Enable FW LOG

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -21,7 +21,7 @@
 #include <target_if_twt.h>
 #include <target_if_twt_evt.h>
 #include <target_if_ext_twt.h>
-#include "twt/core/src/wlan_twt_priv.h"
+#include "wlan_twt_priv.h"
 #include <wlan_twt_api.h>
 #include <wmi_unified_twt_api.h>
 
@@ -31,8 +31,7 @@ target_if_twt_en_complete_event_handler(ol_scn_t scn,
 {
 	wmi_unified_t wmi_handle;
 	struct wlan_objmgr_psoc *psoc;
-	struct wlan_lmac_if_rx_ops *rx_ops;
-	struct wlan_lmac_if_twt_rx_ops *twt_rx_ops;
+	struct wlan_lmac_if_twt_rx_ops *rx_ops;
 	struct twt_enable_complete_event_param event;
 	QDF_STATUS status;
 
@@ -49,14 +48,9 @@ target_if_twt_en_complete_event_handler(ol_scn_t scn,
 		return -EINVAL;
 	}
 
-	rx_ops = wlan_psoc_get_lmac_if_rxops(psoc);
-	if (!rx_ops) {
-		target_if_err("rx_ops is NULL");
-		return -EINVAL;
-	}
-	twt_rx_ops =  &rx_ops->twt_rx_ops;
-	if (!twt_rx_ops || !twt_rx_ops->twt_enable_comp_cb) {
-		target_if_err("TWT rx_ops comp_cb is NULL");
+	rx_ops = wlan_twt_get_rx_ops(psoc);
+	if (!rx_ops || !rx_ops->twt_enable_comp_cb) {
+		target_if_err("TWT rx_ops is NULL");
 		return -EINVAL;
 	}
 
@@ -73,7 +67,7 @@ target_if_twt_en_complete_event_handler(ol_scn_t scn,
 		goto end;
 	}
 
-	status = twt_rx_ops->twt_enable_comp_cb(psoc, &event);
+	status = rx_ops->twt_enable_comp_cb(psoc, &event);
 
 end:
 	return qdf_status_to_os_return(status);
@@ -85,8 +79,7 @@ target_if_twt_disable_comp_event_handler(ol_scn_t scn,
 {
 	wmi_unified_t wmi_handle;
 	struct wlan_objmgr_psoc *psoc;
-	struct wlan_lmac_if_rx_ops *rx_ops;
-	struct wlan_lmac_if_twt_rx_ops *twt_rx_ops;
+	struct wlan_lmac_if_twt_rx_ops *rx_ops;
 	struct twt_disable_complete_event_param event;
 	QDF_STATUS status;
 
@@ -103,14 +96,9 @@ target_if_twt_disable_comp_event_handler(ol_scn_t scn,
 		return -EINVAL;
 	}
 
-	rx_ops = wlan_psoc_get_lmac_if_rxops(psoc);
-	if (!rx_ops) {
-		target_if_err("rx_ops is NULL");
-		return -EINVAL;
-	}
-	twt_rx_ops =  &rx_ops->twt_rx_ops;
-	if (!twt_rx_ops || !twt_rx_ops->twt_disable_comp_cb) {
-		target_if_err("TWT rx_ops comp_cb is NULL");
+	rx_ops = wlan_twt_get_rx_ops(psoc);
+	if (!rx_ops || !rx_ops->twt_disable_comp_cb) {
+		target_if_err("TWT rx_ops is NULL");
 		return -EINVAL;
 	}
 
@@ -127,7 +115,7 @@ target_if_twt_disable_comp_event_handler(ol_scn_t scn,
 		goto end;
 	}
 
-	status = twt_rx_ops->twt_disable_comp_cb(psoc, &event);
+	status = rx_ops->twt_disable_comp_cb(psoc, &event);
 
 end:
 	return qdf_status_to_os_return(status);

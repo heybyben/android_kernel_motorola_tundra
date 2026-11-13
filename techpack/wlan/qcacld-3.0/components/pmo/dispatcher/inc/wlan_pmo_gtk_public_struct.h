@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -61,15 +60,14 @@ struct pmo_gtk_req {
 
 /**
  * struct pmo_gtk_rsp_params - pmo gtk response
+ * @psoc: objmgr psoc
  * @vdev_id: vdev id on which arp offload needed
  * @status_flag: status flags
  * @refresh_cnt: number of successful GTK refresh exchanges since SET operation
- * @replay_counter:GTK replay counter
  * @igtk_key_index: igtk key index
  * @igtk_key_length: igtk key length
  * @igtk_key_rsc: igtk key index
  * @igtk_key: igtk key length
- * @bssid: BSSID
  */
 struct pmo_gtk_rsp_params {
 	uint8_t  vdev_id;
@@ -84,16 +82,14 @@ struct pmo_gtk_rsp_params {
 };
 
 /**
- * typedef pmo_gtk_rsp_callback() - gtk response callback
- * @callback_context: client context
- * @gtk_rsp: GTK response
+ * typedef for gtk response callback
  */
 typedef void (*pmo_gtk_rsp_callback)(void *callback_context,
 		struct pmo_gtk_rsp_params *gtk_rsp);
 
 /**
- * struct pmo_gtk_rsp_req - gtk respsonse request
- * @callback: client callback for providing gtk response when fwr send event
+ * struct pmo_gtk_rsp_req -gtk respsonse request
+ * @callback: client callback for providing gtk resposne when fwr send event
  * @callback_context: client callback response
  */
 struct pmo_gtk_rsp_req {

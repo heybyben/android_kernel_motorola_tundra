@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -445,7 +445,7 @@ cfg_store_alloc(const char *path, struct cfg_value_store **out_store)
 
 	cfg_enter();
 
-	store = qdf_mem_common_alloc(sizeof(*store));
+	store = qdf_mem_malloc(sizeof(*store));
 	if (!store)
 		return QDF_STATUS_E_NOMEM;
 
@@ -472,7 +472,7 @@ free_path:
 	qdf_mem_free(store->path);
 
 free_store:
-	qdf_mem_common_free(store);
+	qdf_mem_free(store);
 
 	return status;
 }
@@ -491,7 +491,7 @@ static void cfg_store_free(struct cfg_value_store *store)
 				status);
 
 	qdf_mem_free(store->path);
-	qdf_mem_common_free(store);
+	qdf_mem_free(store);
 }
 
 static QDF_STATUS
@@ -557,21 +557,6 @@ cfg_ini_parse_to_store(const char *path, struct cfg_value_store *store)
 	return status;
 }
 
-static QDF_STATUS
-cfg_ini_section_parse_to_store(const char *path, const char *section_name,
-			       struct cfg_value_store *store)
-{
-	QDF_STATUS status;
-
-	status = qdf_ini_section_parse(path, store, cfg_ini_item_handler,
-				       section_name);
-	if (QDF_IS_STATUS_ERROR(status))
-		cfg_err("Failed to parse *.ini file @ %s; status:%d",
-			path, status);
-
-	return status;
-}
-
 QDF_STATUS cfg_parse_to_psoc_store(struct wlan_objmgr_psoc *psoc,
 				   const char *path)
 {
@@ -579,16 +564,6 @@ QDF_STATUS cfg_parse_to_psoc_store(struct wlan_objmgr_psoc *psoc,
 }
 
 qdf_export_symbol(cfg_parse_to_psoc_store);
-
-QDF_STATUS cfg_section_parse_to_psoc_store(struct wlan_objmgr_psoc *psoc,
-					   const char *path,
-					   const char *section_name)
-{
-	return cfg_ini_section_parse_to_store(path, section_name,
-			cfg_psoc_get_ctx(psoc)->store);
-}
-
-qdf_export_symbol(cfg_section_parse_to_psoc_store);
 
 QDF_STATUS cfg_parse_to_global_store(const char *path)
 {
@@ -697,7 +672,6 @@ cfg_ini_config_print(struct wlan_objmgr_psoc *psoc, uint8_t *buf,
 			len = qdf_scnprintf(buf, buflen, "%s %d\n", meta->name,
 					    *((int32_t *)offset));
 			buf += len;
-			buflen -= len;
 			break;
 		case CFG_UINT_ITEM:
 			len = qdf_scnprintf(buf, buflen, "%s %d\n", meta->name,
@@ -898,13 +872,6 @@ free_store:
 	return status;
 }
 
-bool cfg_valid_ini_check(const char *path)
-{
-	cfg_enter();
-
-	return qdf_valid_ini_check(path);
-}
-
 void cfg_release(void)
 {
 	cfg_enter();
@@ -975,3 +942,4 @@ put_store:
 }
 
 qdf_export_symbol(cfg_psoc_parse);
+

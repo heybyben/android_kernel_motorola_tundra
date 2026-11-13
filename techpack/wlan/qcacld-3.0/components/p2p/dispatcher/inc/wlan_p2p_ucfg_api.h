@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2018, 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -37,10 +36,9 @@ struct p2p_ps_config;
 struct p2p_lo_start;
 struct p2p_lo_event;
 struct p2p_protocol_callbacks;
-struct mcc_quota_info;
 
 /**
- * typedef p2p_rx_callback() - Callback for rx mgmt frame
+ * p2p_rx_callback() - Callback for rx mgmt frame
  * @user_data: user data associated to this rx mgmt frame.
  * @rx_frame: RX mgmt frame
  *
@@ -52,7 +50,7 @@ typedef void (*p2p_rx_callback)(void *user_data,
 	struct p2p_rx_mgmt_frame *rx_frame);
 
 /**
- * typedef p2p_action_tx_cnf_callback() - Callback for tx confirmation
+ * p2p_action_tx_cnf_callback() - Callback for tx confirmation
  * @user_data: user data associated to this tx confirmation
  * @tx_cnf: tx confirmation information
  *
@@ -65,7 +63,7 @@ typedef void (*p2p_action_tx_cnf_callback)(void *user_data,
 	struct p2p_tx_cnf *tx_cnf);
 
 /**
- * typedef p2p_lo_event_callback() - Callback for listen offload event
+ * p2p_lo_event_callback() - Callback for listen offload event
  * @user_data: user data associated to this lo event
  * @p2p_lo_event: listen offload event information
  *
@@ -77,7 +75,7 @@ typedef void (*p2p_lo_event_callback)(void *user_data,
 	struct p2p_lo_event *p2p_lo_event);
 
 /**
- * typedef p2p_event_callback() - Callback for P2P event
+ * p2p_event_callback() - Callback for P2P event
  * @user_data: user data associated to this p2p event
  * @p2p_event: p2p event information
  *
@@ -89,26 +87,12 @@ typedef void (*p2p_event_callback)(void *user_data,
 	struct p2p_event *p2p_event);
 
 /**
- * typedef mcc_quota_event_callback() - Callback for mcc quota
- * @psoc: psoc object
- * @vdev: vdev object
- * @mcc_quota: mcc quota event information
- *
- * Callback to notify mcc quota event.
- *
- * Return: None
- */
-typedef QDF_STATUS (*mcc_quota_event_callback)(struct wlan_objmgr_psoc *psoc,
-					       struct wlan_objmgr_vdev *vdev,
-					       struct mcc_quota_info *mcc_quota);
-
-/**
  * struct p2p_start_param - p2p soc start parameters. Below callbacks
  *                          will be registered by the HDD
- * @rx_cb:            Function pointer to hdd rx callback. This
+ * @rx_callback:      Function pointer to hdd rx callback. This
  *                    function will be used to give rx frames to hdd
  * @rx_cb_data:       RX callback user data
- * @event_cb:         Function pointer to hdd p2p event callback.
+ * @event_cb:         Founction pointer to hdd p2p event callback.
  *                    This function will be used to give p2p event
  *                    to hdd
  * @event_cb_data:    Pointer to p2p event callback user data
@@ -116,7 +100,7 @@ typedef QDF_STATUS (*mcc_quota_event_callback)(struct wlan_objmgr_psoc *psoc,
  *                    This function will be used to give tx confirm
  *                    to hdd
  * @tx_cnf_cb_data:   Pointer to p2p tx confirm callback user data
- * @lo_event_cb:      Function pointer to p2p listen offload
+ * @lo_event_cb:      Founction pointer to p2p listen offload
  *                    callback. This function will be used to give
  *                    listen offload stopped event to hdd
  * @lo_event_cb_data: Pointer to p2p listen offload callback user data
@@ -230,7 +214,7 @@ QDF_STATUS ucfg_p2p_roc_cancel_req(struct wlan_objmgr_psoc *soc,
 QDF_STATUS ucfg_p2p_cleanup_roc_by_vdev(struct wlan_objmgr_vdev *vdev);
 
 /**
- * ucfg_p2p_cleanup_roc_by_psoc() - Cleanup roc request by psoc
+ * ucfg_p2p_cleanup_roc_by_poc() - Cleanup roc request by psoc
  * @psoc: pointer to psoc object
  *
  * This function call P2P API to cleanup roc request by psoc
@@ -250,7 +234,7 @@ QDF_STATUS ucfg_p2p_cleanup_roc_by_psoc(struct wlan_objmgr_psoc *psoc);
 QDF_STATUS ucfg_p2p_cleanup_tx_by_vdev(struct wlan_objmgr_vdev *vdev);
 
 /**
- * ucfg_p2p_cleanup_tx_by_psoc() - Cleanup tx request by psoc
+ * ucfg_p2p_cleanup_tx_by_poc() - Cleanup tx request by psoc
  * @psoc: pointer to psoc object
  *
  * This function call P2P API to cleanup tx action frame request by psoc
@@ -379,27 +363,6 @@ bool ucfg_p2p_check_random_mac(struct wlan_objmgr_psoc *soc, uint32_t vdev_id,
 QDF_STATUS ucfg_p2p_register_callbacks(struct wlan_objmgr_psoc *soc,
 	    struct p2p_protocol_callbacks *cb_obj);
 
-#ifdef WLAN_FEATURE_MCC_QUOTA
-/**
- * ucfg_p2p_register_mcc_quota_event_os_if_cb() - Register OS IF mcc quota
- * event callback
- * @psoc: soc object
- * @cb: os if callback for mcc quota event
- *
- * Return: QDF_STATUS_SUCCESS for success
- */
-QDF_STATUS
-ucfg_p2p_register_mcc_quota_event_os_if_cb(struct wlan_objmgr_psoc *psoc,
-					   mcc_quota_event_callback cb);
-#else
-static inline QDF_STATUS
-ucfg_p2p_register_mcc_quota_event_os_if_cb(struct wlan_objmgr_psoc *psoc,
-					   mcc_quota_event_callback cb)
-{
-	return QDF_STATUS_SUCCESS;
-}
-#endif
-
 /**
  * ucfg_p2p_status_scan() - Show P2P connection status when scanning
  * @vdev: vdev context
@@ -464,46 +427,4 @@ bool ucfg_p2p_is_roam_config_disabled(struct wlan_objmgr_psoc *psoc)
 {
 	return cfg_p2p_is_roam_config_disabled(psoc);
 }
-
-/**
- * ucfg_p2p_get_indoor_ch_support() - Get indoor channel support
- * for P2P GO
- *
- * @psoc: pointer to psoc obj
- *
- * Get the indoor channel support for P2P GO
- *
- * Return: p2p go supported on indoor channel
- */
-bool ucfg_p2p_get_indoor_ch_support(struct wlan_objmgr_psoc *psoc);
-
-#ifdef WLAN_FEATURE_DYNAMIC_MAC_ADDR_UPDATE
-/**
- * ucfg_is_p2p_device_dynamic_set_mac_addr_supported() - API to check P2P device
- * dynamic MAC address update is supported or not
- *
- * @psoc: Pointer to psoc
- *
- * Return: true or false
- */
-bool
-ucfg_is_p2p_device_dynamic_set_mac_addr_supported(struct wlan_objmgr_psoc *psoc);
-#else
-static inline bool
-ucfg_is_p2p_device_dynamic_set_mac_addr_supported(struct wlan_objmgr_psoc *psoc)
-{
-	return false;
-}
-#endif
-
-/**
- * ucfg_p2p_is_p2p_go_noa_in_progress() - Check whether P2P GO single shot noa
- * is in progress or not
- * @pdev: PDEV object manager for P2P GO
- * @vdev_id: vdev id
- *
- * Return: True/False
- */
-bool ucfg_p2p_is_p2p_go_noa_in_progress(struct wlan_objmgr_pdev *pdev,
-					uint8_t vdev_id);
 #endif /* _WLAN_P2P_UCFG_API_H_ */

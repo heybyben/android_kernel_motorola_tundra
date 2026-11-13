@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -32,10 +32,10 @@
 
 /**
  * action_oui_string_to_hex() - convert string to uint8_t hex array
- * @token: string to be converted
- * @hex: output string to hold converted string
- * @no_of_lengths: count of possible lengths for input string
- * @possible_lengths: array holding possible lengths
+ * @token - string to be converted
+ * @hex - output string to hold converted string
+ * @no_of_lengths - count of possible lengths for input string
+ * @possible_lengths - array holding possible lengths
  *
  * This function converts the continuous input string of even length and
  * containing hexa decimal characters into hexa decimal array of uint8_t type.
@@ -80,7 +80,7 @@ static bool action_oui_string_to_hex(uint8_t *token, uint8_t *hex,
 
 /**
  * action_oui_token_string() - converts enum value to string
- * @token_id: enum value to be converted to string
+ * token_id: enum value to be converted to string
  *
  * This function converts the enum value of type action_oui_token_type
  * to string
@@ -172,8 +172,8 @@ validate_and_convert_data_length(uint8_t *token,
 	}
 
 	if ((uint32_t)len > ACTION_OUI_MAX_DATA_LENGTH) {
-		action_oui_err("action OUI data len %d is more than %u",
-			       len, ACTION_OUI_MAX_DATA_LENGTH);
+		action_oui_err("action OUI data len is more than %u",
+			ACTION_OUI_MAX_DATA_LENGTH);
 		return false;
 	}
 
@@ -471,7 +471,7 @@ validate_and_convert_capability(uint8_t *token,
 
 /**
  * action_oui_extension_store() - store action oui extension
- * @psoc_priv: pointer to action_oui priv obj
+ * @priv_obj: pointer to action_oui priv obj
  * @oui_priv: type of the action
  * @ext: oui extension to store in sme
  *
@@ -533,11 +533,6 @@ action_oui_parse(struct action_oui_psoc_priv *psoc_priv,
 	if (!oui_priv) {
 		action_oui_err("action oui priv not allocated");
 		return QDF_STATUS_E_INVAL;
-	}
-
-	if (!psoc_priv->action_oui_enable) {
-		action_oui_debug("action_oui is not enable");
-		return QDF_STATUS_SUCCESS;
 	}
 
 	str1 = qdf_str_trim((char *)oui_string);
@@ -630,12 +625,6 @@ action_oui_parse(struct action_oui_psoc_priv *psoc_priv,
 			break;
 		}
 
-		if (action_id >= ACTION_OUI_HOST_ONLY) {
-			qdf_mutex_acquire(&oui_priv->extension_lock);
-			psoc_priv->host_only_extensions++;
-			qdf_mutex_release(&oui_priv->extension_lock);
-		}
-
 		oui_index++;
 		if (oui_index == ACTION_OUI_MAX_EXTENSIONS) {
 			if (str1)
@@ -680,60 +669,6 @@ action_oui_parse(struct action_oui_psoc_priv *psoc_priv,
 	return QDF_STATUS_SUCCESS;
 }
 
-QDF_STATUS
-action_oui_parse_string(struct wlan_objmgr_psoc *psoc,
-			const uint8_t *in_str,
-			enum action_oui_id action_id)
-{
-	struct action_oui_psoc_priv *psoc_priv;
-	QDF_STATUS status = QDF_STATUS_E_INVAL;
-	uint8_t *oui_str;
-	int len;
-
-	ACTION_OUI_ENTER();
-
-	if (!psoc) {
-		action_oui_err("psoc is NULL");
-		goto exit;
-	}
-
-	if (action_id >= ACTION_OUI_MAXIMUM_ID) {
-		action_oui_err("Invalid action_oui id: %u", action_id);
-		goto exit;
-	}
-
-	psoc_priv = action_oui_psoc_get_priv(psoc);
-	if (!psoc_priv) {
-		action_oui_err("psoc priv is NULL");
-		goto exit;
-	}
-
-	len = qdf_str_len(in_str);
-	if (len <= 0 || len > ACTION_OUI_MAX_STR_LEN - 1) {
-		action_oui_err("Invalid string length: %u", action_id);
-		goto exit;
-	}
-
-	oui_str = qdf_mem_malloc(len + 1);
-	if (!oui_str) {
-		status = QDF_STATUS_E_NOMEM;
-		goto exit;
-	}
-
-	qdf_mem_copy(oui_str, in_str, len);
-	oui_str[len] = '\0';
-
-	status = action_oui_parse(psoc_priv, oui_str, action_id);
-	if (!QDF_IS_STATUS_SUCCESS(status))
-		action_oui_err("Failed to parse: %u", action_id);
-
-	qdf_mem_free(oui_str);
-
-exit:
-	ACTION_OUI_EXIT();
-	return status;
-}
-
 QDF_STATUS action_oui_send(struct action_oui_psoc_priv *psoc_priv,
 			enum action_oui_id action_id)
 {
@@ -752,22 +687,11 @@ QDF_STATUS action_oui_send(struct action_oui_psoc_priv *psoc_priv,
 	if (!oui_priv)
 		return QDF_STATUS_SUCCESS;
 
-	if (!psoc_priv->action_oui_enable) {
-		action_oui_debug("action_oui is not enable");
-		return QDF_STATUS_SUCCESS;
-	}
-
 	extension_list = &oui_priv->extension_list;
 	qdf_mutex_acquire(&oui_priv->extension_lock);
-
-	if (psoc_priv->max_extensions -
-	    (psoc_priv->total_extensions - psoc_priv->host_only_extensions) < 0) {
-		action_oui_err("total_extensions: %d exceeds max_extensions: %d, do not update",
-			       psoc_priv->max_extensions,
-			       (psoc_priv->total_extensions -
-				psoc_priv->host_only_extensions));
+	if (qdf_list_empty(extension_list)) {
 		qdf_mutex_release(&oui_priv->extension_lock);
-		return QDF_STATUS_E_FAILURE;
+		return QDF_STATUS_SUCCESS;
 	}
 
 	no_oui_extensions = qdf_list_size(extension_list);
@@ -780,7 +704,7 @@ QDF_STATUS action_oui_send(struct action_oui_psoc_priv *psoc_priv,
 
 	req->action_id = oui_priv->id;
 	req->no_oui_extensions = no_oui_extensions;
-	req->total_no_oui_extensions = psoc_priv->max_extensions;
+	req->total_no_oui_extensions = psoc_priv->total_extensions;
 
 	extension = req->extension;
 	qdf_list_peek_front(extension_list, &node);
@@ -945,72 +869,6 @@ action_oui_get_oui_ptr(struct action_oui_extension *extension,
 }
 
 bool
-action_oui_is_empty(struct action_oui_psoc_priv *psoc_priv,
-		    enum action_oui_id action_id)
-{
-	struct action_oui_priv *oui_priv;
-	qdf_list_t *extension_list;
-
-	oui_priv = psoc_priv->oui_priv[action_id];
-	if (!oui_priv)
-		return true;
-
-	extension_list = &oui_priv->extension_list;
-	qdf_mutex_acquire(&oui_priv->extension_lock);
-	if (qdf_list_empty(extension_list)) {
-		qdf_mutex_release(&oui_priv->extension_lock);
-		return true;
-	}
-	qdf_mutex_release(&oui_priv->extension_lock);
-
-	return false;
-}
-
-static bool validate_vendor_oui_data(struct action_oui_extension *extension,
-				     struct action_oui_search_attr *attr)
-{
-	uint8_t elem_id, elem_len;
-	int32_t left;
-	uint8_t eid = WLAN_MAC_EID_VENDOR;
-	const uint8_t *ptr = NULL;
-	const uint8_t *oui = extension->oui;
-
-	if (!attr->ie_data || !attr->ie_length || !oui)
-		return false;
-
-	ptr = attr->ie_data;
-	left = attr->ie_length;
-
-	while (left >= 2) {
-		elem_id  = ptr[0];
-		elem_len = ptr[1];
-		left -= 2;
-
-		if (elem_len > left)
-			return false;
-
-		if (eid == elem_id) {
-			/*
-			 * if oui is provided and oui_size is more than left
-			 * bytes, then we cannot have match
-			 */
-			if (extension->oui_length > left)
-				return false;
-
-			if (qdf_mem_cmp(&ptr[2], extension->oui,
-					extension->oui_length) == 0 &&
-			    check_for_vendor_oui_data(extension, ptr))
-				return true;
-		}
-
-		left -= elem_len;
-		ptr += (elem_len + 2);
-	}
-
-	return false;
-}
-
-bool
 action_oui_search(struct action_oui_psoc_priv *psoc_priv,
 		  struct action_oui_search_attr *attr,
 		  enum action_oui_id action_id)
@@ -1060,8 +918,9 @@ action_oui_search(struct action_oui_psoc_priv *psoc_priv,
 			goto next;
 
 		if (extension->data_length && !wildcard_oui &&
-		    !validate_vendor_oui_data(extension, attr))
+		    !check_for_vendor_oui_data(extension, oui_ptr))
 			goto next;
+
 
 		if ((extension->info_mask & ACTION_OUI_INFO_MAC_ADDRESS) &&
 		    !check_for_vendor_ap_mac(extension, attr))

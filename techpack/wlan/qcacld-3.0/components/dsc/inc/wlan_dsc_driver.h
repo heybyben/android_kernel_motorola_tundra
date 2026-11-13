@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2018 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -26,7 +25,7 @@
 
 #include "qdf_status.h"
 
-/*
+/**
  * struct dsc_driver - opaque dsc driver context
  */
 struct dsc_driver;
@@ -62,7 +61,7 @@ void dsc_driver_destroy(struct dsc_driver **out_driver);
  * Call dsc_driver_trans_stop() to complete the transition.
  *
  * Return:
- *	QDF_STATUS_SUCCESS - transition started successfully
+ *	QDF_STATUS_SUCCESS - transition started succcessfully
  *	QDF_STATUS_E_INVAL - invalid request (causes debug panic)
  *	QDF_STATUS_E_AGAIN - transition cannot currently be started
  *	QDF_STATUS_E_ALREADY - transition with @desc already in flight
@@ -78,7 +77,7 @@ QDF_STATUS dsc_driver_trans_start(struct dsc_driver *driver, const char *desc);
  * Call dsc_driver_trans_stop() to complete the transition.
  *
  * Return:
- *	QDF_STATUS_SUCCESS - transition started successfully
+ *	QDF_STATUS_SUCCESS - transition started succcessfully
  *	QDF_STATUS_E_INVAL - invalid request (causes debug panic)
  *	QDF_STATUS_E_AGAIN - transition cannot currently be started
  *	QDF_STATUS_E_ALREADY - transition with @desc already queued or in flight
@@ -110,7 +109,7 @@ void dsc_driver_assert_trans_protected(struct dsc_driver *driver);
  * @driver: the driver to start an operation on
  *
  * Return:
- *	QDF_STATUS_SUCCESS - operation started successfully
+ *	QDF_STATUS_SUCCESS - operation started succcessfully
  *	QDF_STATUS_E_INVAL - invalid request (causes debug panic)
  *	QDF_STATUS_E_AGAIN - operation cannot currently be started
  *	QDF_STATUS_E_NOMEM - out of memory

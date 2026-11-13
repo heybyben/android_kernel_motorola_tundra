@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -41,8 +41,6 @@ ucfg_coap_offload_reply_enable(struct wlan_objmgr_vdev *vdev,
  * ucfg_coap_offload_reply_disable() - API to disable CoAP offload reply
  * @vdev: pointer to vdev object
  * @req_id: request id
- * @cbk: callback function to invoke with cached data
- * @context: caller-supplied context
  *
  * Return: status of operation
  */

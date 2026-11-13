@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2015-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef _ICNSS_WLAN_H_
 #define _ICNSS_WLAN_H_
@@ -17,6 +17,7 @@
 #define ICNSS_MAX_DEV_MEM_NUM            4
 
 #define DEVICE_NAME_MAX		10
+
 enum icnss_uevent {
 	ICNSS_UEVENT_FW_CRASHED,
 	ICNSS_UEVENT_FW_DOWN,
@@ -113,13 +114,6 @@ struct icnss_rri_over_ddr_cfg {
 	u32 base_addr_low;
 	u32 base_addr_high;
 };
-
-struct icnss_ce_cmn_register_config {
-	u32 offset_addr;
-	u32 reg_mask;
-	u32 reg_value;
-};
-
 /* CE configuration to target */
 struct icnss_wlan_enable_cfg {
 	u32 num_ce_tgt_cfg;
@@ -134,8 +128,6 @@ struct icnss_wlan_enable_cfg {
 	struct icnss_shadow_reg_v3_cfg *shadow_reg_v3_cfg;
 	bool rri_over_ddr_cfg_valid;
 	struct icnss_rri_over_ddr_cfg rri_over_ddr_cfg;
-	u32 num_ce_cmn_reg_config;
-	struct icnss_ce_cmn_register_config *ce_cmn_reg_cfg;
 };
 
 /* driver modes */
@@ -169,10 +161,6 @@ enum icnss_phy_qam_cap {
 	ICNSS_PHY_QAM_CAP_1K,
 	ICNSS_PHY_QAM_CAP_4K,
 	ICNSS_PHY_QAM_CAP_MAX_VAL,
-};
-
-enum icnss_fw_caps {
-	ICNSS_FW_CAP_CE_CMN_CFG_SUPPORT
 };
 
 struct icnss_soc_info {
@@ -264,9 +252,12 @@ extern void icnss_allow_l1(struct device *dev);
 extern int icnss_get_mhi_state(struct device *dev);
 extern int icnss_is_pci_ep_awake(struct device *dev);
 extern unsigned long icnss_get_device_config(void);
+extern void icnss_get_cpumask_for_wlan_rx_interrupts(struct device *dev,
+						     unsigned int *cpu_mask);
+extern void icnss_get_cpumask_for_wlan_tx_comp_interrupts(struct device *dev,
+							unsigned int *cpu_mask);
 extern int icnss_register_driver_async_data_cb(struct device *dev, void *cb_ctx,
 					       int (*cb)(void *ctx,
 					       uint16_t type, void *event,
 					       int event_len));
-extern bool icnss_get_fw_cap(struct device *dev, enum icnss_fw_caps fw_cap);
 #endif /* _ICNSS_WLAN_H_ */

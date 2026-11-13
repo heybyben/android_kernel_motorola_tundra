@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -37,14 +37,12 @@
 
 /**
  * enum wlan_vdev_mgr_tgt_if_rsp_bit - response status bit
- * @START_RESPONSE_BIT: vdev start response bit
- * @RESTART_RESPONSE_BIT: vdev restart response bit
- * @STOP_RESPONSE_BIT: vdev stop response bit
- * @DELETE_RESPONSE_BIT:  vdev delete response bit
- * @PEER_DELETE_ALL_RESPONSE_BIT: vdev peer delete all response bit
- * @RSO_STOP_RESPONSE_BIT: RSO stop response bit
- * @UPDATE_MAC_ADDR_RESPONSE_BIT: MAC address update response bit
- * @RESPONSE_BIT_MAX: Max enumeration
+ * START_RESPONSE_BIT: vdev start response bit
+ * RESTART_RESPONSE_BIT: vdev restart response bit
+ * STOP_RESPONSE_BIT: vdev stop response bit
+ * DELETE_RESPONSE_BIT:  vdev delete response bit
+ * PEER_DELETE_ALL_RESPONSE_BIT: vdev peer delete all response bit
+ * RSO_STOP_RESPONSE_BIT : RSO stop response bit
  */
 enum wlan_vdev_mgr_tgt_if_rsp_bit {
 	START_RESPONSE_BIT = 0,
@@ -53,13 +51,12 @@ enum wlan_vdev_mgr_tgt_if_rsp_bit {
 	DELETE_RESPONSE_BIT = 3,
 	PEER_DELETE_ALL_RESPONSE_BIT = 4,
 	RSO_STOP_RESPONSE_BIT = 5,
-	UPDATE_MAC_ADDR_RESPONSE_BIT = 6,
 	RESPONSE_BIT_MAX,
 };
 
 /**
  * string_from_rsp_bit() - Convert response bit to string
- * @bit: response bit as in wlan_vdev_mgr_tgt_if_rsp_bit
+ * @bit - response bit as in wlan_vdev_mgr_tgt_if_rsp_bit
  *
  * Please note to add new string in the array at index equal to
  * its enum value in wlan_vdev_mgr_tgt_if_rsp_bit.
@@ -72,7 +69,6 @@ static inline char *string_from_rsp_bit(enum wlan_vdev_mgr_tgt_if_rsp_bit bit)
 					"DELETE",
 					"PEER DELETE ALL",
 					"RSO STOP",
-					"UPDATE_MAC_ADDR",
 					"RESPONE MAX"};
 	return (char *)strings[bit];
 }
@@ -112,7 +108,6 @@ defined(QCA_WIFI_QCA5018)
  * @timer_status: status of timer
  * @rsp_timer_inuse: Status bit to inform whether the rsp timer is inuse
  * @vdev_id: vdev object id
- * @peer_type_bitmap: Peer type bitmap
  */
 struct vdev_response_timer {
 	struct wlan_objmgr_psoc *psoc;
@@ -122,7 +117,6 @@ struct vdev_response_timer {
 	QDF_STATUS timer_status;
 	qdf_atomic_t rsp_timer_inuse;
 	uint8_t vdev_id;
-	uint32_t peer_type_bitmap;
 };
 
 /**
@@ -171,12 +165,10 @@ struct vdev_delete_response {
  * struct peer_delete_all_response - peer delete all response structure
  * @vdev_id: vdev id
  * @status: FW status for vdev delete all peer request
- * @peer_type_bitmap: bitmap of peer type to delete from enum wlan_peer_type
  */
 struct peer_delete_all_response {
 	uint8_t vdev_id;
 	uint8_t status;
-	uint32_t peer_type_bitmap;
 };
 
 /**
@@ -184,13 +176,11 @@ struct peer_delete_all_response {
  * @pdev_id: pdev id
  * @status: FW status for multi vdev restart request
  * @vdev_id_bmap: Bitmap of vdev_ids
- * @timestamp: Time stamp corresponding to the start of event processing
  */
 struct multi_vdev_restart_resp {
 	uint8_t pdev_id;
 	uint8_t status;
 	qdf_bitmap(vdev_id_bmap, WLAN_UMAC_PSOC_MAX_VDEVS);
-	uint64_t timestamp;
 };
 
 #ifdef WLAN_FEATURE_11BE_MLO

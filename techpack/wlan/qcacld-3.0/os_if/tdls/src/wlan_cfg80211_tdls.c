@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -37,11 +37,8 @@
 #include "wlan_cfg80211_mc_cp_stats.h"
 #include "sir_api.h"
 #include "wlan_tdls_ucfg_api.h"
-#include "wlan_cm_roam_api.h"
-#include "wlan_mlo_mgr_sta.h"
-#include "wlan_hdd_main.h"
-#include "wlan_hdd_object_manager.h"
-#include "wlan_tdls_main.h"
+
+#define TDLS_MAX_NO_OF_2_4_CHANNELS 14
 
 static int wlan_cfg80211_tdls_validate_mac_addr(const uint8_t *mac)
 {
@@ -107,8 +104,8 @@ void hdd_notify_tdls_reset_adapter(struct wlan_objmgr_vdev *vdev)
 	ucfg_tdls_notify_reset_adapter(vdev);
 }
 
-static int wlan_cfg80211_tdls_add_peer(struct wlan_objmgr_vdev *vdev,
-				       const uint8_t *mac)
+int wlan_cfg80211_tdls_add_peer(struct wlan_objmgr_vdev *vdev,
+				const uint8_t *mac)
 {
 	struct tdls_add_peer_params *add_peer_req;
 	int status;
@@ -166,181 +163,83 @@ error:
 	return status;
 }
 
-int wlan_cfg80211_tdls_add_peer_mlo(struct hdd_adapter *adapter,
-				    const uint8_t *mac, uint8_t link_id)
-{
-	struct wlan_objmgr_vdev *vdev;
-	bool is_mlo_vdev;
-	int status;
-
-	vdev = hdd_objmgr_get_vdev_by_user(adapter->deflink, WLAN_OSIF_TDLS_ID);
-	if (!vdev)
-		return -EINVAL;
-
-	if (wlan_vdev_is_up(vdev) != QDF_STATUS_SUCCESS) {
-		osif_debug("sta is not connected or disconnecting");
-		hdd_objmgr_put_vdev_by_user(vdev, WLAN_OSIF_TDLS_ID);
-		return -EINVAL;
-	}
-
-	is_mlo_vdev = wlan_vdev_mlme_is_mlo_vdev(vdev);
-	if (is_mlo_vdev) {
-		hdd_objmgr_put_vdev_by_user(vdev, WLAN_OSIF_TDLS_ID);
-
-		vdev = wlan_key_get_link_vdev(adapter, WLAN_OSIF_TDLS_ID,
-					      link_id);
-		if (!vdev)
-			return -EINVAL;
-
-		if (!ucfg_tdls_link_vdev_is_matching(vdev)) {
-			wlan_key_put_link_vdev(vdev, WLAN_OSIF_TDLS_ID);
-			return -EINVAL;
-		}
-
-		osif_debug("tdls add peer for vdev %d", wlan_vdev_get_id(vdev));
-		status = wlan_cfg80211_tdls_add_peer(vdev, mac);
-		wlan_key_put_link_vdev(vdev, WLAN_OSIF_TDLS_ID);
-	} else {
-		status = wlan_cfg80211_tdls_add_peer(vdev, mac);
-		hdd_objmgr_put_vdev_by_user(vdev, WLAN_OSIF_TDLS_ID);
-	}
-
-	return status;
-}
-
 static bool
-is_duplicate_freq(qdf_freq_t *arr, uint8_t index, qdf_freq_t freq)
+is_duplicate_channel(uint8_t *arr, int index, uint8_t match)
 {
 	int i;
 
 	for (i = 0; i < index; i++) {
-		if (arr[i] == freq)
+		if (arr[i] == match)
 			return true;
 	}
 	return false;
 }
 
-static uint8_t
-tdls_fill_chan_freq_from_supported_ch_list(struct wlan_objmgr_pdev *pdev,
-					   const uint8_t *country,
-					   const uint8_t *src_chans,
-					   uint8_t src_chan_num,
-					   uint8_t src_opclass,
-					   uint8_t *num_freq,
-					   qdf_freq_t *freq_lst)
-{
-	uint8_t i = 0, j = 0, num_unique_freq = *num_freq;
-	uint8_t chan_count;
-	uint8_t wifi_chan_index;
-	uint8_t next_ch;
-	qdf_freq_t freq;
-
-	for (i = 0; i < src_chan_num &&
-	     num_unique_freq < WLAN_MAC_MAX_SUPP_CHANNELS; i += 2) {
-		freq = wlan_reg_country_chan_opclass_to_freq(pdev, country,
-							     src_chans[i],
-							     src_opclass,
-							     false);
-
-		if (!freq || is_duplicate_freq(freq_lst, num_unique_freq, freq))
-			continue;
-
-		if (wlan_reg_is_6ghz_chan_freq(freq) &&
-		    !tdls_is_6g_freq_allowed(pdev, freq)) {
-			osif_debug("skipping non-psc or non-vlp freq %d",
-				   freq);
-			continue;
-		}
-
-		chan_count = src_chans[i + 1];
-		wifi_chan_index = ((src_chans[i] <= WLAN_CHANNEL_14) ? 1 : 4);
-		freq_lst[num_unique_freq] = freq;
-		num_unique_freq++;
-		next_ch = src_chans[i];
-		osif_debug("freq %d index %d ", freq, num_unique_freq);
-
-		for (j = 1; j < chan_count &&
-		     num_unique_freq < WLAN_MAC_MAX_SUPP_CHANNELS; j++) {
-			next_ch += wifi_chan_index;
-			freq = wlan_reg_country_chan_opclass_to_freq(
-							pdev, country, next_ch,
-							src_opclass, false);
-
-			if (!freq ||
-			    is_duplicate_freq(freq_lst, num_unique_freq, freq))
-				continue;
-
-			if (wlan_reg_is_6ghz_chan_freq(freq) &&
-			    !tdls_is_6g_freq_allowed(pdev, freq)) {
-				osif_debug("skipping non-psc or non-vlp freq %d",
-					   freq);
-				continue;
-			}
-
-			freq_lst[num_unique_freq] = freq;
-			osif_debug("freq %d index %d ", freq, num_unique_freq);
-			num_unique_freq++;
-
-			if (num_unique_freq > NUM_CHANNELS) {
-				osif_debug("num_unique_freq more than max num");
-				break;
-			}
-		}
-	}
-	*num_freq = num_unique_freq;
-
-	return num_unique_freq;
-}
-
 static void
-tdls_calc_channels_from_staparams(struct wlan_objmgr_vdev *vdev,
-				  struct tdls_update_peer_params *req_info,
+tdls_calc_channels_from_staparams(struct tdls_update_peer_params *req_info,
 				  struct station_parameters *params)
 {
-	uint8_t i = 0;
-	uint8_t num_unique_freq = 0;
-	const uint8_t *src_chans, *src_opclass;
-	qdf_freq_t *dest_freq;
-	uint8_t country[REG_ALPHA2_LEN + 1];
-	struct wlan_objmgr_pdev *pdev;
-	struct wlan_objmgr_psoc *psoc;
+	int i = 0, j = 0, k = 0, no_of_channels = 0;
+	int num_unique_channels;
+	int next;
+	uint8_t *dest_chans;
+	const uint8_t *src_chans;
 
-	if (!vdev) {
-		osif_err("null vdev");
-		return;
-	}
-
+	dest_chans = req_info->supported_channels;
 	src_chans = params->supported_channels;
-	src_opclass = params->supported_oper_classes;
-	dest_freq = req_info->supported_chan_freq;
-	pdev = wlan_vdev_get_pdev(vdev);
-	psoc  = wlan_vdev_get_psoc(vdev);
-	if (!psoc || !pdev)
-		return;
 
-	wlan_reg_read_current_country(psoc, country);
-	osif_debug("Country info from AP:%c%c 0x%x", country[0],
-		   country[1], country[2]);
+	/* Convert (first channel , number of channels) tuple to
+	 * the total list of channels. This goes with the assumption
+	 * that if the first channel is < 14, then the next channels
+	 * are an incremental of 1 else an incremental of 4 till the number
+	 * of channels.
+	 */
+	for (i = 0; i < params->supported_channels_len &&
+	     j < WLAN_MAC_MAX_SUPP_CHANNELS; i += 2) {
+		int wifi_chan_index;
 
-	for (i = 0; i < params->supported_oper_classes_len; i++)
-		tdls_fill_chan_freq_from_supported_ch_list(
-						pdev, country, src_chans,
-						params->supported_channels_len,
-						src_opclass[i],
-						&num_unique_freq,
-						dest_freq);
+		if (!is_duplicate_channel(dest_chans, j, src_chans[i]))
+			dest_chans[j] = src_chans[i];
+		else
+			continue;
 
+		wifi_chan_index = ((dest_chans[j] <= WLAN_CHANNEL_14) ? 1 : 4);
+		no_of_channels = src_chans[i + 1];
+
+		osif_debug("i:%d,j:%d,k:%d,[%d]:%d,index:%d,chans_num: %d",
+			   i, j, k, j,
+			   dest_chans[j],
+			   wifi_chan_index,
+			   no_of_channels);
+
+		for (k = 1; k <= no_of_channels &&
+		     j < WLAN_MAC_MAX_SUPP_CHANNELS - 1; k++) {
+			next = dest_chans[j] + wifi_chan_index;
+
+			if (!is_duplicate_channel(dest_chans, j + 1, next))
+				dest_chans[j + 1] = next;
+			else
+				continue;
+
+			osif_debug("i: %d, j: %d, k: %d, [%d]: %d",
+				   i, j, k, j + 1, dest_chans[j + 1]);
+			j += 1;
+		}
+	}
+	num_unique_channels = j + 1;
 	osif_debug("Unique Channel List: supported_channels ");
-	for (i = 0; i < num_unique_freq; i++)
-		osif_debug(" %d,", dest_freq[i]);
+	for (i = 0; i < num_unique_channels; i++)
+		osif_debug("[%d]: %d,", i, dest_chans[i]);
 
-	req_info->supported_channels_len = num_unique_freq;
+	if (num_unique_channels > NUM_CHANNELS)
+		num_unique_channels = NUM_CHANNELS;
+	req_info->supported_channels_len = num_unique_channels;
 	osif_debug("After removing duplcates supported_channels_len: %d",
 		   req_info->supported_channels_len);
 }
 
 #ifdef WLAN_FEATURE_11AX
-#if defined(WLAN_LINK_STA_PARAMS_PRESENT) && defined(CONFIG_BAND_6GHZ)
+#if defined(CFG80211_LINK_STA_PARAMS_PRESENT)
 static void
 wlan_cfg80211_tdls_extract_6ghz_params(struct tdls_update_peer_params *req_info,
 				       struct station_parameters *params)
@@ -354,7 +253,7 @@ wlan_cfg80211_tdls_extract_6ghz_params(struct tdls_update_peer_params *req_info,
 		     params->link_sta_params.he_6ghz_capa,
 		     sizeof(req_info->he_6ghz_cap));
 }
-#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)) && defined(CONFIG_BAND_6GHZ)
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0))
 static void
 wlan_cfg80211_tdls_extract_6ghz_params(struct tdls_update_peer_params *req_info,
 				       struct station_parameters *params)
@@ -376,11 +275,10 @@ wlan_cfg80211_tdls_extract_6ghz_params(struct tdls_update_peer_params *req_info,
 }
 #endif
 
-#ifdef WLAN_LINK_STA_PARAMS_PRESENT
+#ifdef CFG80211_LINK_STA_PARAMS_PRESENT
 static void
 wlan_cfg80211_tdls_extract_he_params(struct tdls_update_peer_params *req_info,
-				     struct station_parameters *params,
-				     bool tdls_6g_support)
+				     struct station_parameters *params)
 {
 	if (params->link_sta_params.he_capa_len < MIN_TDLS_HE_CAP_LEN) {
 		osif_debug("he_capa_len %d less than MIN_TDLS_HE_CAP_LEN",
@@ -400,14 +298,14 @@ wlan_cfg80211_tdls_extract_he_params(struct tdls_update_peer_params *req_info,
 	qdf_mem_copy(&req_info->he_cap, params->link_sta_params.he_capa,
 		     req_info->he_cap_len);
 
-	if (tdls_6g_support)
-		wlan_cfg80211_tdls_extract_6ghz_params(req_info, params);
+	wlan_cfg80211_tdls_extract_6ghz_params(req_info, params);
+
+	return;
 }
 #else
 static void
 wlan_cfg80211_tdls_extract_he_params(struct tdls_update_peer_params *req_info,
-				     struct station_parameters *params,
-				     bool tdls_6g_support)
+				     struct station_parameters *params)
 {
 	if (params->he_capa_len < MIN_TDLS_HE_CAP_LEN) {
 		osif_debug("he_capa_len %d less than MIN_TDLS_HE_CAP_LEN",
@@ -427,72 +325,25 @@ wlan_cfg80211_tdls_extract_he_params(struct tdls_update_peer_params *req_info,
 	qdf_mem_copy(&req_info->he_cap, params->he_capa,
 		     req_info->he_cap_len);
 
-	if (tdls_6g_support)
-		wlan_cfg80211_tdls_extract_6ghz_params(req_info, params);
+	wlan_cfg80211_tdls_extract_6ghz_params(req_info, params);
+
+	return;
 }
 #endif
+
 #else
-static inline void
+static void
 wlan_cfg80211_tdls_extract_he_params(struct tdls_update_peer_params *req_info,
-				     struct station_parameters *params,
-				     bool tdls_6g_support)
+				     struct station_parameters *params)
 {
 }
 #endif
 
-#ifdef WLAN_FEATURE_11BE
-#ifdef WLAN_LINK_STA_PARAMS_PRESENT
+#ifdef CFG80211_LINK_STA_PARAMS_PRESENT
 static void
-wlan_cfg80211_tdls_extract_eht_params(struct tdls_update_peer_params *req_info,
-				      struct station_parameters *params)
-{
-	if (params->link_sta_params.eht_capa) {
-		osif_debug("eht capa is present");
-		req_info->ehtcap_present = 1;
-		req_info->eht_cap_len = params->link_sta_params.eht_capa_len;
-		qdf_mem_copy(&req_info->eht_cap,
-			     params->link_sta_params.eht_capa,
-			     sizeof(struct ehtcap));
-	} else {
-		req_info->ehtcap_present = 0;
-	}
-}
-#elif defined(WLAN_EHT_CAPABILITY_PRESENT)
-static void
-wlan_cfg80211_tdls_extract_eht_params(struct tdls_update_peer_params *req_info,
-				      struct station_parameters *params)
-{
-	if (params->eht_capa) {
-		osif_debug("eht capa is present");
-		req_info->ehtcap_present = 1;
-		req_info->eht_cap_len = params->eht_capa_len;
-		qdf_mem_copy(&req_info->eht_cap, params->eht_capa,
-			     sizeof(struct ehtcap));
-	} else {
-		req_info->ehtcap_present = 0;
-	}
-}
-#else
-static inline void
-wlan_cfg80211_tdls_extract_eht_params(struct tdls_update_peer_params *req_info,
-				      struct station_parameters *params)
-{
-}
-#endif
-#else
-static inline void
-wlan_cfg80211_tdls_extract_eht_params(struct tdls_update_peer_params *req_info,
-				      struct station_parameters *params)
-{
-}
-#endif
-
-#ifdef WLAN_LINK_STA_PARAMS_PRESENT
-static void
-wlan_cfg80211_tdls_extract_params(struct wlan_objmgr_vdev *vdev,
-				  struct tdls_update_peer_params *req_info,
+wlan_cfg80211_tdls_extract_params(struct tdls_update_peer_params *req_info,
 				  struct station_parameters *params,
-				  bool tdls_11ax_support, bool tdls_6g_support)
+				  bool tdls_11ax_support)
 {
 	int i;
 
@@ -508,6 +359,9 @@ wlan_cfg80211_tdls_extract_params(struct wlan_objmgr_vdev *vdev,
 	req_info->uapsd_queues = params->uapsd_queues;
 	req_info->max_sp = params->max_sp;
 
+	if (params->supported_channels_len)
+		tdls_calc_channels_from_staparams(req_info, params);
+
 	if (params->supported_oper_classes_len > WLAN_MAX_SUPP_OPER_CLASSES) {
 		osif_debug("received oper classes:%d, resetting it to max supported: %d",
 			   params->supported_oper_classes_len,
@@ -520,9 +374,6 @@ wlan_cfg80211_tdls_extract_params(struct wlan_objmgr_vdev *vdev,
 		     params->supported_oper_classes_len);
 	req_info->supported_oper_classes_len =
 		params->supported_oper_classes_len;
-
-	if (params->supported_channels_len)
-		tdls_calc_channels_from_staparams(vdev, req_info, params);
 
 	if (params->ext_capab_len)
 		qdf_mem_copy(req_info->extn_capability, params->ext_capab,
@@ -537,13 +388,13 @@ wlan_cfg80211_tdls_extract_params(struct wlan_objmgr_vdev *vdev,
 	req_info->supported_rates_len =
 				params->link_sta_params.supported_rates_len;
 
-	/* Note: The Maximum size of supported_rates sent by the Supplicant is
-	 * 32. The supported_rates array, for all the structures propagating
-	 * until Add Sta to the firmware, has to be modified if the supplicant
+	/* Note : The Maximum sizeof supported_rates sent by the Supplicant is
+	 * 32. The supported_rates array , for all the structures propogating
+	 * till Add Sta to the firmware has to be modified , if the supplicant
 	 * (ieee80211) is modified to send more rates.
 	 */
 
-	/* To avoid Data Corruption, set to max length to SIR_MAC_MAX_SUPP_RATES
+	/* To avoid Data Currption , set to max length to SIR_MAC_MAX_SUPP_RATES
 	 */
 	if (req_info->supported_rates_len > WLAN_MAC_MAX_SUPP_RATES)
 		req_info->supported_rates_len = WLAN_MAC_MAX_SUPP_RATES;
@@ -576,19 +427,15 @@ wlan_cfg80211_tdls_extract_params(struct wlan_objmgr_vdev *vdev,
 		req_info->is_pmf = 1;
 	}
 	if (tdls_11ax_support)
-		wlan_cfg80211_tdls_extract_he_params(req_info, params,
-						     tdls_6g_support);
+		wlan_cfg80211_tdls_extract_he_params(req_info, params);
 	else
 		osif_debug("tdls ax disabled");
-
-	wlan_cfg80211_tdls_extract_eht_params(req_info, params);
 }
 #else
 static void
-wlan_cfg80211_tdls_extract_params(struct wlan_objmgr_vdev *vdev,
-				  struct tdls_update_peer_params *req_info,
+wlan_cfg80211_tdls_extract_params(struct tdls_update_peer_params *req_info,
 				  struct station_parameters *params,
-				  bool tdls_11ax_support, bool tdls_6g_support)
+				  bool tdls_11ax_support)
 {
 	int i;
 
@@ -604,6 +451,9 @@ wlan_cfg80211_tdls_extract_params(struct wlan_objmgr_vdev *vdev,
 	req_info->uapsd_queues = params->uapsd_queues;
 	req_info->max_sp = params->max_sp;
 
+	if (params->supported_channels_len)
+		tdls_calc_channels_from_staparams(req_info, params);
+
 	if (params->supported_oper_classes_len > WLAN_MAX_SUPP_OPER_CLASSES) {
 		osif_debug("received oper classes:%d, resetting it to max supported: %d",
 			   params->supported_oper_classes_len,
@@ -616,9 +466,6 @@ wlan_cfg80211_tdls_extract_params(struct wlan_objmgr_vdev *vdev,
 		     params->supported_oper_classes_len);
 	req_info->supported_oper_classes_len =
 		params->supported_oper_classes_len;
-
-	if (params->supported_channels_len)
-		tdls_calc_channels_from_staparams(vdev, req_info, params);
 
 	if (params->ext_capab_len)
 		qdf_mem_copy(req_info->extn_capability, params->ext_capab,
@@ -633,7 +480,7 @@ wlan_cfg80211_tdls_extract_params(struct wlan_objmgr_vdev *vdev,
 	req_info->supported_rates_len = params->supported_rates_len;
 
 	/* Note : The Maximum sizeof supported_rates sent by the Supplicant is
-	 * 32. The supported_rates array , for all the structures propagating
+	 * 32. The supported_rates array , for all the structures propogating
 	 * till Add Sta to the firmware has to be modified , if the supplicant
 	 * (ieee80211) is modified to send more rates.
 	 */
@@ -669,12 +516,9 @@ wlan_cfg80211_tdls_extract_params(struct wlan_objmgr_vdev *vdev,
 		req_info->is_pmf = 1;
 	}
 	if (tdls_11ax_support)
-		wlan_cfg80211_tdls_extract_he_params(req_info, params,
-						     tdls_6g_support);
+		wlan_cfg80211_tdls_extract_he_params(req_info, params);
 	else
 		osif_debug("tdls ax disabled");
-
-	wlan_cfg80211_tdls_extract_eht_params(req_info, params);
 }
 #endif
 
@@ -689,8 +533,6 @@ int wlan_cfg80211_tdls_update_peer(struct wlan_objmgr_vdev *vdev,
 	unsigned long rc;
 	struct wlan_objmgr_psoc *psoc;
 	bool tdls_11ax_support = false;
-	bool tdls_6g_support = false;
-	bool is_mlo_vdev;
 
 	status = wlan_cfg80211_tdls_validate_mac_addr(mac);
 
@@ -700,32 +542,18 @@ int wlan_cfg80211_tdls_update_peer(struct wlan_objmgr_vdev *vdev,
 	osif_debug("Update TDLS peer " QDF_MAC_ADDR_FMT,
 		   QDF_MAC_ADDR_REF(mac));
 
-	is_mlo_vdev = wlan_vdev_mlme_is_mlo_vdev(vdev);
-	if (is_mlo_vdev) {
-		vdev = ucfg_tdls_get_tdls_link_vdev(vdev, WLAN_OSIF_TDLS_ID);
-		if (!vdev) {
-			osif_err("no tdls link vdev");
-			return -EINVAL;
-		}
-	}
+	req_info = qdf_mem_malloc(sizeof(*req_info));
+	if (!req_info)
+		return -EINVAL;
 
 	psoc = wlan_vdev_get_psoc(vdev);
 	if (!psoc) {
 		osif_err_rl("Invalid psoc");
-		goto relref;
-	}
-
-	req_info = qdf_mem_malloc(sizeof(*req_info));
-	if (!req_info) {
-		status = -EINVAL;
-		goto relref;
+		return -EINVAL;
 	}
 
 	tdls_11ax_support = ucfg_tdls_is_fw_11ax_capable(psoc);
-	tdls_6g_support = ucfg_tdls_is_fw_6g_capable(psoc);
-	wlan_cfg80211_tdls_extract_params(vdev, req_info, params,
-					  tdls_11ax_support,
-					  tdls_6g_support);
+	wlan_cfg80211_tdls_extract_params(req_info, params, tdls_11ax_support);
 
 	osif_priv = wlan_vdev_get_ospriv(vdev);
 	if (!osif_priv || !osif_priv->osif_tdls) {
@@ -761,9 +589,6 @@ int wlan_cfg80211_tdls_update_peer(struct wlan_objmgr_vdev *vdev,
 	}
 error:
 	qdf_mem_free(req_info);
-relref:
-	if (is_mlo_vdev)
-		ucfg_tdls_put_tdls_link_vdev(vdev, WLAN_OSIF_TDLS_ID);
 	return status;
 }
 
@@ -841,7 +666,6 @@ int wlan_cfg80211_tdls_oper(struct wlan_objmgr_vdev *vdev,
 	int status;
 	unsigned long rc;
 	enum tdls_command_type cmd;
-	bool is_mlo_vdev;
 
 	status = wlan_cfg80211_tdls_validate_mac_addr(peer);
 
@@ -852,15 +676,6 @@ int wlan_cfg80211_tdls_oper(struct wlan_objmgr_vdev *vdev,
 		osif_warn(
 			"We don't support in-driver setup/teardown/discovery");
 		return -ENOTSUPP;
-	}
-
-	is_mlo_vdev = wlan_vdev_mlme_is_mlo_vdev(vdev);
-	if (is_mlo_vdev) {
-		vdev = ucfg_tdls_get_tdls_link_vdev(vdev, WLAN_OSIF_TDLS_ID);
-		if (!vdev) {
-			osif_err("no tdls link vdev");
-			return -EINVAL;
-		}
 	}
 
 	osif_debug("%s start", tdls_oper_to_str(oper));
@@ -878,9 +693,6 @@ int wlan_cfg80211_tdls_oper(struct wlan_objmgr_vdev *vdev,
 		}
 		break;
 	case NL80211_TDLS_DISABLE_LINK:
-		wlan_vdev_mlme_feat_ext2_cap_clear(vdev,
-						   WLAN_VDEV_FEXT2_MLO_STA_TDLS);
-
 		osif_priv = wlan_vdev_get_ospriv(vdev);
 
 		if (!osif_priv || !osif_priv->osif_tdls) {
@@ -911,8 +723,6 @@ int wlan_cfg80211_tdls_oper(struct wlan_objmgr_vdev *vdev,
 	}
 
 error:
-	if (is_mlo_vdev)
-		ucfg_tdls_put_tdls_link_vdev(vdev, WLAN_OSIF_TDLS_ID);
 	return status;
 }
 
@@ -920,10 +730,9 @@ void wlan_cfg80211_tdls_rx_callback(void *user_data,
 	struct tdls_rx_mgmt_frame *rx_frame)
 {
 	struct wlan_objmgr_psoc *psoc;
-	struct wlan_objmgr_vdev *vdev, *assoc_vdev;
+	struct wlan_objmgr_vdev *vdev;
 	struct vdev_osif_priv *osif_priv;
 	struct wireless_dev *wdev;
-	enum QDF_OPMODE opmode;
 
 	psoc = user_data;
 	if (!psoc) {
@@ -938,19 +747,7 @@ void wlan_cfg80211_tdls_rx_callback(void *user_data,
 		return;
 	}
 
-	assoc_vdev = vdev;
-	opmode = wlan_vdev_mlme_get_opmode(vdev);
-
-	if ((opmode == QDF_STA_MODE || opmode == QDF_TDLS_MODE) &&
-	    wlan_vdev_mlme_is_mlo_vdev(vdev)) {
-		assoc_vdev = ucfg_mlo_get_assoc_link_vdev(vdev);
-		if (!assoc_vdev) {
-			osif_err("assoc vdev is null");
-			goto fail;
-		}
-	}
-
-	osif_priv = wlan_vdev_get_ospriv(assoc_vdev);
+	osif_priv = wlan_vdev_get_ospriv(vdev);
 	if (!osif_priv) {
 		osif_err("osif_priv is null");
 		goto fail;
@@ -1076,34 +873,11 @@ error_get_tdls_peers:
 	return len;
 }
 
-bool wlan_cfg80211_tdls_is_fw_wideband_capable(struct wlan_objmgr_vdev *vdev)
-{
-	struct wlan_objmgr_psoc *psoc = wlan_vdev_get_psoc(vdev);
-
-	if (!psoc)
-		return false;
-
-	return ucfg_tdls_is_fw_wideband_capable(psoc);
-}
-
-#ifdef WLAN_FEATURE_11AX
-bool wlan_cfg80211_tdls_is_fw_6ghz_capable(struct wlan_objmgr_pdev *pdev)
-{
-	struct wlan_objmgr_psoc *psoc = wlan_pdev_get_psoc(pdev);
-
-	if (!psoc)
-		return false;
-
-	return ucfg_tdls_is_fw_6g_capable(psoc);
-}
-#endif
-
-static int
-wlan_cfg80211_tdls_mgmt(struct wlan_objmgr_vdev *vdev,
-			const uint8_t *peer_mac,
-			uint8_t action_code, uint8_t dialog_token,
-			uint16_t status_code, uint32_t peer_capability,
-			const uint8_t *buf, size_t len, int link_id)
+int wlan_cfg80211_tdls_mgmt(struct wlan_objmgr_vdev *vdev,
+			    const uint8_t *peer_mac,
+			    uint8_t action_code, uint8_t dialog_token,
+			    uint16_t status_code, uint32_t peer_capability,
+			    const uint8_t *buf, size_t len)
 {
 	struct tdls_action_frame_request mgmt_req;
 	struct vdev_osif_priv *osif_priv;
@@ -1159,8 +933,6 @@ wlan_cfg80211_tdls_mgmt(struct wlan_objmgr_vdev *vdev,
 	mgmt_req.tdls_mgmt.peer_capability = peer_capability;
 	mgmt_req.tdls_mgmt.status_code = mgmt_req.chk_frame.status_code;
 
-	mgmt_req.link_active = false;
-	mgmt_req.link_id = link_id;
 	/*populate the additional IE's */
 	mgmt_req.cmd_buf = buf;
 	mgmt_req.len = len;
@@ -1210,102 +982,6 @@ wlan_cfg80211_tdls_mgmt(struct wlan_objmgr_vdev *vdev,
 
 error_mgmt_req:
 	return status;
-}
-
-int
-wlan_cfg80211_tdls_mgmt_mlo(struct hdd_adapter *adapter, const uint8_t *peer,
-			    uint8_t action_code, uint8_t dialog_token,
-			    uint16_t status_code, uint32_t peer_capability,
-			    const uint8_t *buf, size_t len, int link_id)
-{
-	struct wlan_objmgr_vdev *tdls_link_vdev = NULL;
-	struct wlan_objmgr_vdev *mlo_vdev = NULL;
-	struct wlan_objmgr_vdev *vdev;
-	bool is_mlo_vdev;
-	bool link_id_vdev = false;
-	bool dis_req_more = false;
-	uint8_t i;
-	int ret = 0;
-
-	vdev = hdd_objmgr_get_vdev_by_user(adapter->deflink, WLAN_OSIF_TDLS_ID);
-	if (!vdev)
-		return -EINVAL;
-
-	/* STA should be connected before sending any TDLS frame */
-	if (wlan_vdev_is_up(vdev) != QDF_STATUS_SUCCESS) {
-		osif_err_rl("STA is not connected");
-		hdd_objmgr_put_vdev_by_user(vdev, WLAN_OSIF_TDLS_ID);
-		return -EAGAIN;
-	}
-
-	is_mlo_vdev = wlan_vdev_mlme_is_mlo_vdev(vdev);
-	if (is_mlo_vdev) {
-		tdls_link_vdev =
-			ucfg_tdls_get_tdls_link_vdev(vdev, WLAN_OSIF_TDLS_ID);
-		if (!tdls_link_vdev) {
-			if (action_code == TDLS_DISCOVERY_RESPONSE) {
-				hdd_objmgr_put_vdev_by_user(vdev,
-							    WLAN_OSIF_TDLS_ID);
-				if (link_id < 0) {
-					osif_err_rl("link id is invalid");
-					return -EINVAL;
-				}
-				/* Get the candidate vdev per link id */
-				link_id_vdev = true;
-				vdev = wlan_key_get_link_vdev(adapter,
-							      WLAN_OSIF_TDLS_ID,
-							      link_id);
-				if (!vdev) {
-					osif_err_rl("vdev is null");
-					return -EINVAL;
-				}
-			} else if (action_code == TDLS_DISCOVERY_REQUEST) {
-				if (ucfg_tdls_discovery_on_going(vdev)) {
-					hdd_objmgr_put_vdev_by_user(vdev,
-							     WLAN_OSIF_TDLS_ID);
-					osif_err_rl("discovery request is going on vdev %d",
-						    wlan_vdev_get_id(vdev));
-					return -EAGAIN;
-				}
-				dis_req_more = true;
-			}
-		} else {
-			hdd_objmgr_put_vdev_by_user(vdev, WLAN_OSIF_TDLS_ID);
-			vdev = tdls_link_vdev;
-		}
-	}
-
-	if (dis_req_more) {
-		/* it needs to send discovery request on each vdev */
-		for (i = 0 ;  i < WLAN_UMAC_MLO_MAX_VDEVS; i++) {
-			mlo_vdev = ucfg_tdls_get_mlo_vdev(vdev, i,
-							  WLAN_OSIF_TDLS_ID);
-			if (!mlo_vdev) {
-				osif_err_rl("mlo vdev is NULL");
-				continue;
-			}
-			ret = wlan_cfg80211_tdls_mgmt(mlo_vdev, peer,
-						      action_code,
-						      dialog_token, status_code,
-						      peer_capability, buf, len,
-						      link_id);
-			ucfg_tdls_release_mlo_vdev(mlo_vdev, WLAN_OSIF_TDLS_ID);
-		}
-	} else {
-		ret = wlan_cfg80211_tdls_mgmt(vdev, peer,
-					      action_code, dialog_token,
-					      status_code, peer_capability,
-					      buf, len, link_id);
-	}
-
-	if (vdev && link_id_vdev)
-		wlan_key_put_link_vdev(vdev, WLAN_OSIF_TDLS_ID);
-	else if (tdls_link_vdev)
-		ucfg_tdls_put_tdls_link_vdev(tdls_link_vdev, WLAN_OSIF_TDLS_ID);
-	else
-		hdd_objmgr_put_vdev_by_user(vdev, WLAN_OSIF_TDLS_ID);
-
-	return ret;
 }
 
 int wlan_tdls_antenna_switch(struct wlan_objmgr_vdev *vdev, uint32_t mode)

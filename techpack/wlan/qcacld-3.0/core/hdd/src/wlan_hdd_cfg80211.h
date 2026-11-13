@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -33,13 +33,6 @@
 #include <wlan_cfg80211_spectral.h>
 
 struct hdd_context;
-struct wlan_hdd_link_info;
-
-#ifdef WLAN_FEATURE_11BE_MLO
-#define EHT_OPMODE_SUPPORTED 2
-#else
-#define EHT_OPMODE_SUPPORTED 1
-#endif
 
 /* QCA_NL80211_VENDOR_SUBCMD_ROAM policy */
 extern const struct nla_policy wlan_hdd_set_roam_param_policy[
@@ -128,8 +121,8 @@ extern const struct nla_policy wlan_hdd_wisa_cmd_policy[
 #define WNM_NOTIFICATION_FRAME_SIZE 2
 
 #define WPA_OUI_TYPE   "\x00\x50\xf2\x01"
-#define DENYLIST_OUI_TYPE   "\x00\x50\x00\x00"
-#define ALLOWLIST_OUI_TYPE   "\x00\x50\x00\x01"
+#define BLACKLIST_OUI_TYPE   "\x00\x50\x00\x00"
+#define WHITELIST_OUI_TYPE   "\x00\x50\x00\x01"
 #define WPA_OUI_TYPE_SIZE  4
 #define WMM_OUI_TYPE   "\x00\x50\xf2\x02\x01"
 #define WMM_OUI_TYPE_SIZE  5
@@ -189,14 +182,6 @@ extern const struct nla_policy wlan_hdd_wisa_cmd_policy[
 #define WLAN_AKM_SUITE_FT_EAP_SHA_384 0x000FAC0D
 #endif
 
-#ifndef WLAN_AKM_SUITE_SAE_EXT_KEY
-#define WLAN_AKM_SUITE_SAE_EXT_KEY 0x000FAC18
-#endif
-
-#ifndef WLAN_AKM_SUITE_FT_SAE_EXT_KEY
-#define WLAN_AKM_SUITE_FT_SAE_EXT_KEY 0x000FAC19
-#endif
-
 #ifdef FEATURE_WLAN_TDLS
 #define WLAN_IS_TDLS_SETUP_ACTION(action) \
 	((TDLS_SETUP_REQUEST <= action) && \
@@ -224,11 +209,11 @@ extern const struct nla_policy wlan_hdd_wisa_cmd_policy[
 #endif
 
 /**
- * typedef eDFS_CAC_STATUS - CAC status
+ * enum eDFS_CAC_STATUS: CAC status
  *
  * @DFS_CAC_NEVER_DONE: CAC never done
  * @DFS_CAC_IN_PROGRESS: CAC is in progress
- * @DFS_CAC_ALREADY_DONE: CAC already done
+ * @DFS_CAC_IN_PROGRESS: CAC already done
  */
 typedef enum {
 	DFS_CAC_NEVER_DONE,
@@ -271,9 +256,7 @@ typedef enum {
 #define WIFI_FEATURE_CONFIG_NDO         0x200000  /* ND offload configure */
 #define WIFI_FEATURE_TX_TRANSMIT_POWER  0x400000  /* Tx transmit power levels */
 #define WIFI_FEATURE_CONTROL_ROAMING    0x800000  /* Enable/Disable roaming */
-#define WIFI_FEATURE_IE_ALLOWLIST       0x1000000 /* Support Probe IE allow
-						   * listing
-						   */
+#define WIFI_FEATURE_IE_WHITELIST       0x1000000 /* Support Probe IE white listing */
 #define WIFI_FEATURE_SCAN_RAND          0x2000000 /* Support MAC & Probe Sequence Number randomization */
 #define WIFI_FEATURE_SET_LATENCY_MODE   0x40000000 /* Set latency mode */
 /* Support changing MAC address without iface reset(down and up) */
@@ -285,8 +268,7 @@ typedef enum {
 /* Add more features here */
 #define WIFI_TDLS_SUPPORT			BIT(0)
 #define WIFI_TDLS_EXTERNAL_CONTROL_SUPPORT	BIT(1)
-#define WIFI_TDLS_OFFCHANNEL_SUPPORT		BIT(2)
-#define WIFI_TDLS_WIDER_BW_SUPPORT		BIT(3)
+#define WIIF_TDLS_OFFCHANNEL_SUPPORT		BIT(2)
 
 #define CFG_NON_AGG_RETRY_MAX                  (64)
 #define CFG_AGG_RETRY_MAX                      (64)
@@ -335,8 +317,6 @@ wlan_hdd_wifi_test_config_policy[
 #define SA_QUERY_TIMEOUT_IGNORE 1
 #define FILS_DISCV_FRAMES_DISABLE 0
 #define FILS_DISCV_FRAMES_ENABLE 1
-#define H2E_RSNXE_DEFAULT 0
-#define H2E_RSNXE_IGNORE 1
 
 #define FEATURE_VENDOR_SUBCMD_WIFI_TEST_CONFIGURATION                    \
 {                                                                        \
@@ -434,16 +414,7 @@ void wlan_hdd_cfg80211_deregister_frames(struct hdd_adapter *adapter);
 void hdd_reg_notifier(struct wiphy *wiphy,
 				 struct regulatory_request *request);
 
-/*
- * FUNCTION: wlan_hdd_validate_operation_channel
- * called by wlan_hdd_cfg80211_start_bss() and
- * wlan_hdd_set_channel()
- * @hdd_ctx: Global HDD context
- *
- * This function validates whether given channel is part of valid
- * channel list.
- */
-QDF_STATUS wlan_hdd_validate_operation_channel(struct hdd_context *hdd_ctx,
+QDF_STATUS wlan_hdd_validate_operation_channel(struct hdd_adapter *adapter,
 					       uint32_t ch_freq);
 
 /**
@@ -529,18 +500,7 @@ int wlan_hdd_send_avoid_freq_for_dnbs(struct hdd_context *hdd_ctx,
 void wlan_hdd_rso_cmd_status_cb(hdd_handle_t hdd_handle,
 				struct rso_cmd_status *rso_status);
 
-/**
- * wlan_hdd_cfg80211_acs_ch_select_evt: Callback function for ACS evt
- * @link_info: Link info pointer in HDD adapter
- * @store_acs_freq: Store current ACS frequecy flag
- *
- * This is a callback function on ACS procedure is completed.
- * This function send the ACS selected channel information to hostapd
- *
- * Return: None
- */
-void wlan_hdd_cfg80211_acs_ch_select_evt(struct wlan_hdd_link_info *link_info,
-					 bool store_acs_freq);
+void wlan_hdd_cfg80211_acs_ch_select_evt(struct hdd_adapter *adapter);
 
 #ifdef WLAN_CFR_ENABLE
 /*
@@ -586,14 +546,19 @@ void hdd_send_roam_scan_ch_list_event(struct hdd_context *hdd_ctx,
 }
 #endif
 
-/**
- * wlan_hdd_cfg80211_update_apies() - update ap mode ies
- * @link_info: Link info pointer in hostapd adapter
- *
- * Return: 0 for success non-zero for failure
- */
-int wlan_hdd_cfg80211_update_apies(struct wlan_hdd_link_info *link_info);
+int wlan_hdd_cfg80211_update_apies(struct hdd_adapter *adapter);
 
+/**
+ * wlan_hdd_request_pre_cac() - Start pre CAC in the driver
+ * @hdd_ctx: the HDD context to operate against
+ * @chan_freq: channel freq option provided by userspace
+ *
+ * Sets the driver to the required hardware mode and start an adapter for
+ * pre CAC which will mimic an AP.
+ *
+ * Return: Zero on success, non-zero value on error
+ */
+int wlan_hdd_request_pre_cac(struct hdd_context *hdd_ctx, uint32_t chan_freq);
 int wlan_hdd_sap_cfg_dfs_override(struct hdd_adapter *adapter);
 
 int wlan_hdd_enable_dfs_chan_scan(struct hdd_context *hdd_ctx,
@@ -632,14 +597,13 @@ int wlan_hdd_change_hw_mode_for_given_chnl(struct hdd_adapter *adapter,
 					   enum policy_mgr_conn_update_reason reason);
 
 /**
- * enum hdd_rate_info_bw: an HDD internal rate bandwidth representation
+ * hdd_rate_info_bw: an HDD internal rate bandwidth representation
  * @HDD_RATE_BW_5: 5MHz
  * @HDD_RATE_BW_10: 10MHz
  * @HDD_RATE_BW_20: 20MHz
  * @HDD_RATE_BW_40: 40MHz
  * @HDD_RATE_BW_80: 80MHz
  * @HDD_RATE_BW_160: 160 MHz
- * @HDD_RATE_BW_320: 320 MHz
  */
 enum hdd_rate_info_bw {
 	HDD_RATE_BW_5,
@@ -648,37 +612,16 @@ enum hdd_rate_info_bw {
 	HDD_RATE_BW_40,
 	HDD_RATE_BW_80,
 	HDD_RATE_BW_160,
-	HDD_RATE_BW_320,
 };
 
 /**
- * enum hdd_chain_mode : Representation of Number of chains available.
+ * hdd_chain_mode : Representation of Number of chains available.
  * @HDD_CHAIN_MODE_1X1: Chain mask Not Configurable as only one chain available
  * @HDD_CHAIN_MODE_2X2: Chain mask configurable as both chains available
  */
 enum hdd_chain_mode {
 	HDD_CHAIN_MODE_1X1 = 1,
 	HDD_CHAIN_MODE_2X2 = 3,
-};
-
-/**
- * enum hdd_ba_mode: Representation of Number to configure BA mode
- * @HDD_BA_MODE_AUTO: Auto mode
- * @HDD_BA_MODE_MANUAL: Manual mode
- * @HDD_BA_MODE_64: For buffer size 64
- * @HDD_BA_MODE_256: For buffer size 256
- * @HDD_BA_MODE_128: placeholder, not valid
- * @HDD_BA_MODE_512: For buffer size 512
- * @HDD_BA_MODE_1024: For buffer size 1024
- */
-enum hdd_ba_mode {
-	HDD_BA_MODE_AUTO,
-	HDD_BA_MODE_MANUAL,
-	HDD_BA_MODE_64,
-	HDD_BA_MODE_256,
-	HDD_BA_MODE_128,
-	HDD_BA_MODE_512,
-	HDD_BA_MODE_1024,
 };
 
 /**
@@ -689,15 +632,14 @@ enum hdd_ba_mode {
 void hdd_set_rate_bw(struct rate_info *info, enum hdd_rate_info_bw hdd_bw);
 
 /*
- * hdd_get_sap_operating_band_by_link_info: Get operating channel of link info
+ * hdd_get_sap_operating_band_by_adapter: Get current adapter operating channel
  * for sap.
- * @link_info: Pointer to link_info in adapter
+ * @adapter: Pointer to adapter
  *
  * Return : Corresponding band for SAP operating channel
  */
 
-uint8_t
-hdd_get_sap_operating_band_by_link_info(struct wlan_hdd_link_info *link_info);
+uint8_t hdd_get_sap_operating_band_by_adapter(struct hdd_adapter *adapter);
 
 /*
  * hdd_get_sap_operating_band:  Get current operating channel
@@ -758,11 +700,11 @@ void wlan_hdd_save_gtk_offload_params(struct hdd_adapter *adapter,
 
 /**
  * wlan_hdd_flush_pmksa_cache() - flush pmksa cache for adapter
- * @link_info: link_info pointer in adapter
+ * @adapter: Adapter context
  *
  * Return: qdf status
  */
-QDF_STATUS wlan_hdd_flush_pmksa_cache(struct wlan_hdd_link_info *link_info);
+QDF_STATUS wlan_hdd_flush_pmksa_cache(struct hdd_adapter *adapter);
 
 /*
  * wlan_hdd_send_mode_change_event() - API to send hw mode change event to
@@ -786,7 +728,7 @@ int wlan_hdd_restore_channels(struct hdd_context *hdd_ctx);
  * event to user space in case of SAP
  * @adapter: Pointer to the adapter
  * @hdd_ctx: HDD Context
- * @mac_addr: MAC address of the STA for which the Authorized event needs to
+ * @mac_addr: MAC address of the STA for whic the Authorized event needs to
  * be sent
  * This api is used to send station authorized event to user space
  */
@@ -797,7 +739,7 @@ QDF_STATUS wlan_hdd_send_sta_authorized_event(
 
 /**
  * hdd_set_dynamic_antenna_mode() - set dynamic antenna mode
- * @link_info: Link info pointer in HDD adapter
+ * @adapter: Pointer to network adapter
  * @num_rx_chains: number of chains to be used for receiving data
  * @num_tx_chains: number of chains to be used for transmitting data
  *
@@ -805,8 +747,9 @@ QDF_STATUS wlan_hdd_send_sta_authorized_event(
  *
  * Return: 0 for success
  */
-int hdd_set_dynamic_antenna_mode(struct wlan_hdd_link_info *link_info,
-				 uint8_t num_rx_chains, uint8_t num_tx_chains);
+int hdd_set_dynamic_antenna_mode(struct hdd_adapter *adapter,
+				 uint8_t num_rx_chains,
+				 uint8_t num_tx_chains);
 
 #ifdef MULTI_CLIENT_LL_SUPPORT
 /**
@@ -821,7 +764,7 @@ bool hdd_get_multi_client_ll_support(struct hdd_adapter *adapter);
  * wlan_hdd_set_wlm_client_latency_level() - Set latency level to FW
  * @adapter: pointer to network adapter
  * @port_id: port id for which host sends latency level to FW
- * @latency_level: level to be set in fw
+ * @latency_level: lavel to be set in fw
  *
  * Return: QDF_STATUS
  */
@@ -832,9 +775,9 @@ QDF_STATUS wlan_hdd_set_wlm_client_latency_level(struct hdd_adapter *adapter,
 /**
  * wlan_hdd_set_wlm_latency_level() - Set latency level to FW
  * @adapter: pointer to network adapter
- * @latency_level: level to be set in fw
+ * @latency_level: lavel to be set in fw
  * @client_id_bitmap: client id bitmap
- * @force_reset: flag to reset latency level in fw
+ * @force_reset: flag to reset latency lavel in fw
  *
  * Return: QDF_STATUS
  */
@@ -928,16 +871,6 @@ enum qca_wlan_802_11_mode
 hdd_convert_cfgdot11mode_to_80211mode(enum csr_cfgdot11mode mode);
 
 /**
- * hdd_convert_phymode_to_80211mode() - Function to convert eCsrPhyMode
- *					to 80211 mode
- * @mode: eCsrPhyMode
- *
- * Return: 80211 mode
- */
-enum qca_wlan_802_11_mode
-hdd_convert_phymode_to_80211mode(eCsrPhyMode mode);
-
-/**
  * hdd_send_update_owe_info_event - Send update OWE info event
  * @adapter: Pointer to adapter
  * @sta_addr: MAC address of peer STA
@@ -975,24 +908,21 @@ int hdd_set_phy_mode(struct hdd_adapter *adapter,
 
 /**
  * hdd_set_mac_chan_width() - set channel width
- * @link_info: Link info in HDD adapter
+ * @adapter: Handle to hdd_adapter
  * @chwidth: given channel width
- * @link_id: mlo link id
- * @is_restore: is restore
  *
  * Return: 0 on success, negative errno on failure
  */
-int hdd_set_mac_chan_width(struct wlan_hdd_link_info *link_info,
-			   enum eSirMacHTChannelWidth chwidth,
-			   uint8_t link_id, bool is_restore);
+int hdd_set_mac_chan_width(struct hdd_adapter *adapter,
+			   enum eSirMacHTChannelWidth chwidth);
 
 /**
  * hdd_is_legacy_connection() - Is adapter connection is legacy
- * @link_info: Pointer to link_info in hdd_adapter
+ * @adapter: Handle to hdd_adapter
  *
  * Return: true if connection mode is legacy, false otherwise.
  */
-bool hdd_is_legacy_connection(struct wlan_hdd_link_info *link_info);
+bool hdd_is_legacy_connection(struct hdd_adapter *adapter);
 
 struct hdd_hostapd_state;
 
@@ -1025,175 +955,5 @@ bool wlan_hdd_cfg80211_rx_control_port(struct net_device *dev,
 				       u8 *ta_addr,
 				       struct sk_buff *skb,
 				       bool unencrypted);
-
-#ifdef WLAN_FEATURE_DBAM_CONFIG
-/**
- * hdd_send_dbam_config() - send DBAM config
- * @adapter: hdd adapter
- * @dbam_mode: dbam mode configuration
- *
- * Return: 0 on success, negative errno on failure
- */
-int hdd_send_dbam_config(struct hdd_adapter *adapter,
-			 enum coex_dbam_config_mode dbam_mode);
-#endif
-
-#ifdef WLAN_FEATURE_11BE_MLO
-/**
- * wlan_hdd_send_key_vdev() - api to send vdev keys
- * @vdev: vdev pointer
- * @key_index: key index value
- * @pairwise: pairwise keys
- * @cipher_type: cipher type value
- *
- * Api to send vdev keys for mlo link
- *
- * Return: none
- */
-QDF_STATUS wlan_hdd_send_key_vdev(struct wlan_objmgr_vdev *vdev,
-				  u8 key_index, bool pairwise,
-				  enum wlan_crypto_cipher_type cipher_type);
-
-/**
- * wlan_hdd_mlo_copy_partner_addr_from_mlie  - Copy the Partner link mac
- * address from the ML IE
- * @vdev: vdev pointer
- * @partner_mac: pointer to the mac address to be filled
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS
-wlan_hdd_mlo_copy_partner_addr_from_mlie(struct wlan_objmgr_vdev *vdev,
-					 struct qdf_mac_addr *partner_mac);
-#else
-static inline
-QDF_STATUS wlan_hdd_send_key_vdev(struct wlan_objmgr_vdev *vdev,
-				  u8 key_index, bool pairwise,
-				  enum wlan_crypto_cipher_type cipher_type)
-{
-	return QDF_STATUS_E_NOSUPPORT;
-}
-
-static inline QDF_STATUS
-wlan_hdd_mlo_copy_partner_addr_from_mlie(struct wlan_objmgr_vdev *vdev,
-					 struct qdf_mac_addr *partner_mac)
-{
-	return QDF_STATUS_E_NOSUPPORT;
-}
-#endif /* WLAN_FEATURE_11BE_MLO */
-
-/**
- * wlan_key_get_link_vdev() - get vdev per link id
- * @adapter: hdd adapter object
- * @id: reference dbg id
- * @link_id: link id
- *
- * Return: pointer of wlan_objmgr_vdev or NULL if fail
- */
-struct wlan_objmgr_vdev *wlan_key_get_link_vdev(struct hdd_adapter *adapter,
-						wlan_objmgr_ref_dbgid id,
-						int link_id);
-/**
- * wlan_key_put_link_vdev() - put link vdev reference
- * @link_vdev: the pointer to link vdev
- * @id: reference dbg id
- *
- * Return: void
- */
-void wlan_key_put_link_vdev(struct wlan_objmgr_vdev *link_vdev,
-			    wlan_objmgr_ref_dbgid id);
-
-#if defined(WLAN_FEATURE_11BE_MLO)
-/**
- * hdd_tid_to_link_map() - to get t2lm info
- * @vdev: Pointer to vdev
- * @t2lm: T2LM info
- * @dev: Pointer to net_device structure
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS hdd_tid_to_link_map(struct wlan_objmgr_vdev *vdev,
-			       struct wlan_t2lm_info *t2lm,
-			       struct net_device *dev);
-
-/**
- * hdd_mlo_dev_t2lm_notify_link_update() - Send update T2LM info event
- * @vdev: Pointer to vdev
- * @t2lm: T2LM info
- *
- * Send update T2LM info event to userspace
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS hdd_mlo_dev_t2lm_notify_link_update(struct wlan_objmgr_vdev *vdev,
-					       struct wlan_t2lm_info *t2lm);
-#else
-static inline
-QDF_STATUS hdd_mlo_dev_t2lm_notify_link_update(struct wlan_objmgr_vdev *vdev,
-					       struct wlan_t2lm_info *t2lm)
-{
-	return QDF_STATUS_SUCCESS;
-}
-#endif
-
-/** hdd_set_vdev_phy_mode() - Set vdev phy mode
- * @adapter: adapter pointer
- * @vendor_phy_mode: vendor phy mode
- *
- * Return: 0 for success
- */
-int hdd_set_vdev_phy_mode(struct hdd_adapter *adapter,
-			  enum qca_wlan_vendor_phy_mode vendor_phy_mode);
-
-#if defined(WLAN_FEATURE_11BE_MLO) && \
-	defined(CFG80211_SINGLE_NETDEV_MULTI_LINK_SUPPORT)
-/**
- * wlan_hdd_ml_sap_get_peer  - Get ML SAP peer
- * @vdev: vdev pointer
- * @peer_mld: Peer MLD address
- *
- * Return: Peer object
- */
-struct wlan_objmgr_peer *
-wlan_hdd_ml_sap_get_peer(struct wlan_objmgr_vdev *vdev,
-			 const uint8_t *peer_mld);
-#else
-static inline struct wlan_objmgr_peer *
-wlan_hdd_ml_sap_get_peer(struct wlan_objmgr_vdev *vdev,
-			 const uint8_t *peer_mld)
-{
-	return NULL;
-}
-#endif /* WLAN_FEATURE_11BE_MLO && CFG80211_SINGLE_NETDEV_MULTI_LINK_SUPPORT */
-
-/**
- * hdd_vdev_send_sta_keep_alive_interval - Send sta keep alive interval to fw
- * @link_info: Link info pointer.
- * @hdd_ctx: HDD context pointer
- * @keep_alive_interval: STA keep alive interval
- *
- * Return: 0 on success, negative on failure
- */
-int hdd_vdev_send_sta_keep_alive_interval(struct wlan_hdd_link_info *link_info,
-					  struct hdd_context *hdd_ctx,
-					  uint16_t keep_alive_interval);
-
-/**
- * wlan_hdd_save_sta_keep_alive_interval() - Save STA keep alive interval
- * @adapter: HDD adapter pointer
- * @sta_alive_interval: STA keep alive interval
- *
- * Return: None.
- */
-void wlan_hdd_save_sta_keep_alive_interval(struct hdd_adapter *adapter,
-					   uint16_t sta_alive_interval);
-/**
- * hdd_convert_phy_bw_to_nl_bw - Convert phy bandwidth to nl bandwidth
- * @bw: phy bandwidth
- *
- * Return: nl bandwidth
- */
-enum nl80211_chan_width
-hdd_convert_phy_bw_to_nl_bw(enum phy_ch_width bw);
 
 #endif

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -18,7 +18,7 @@
  */
 
 /**
- * DOC: wlan_hdd_memdump.c
+ * DOC : wlan_hdd_memdump.c
  *
  * WLAN Host Device Driver file for dumping firmware memory
  *
@@ -82,10 +82,10 @@ void hdd_driver_mem_cleanup(void)
 /**
  * __hdd_driver_memdump_read() - perform read operation in driver
  * memory dump proc file
- * @file:  handle for the proc file.
- * @buf:   pointer to user space buffer.
- * @count: number of bytes to be read.
- * @pos:   offset in the from buffer.
+ * @file  - handle for the proc file.
+ * @buf   - pointer to user space buffer.
+ * @count - number of bytes to be read.
+ * @pos   - offset in the from buffer.
  *
  * This function performs read operation for the driver memory dump proc file.
  *
@@ -175,10 +175,10 @@ static ssize_t __hdd_driver_memdump_read(struct file *file, char __user *buf,
 /**
  * hdd_driver_memdump_read() - perform read operation in driver
  * memory dump proc file
- * @file:  handle for the proc file.
- * @buf:   pointer to user space buffer.
- * @count: number of bytes to be read.
- * @pos:   offset in the from buffer.
+ * @file  - handle for the proc file.
+ * @buf   - pointer to user space buffer.
+ * @count - number of bytes to be read.
+ * @pos   - offset in the from buffer.
  *
  * This function performs read operation for the driver memory dump proc file.
  *
@@ -203,10 +203,16 @@ static ssize_t hdd_driver_memdump_read(struct file *file, char __user *buf,
 	return err_size;
 }
 
+/**
+ * struct driver_dump_fops - file operations for driver dump feature
+ * @read - read function for driver dump operation.
+ *
+ * This structure initialize the file operation handle for memory
+ * dump feature
+ */
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0))
 static const struct proc_ops driver_dump_fops = {
 	.proc_read = hdd_driver_memdump_read,
-	.proc_lseek = default_llseek,
 };
 #else
 static const struct file_operations driver_dump_fops = {
@@ -216,7 +222,7 @@ static const struct file_operations driver_dump_fops = {
 
 /**
  * hdd_driver_memdump_procfs_init() - Initialize procfs for driver memory dump
- * @hdd_ctx: Pointer to hdd context
+ * @hdd_ctx Pointer to hdd context
  *
  * This function create file under proc file system to be used later for
  * processing driver memory dump
@@ -268,7 +274,7 @@ static void hdd_driver_memdump_procfs_remove(void)
 }
 
 /**
- * hdd_driver_memdump_init() - Initialization function for driver
+ * hdd_driver_memdump_init() - Intialization function for driver
  * memory dump feature
  *
  * This function creates proc file for driver memdump feature

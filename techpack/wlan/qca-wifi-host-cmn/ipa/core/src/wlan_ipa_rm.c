@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -23,7 +22,6 @@
 #include "wlan_ipa_main.h"
 #include "cdp_txrx_ipa.h"
 #include "host_diag_core_event.h"
-#include "wlan_reg_services_api.h"
 
 QDF_STATUS wlan_ipa_set_perf_level(struct wlan_ipa_priv *ipa_ctx,
 				    uint64_t tx_packets,
@@ -49,7 +47,7 @@ QDF_STATUS wlan_ipa_set_perf_level(struct wlan_ipa_priv *ipa_ctx,
 			  ipa_ctx->curr_cons_bw, next_bw);
 		ret = cdp_ipa_set_perf_level(ipa_ctx->dp_soc,
 					     QDF_IPA_CLIENT_WLAN1_CONS,
-					     next_bw, ipa_ctx->hdl);
+					     next_bw);
 		if (ret) {
 			ipa_err("RM CONS set perf profile failed: %d", ret);
 
@@ -57,7 +55,7 @@ QDF_STATUS wlan_ipa_set_perf_level(struct wlan_ipa_priv *ipa_ctx,
 		}
 		ret = cdp_ipa_set_perf_level(ipa_ctx->dp_soc,
 					     QDF_IPA_CLIENT_WLAN1_PROD,
-					     next_bw, ipa_ctx->hdl);
+					     next_bw);
 		if (ret) {
 			ipa_err("RM PROD set perf profile failed: %d", ret);
 			return QDF_STATUS_E_FAILURE;
@@ -68,36 +66,6 @@ QDF_STATUS wlan_ipa_set_perf_level(struct wlan_ipa_priv *ipa_ctx,
 
 	return QDF_STATUS_SUCCESS;
 }
-
-#ifdef QCA_IPA_LL_TX_FLOW_CONTROL
-static inline
-QDF_STATUS wlan_ipa_update_perf_level(struct wlan_ipa_priv *ipa_ctx, int client)
-{
-	struct wlan_objmgr_pdev *pdev = ipa_ctx->pdev;
-	qdf_freq_t low_2g, high_2g;
-
-	wlan_reg_get_freq_range(pdev, &low_2g, &high_2g, NULL, NULL);
-
-	if (low_2g != 0 || high_2g != 0) {
-		return cdp_ipa_set_perf_level(
-				ipa_ctx->dp_soc,
-				client,
-				WLAN_IPA_MAX_BANDWIDTH_2G, ipa_ctx->hdl);
-	} else {
-		return cdp_ipa_set_perf_level(
-				ipa_ctx->dp_soc,
-				client,
-				WLAN_IPA_MAX_BANDWIDTH, ipa_ctx->hdl);
-	}
-}
-#else
-static inline
-QDF_STATUS wlan_ipa_update_perf_level(struct wlan_ipa_priv *ipa_ctx, int client)
-{
-	return cdp_ipa_set_perf_level(ipa_ctx->dp_soc, client,
-				      WLAN_IPA_MAX_BANDWIDTH, ipa_ctx->hdl);
-}
-#endif
 
 QDF_STATUS wlan_ipa_init_perf_level(struct wlan_ipa_priv *ipa_ctx)
 {
@@ -110,13 +78,17 @@ QDF_STATUS wlan_ipa_init_perf_level(struct wlan_ipa_priv *ipa_ctx)
 	ipa_debug("IPA clk scaling disabled. Set perf level to maximum %d",
 		  WLAN_IPA_MAX_BANDWIDTH);
 
-	ret = wlan_ipa_update_perf_level(ipa_ctx, QDF_IPA_CLIENT_WLAN1_CONS);
+	ret = cdp_ipa_set_perf_level(ipa_ctx->dp_soc,
+				     QDF_IPA_CLIENT_WLAN1_CONS,
+				     WLAN_IPA_MAX_BANDWIDTH);
 	if (ret) {
 		ipa_err("CONS set perf profile failed: %d", ret);
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	ret = wlan_ipa_update_perf_level(ipa_ctx, QDF_IPA_CLIENT_WLAN1_PROD);
+	ret = cdp_ipa_set_perf_level(ipa_ctx->dp_soc,
+				     QDF_IPA_CLIENT_WLAN1_PROD,
+				     WLAN_IPA_MAX_BANDWIDTH);
 	if (ret) {
 		ipa_err("PROD set perf profile failed: %d", ret);
 		return QDF_STATUS_E_FAILURE;
@@ -125,66 +97,11 @@ QDF_STATUS wlan_ipa_init_perf_level(struct wlan_ipa_priv *ipa_ctx)
 	return QDF_STATUS_SUCCESS;
 }
 
-bool wlan_ipa_set_perf_level_bw_enabled(struct wlan_ipa_priv *ipa_ctx)
-{
-	/*
-	 * Do bandwidth-based IPA perf vote only when all below are met.
-	 * a. IPA is enabled.
-	 * b. IPA clk scaling is _not_ enabled.
-	 * c. IPA force voting is enabled.
-	 */
-	return wlan_ipa_is_enabled(ipa_ctx->config) &&
-	       !wlan_ipa_is_clk_scaling_enabled(ipa_ctx->config) &&
-	       ipa_ctx->config->ipa_force_voting;
-}
-
-void wlan_ipa_set_perf_level_bw(struct wlan_ipa_priv *ipa_ctx,
-				enum wlan_ipa_bw_level lvl)
-{
-	uint32_t max_mbps;
-	int ret;
-
-	if (!wlan_ipa_set_perf_level_bw_enabled(ipa_ctx))
-		return;
-
-	ipa_debug("Set perf level to %d", lvl);
-
-	if (lvl == WLAN_IPA_BW_LEVEL_HIGH)
-		max_mbps = ipa_ctx->config->ipa_bw_high;
-	else if (lvl == WLAN_IPA_BW_LEVEL_MEDIUM)
-		max_mbps = ipa_ctx->config->ipa_bw_medium;
-	else
-		max_mbps = ipa_ctx->config->ipa_bw_low;
-
-	ret = cdp_ipa_set_perf_level(ipa_ctx->dp_soc,
-				     QDF_IPA_CLIENT_WLAN1_CONS,
-				     max_mbps,
-				     ipa_ctx->hdl);
-	if (ret) {
-		ipa_err("CONS set perf profile failed: %d", ret);
-		return;
-	}
-
-	ret = cdp_ipa_set_perf_level(ipa_ctx->dp_soc,
-				     QDF_IPA_CLIENT_WLAN1_PROD,
-				     max_mbps,
-				     ipa_ctx->hdl);
-	if (ret)
-		ipa_err("PROD set perf profile failed: %d", ret);
-}
-
 #ifdef FEATURE_METERING
 void wlan_ipa_init_metering(struct wlan_ipa_priv *ipa_ctx)
 {
 	qdf_event_create(&ipa_ctx->ipa_uc_sharing_stats_comp);
 	qdf_event_create(&ipa_ctx->ipa_uc_set_quota_comp);
-}
-#endif
-
-#ifdef IPA_OPT_WIFI_DP
-void wlan_ipa_add_rem_flt_cb_event(struct wlan_ipa_priv *ipa_ctx)
-{
-	qdf_event_create(&ipa_ctx->ipa_flt_evnt);
 }
 #endif
 

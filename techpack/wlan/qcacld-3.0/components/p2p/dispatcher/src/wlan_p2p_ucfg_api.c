@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -31,7 +31,6 @@
 #include "../../core/src/wlan_p2p_main.h"
 #include "../../core/src/wlan_p2p_roc.h"
 #include "../../core/src/wlan_p2p_off_chan_tx.h"
-#include "target_if.h"
 
 static inline struct wlan_lmac_if_p2p_tx_ops *
 ucfg_p2p_psoc_get_tx_ops(struct wlan_objmgr_psoc *psoc)
@@ -229,7 +228,7 @@ QDF_STATUS ucfg_p2p_roc_cancel_req(struct wlan_objmgr_psoc *soc,
 
 QDF_STATUS ucfg_p2p_cleanup_roc_by_vdev(struct wlan_objmgr_vdev *vdev)
 {
-	return wlan_p2p_cleanup_roc_by_vdev(vdev, true);
+	return wlan_p2p_cleanup_roc_by_vdev(vdev);
 }
 
 QDF_STATUS ucfg_p2p_cleanup_roc_by_psoc(struct wlan_objmgr_psoc *psoc)
@@ -247,7 +246,7 @@ QDF_STATUS ucfg_p2p_cleanup_roc_by_psoc(struct wlan_objmgr_psoc *psoc)
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	return p2p_cleanup_roc(obj, NULL, true);
+	return p2p_cleanup_roc_sync(obj, NULL);
 }
 
 QDF_STATUS ucfg_p2p_cleanup_tx_by_vdev(struct wlan_objmgr_vdev *vdev)
@@ -305,6 +304,12 @@ QDF_STATUS ucfg_p2p_mgmt_tx(struct wlan_objmgr_psoc *soc,
 	QDF_STATUS status;
 	int32_t id;
 
+	p2p_debug("soc:%pK, vdev_id:%d, freq:%d, wait:%d, buf_len:%d,"
+		  " cck:%d, no ack:%d, off chan:%d",
+		  soc, mgmt_frm->vdev_id, mgmt_frm->chan_freq,
+		  mgmt_frm->wait, mgmt_frm->len, mgmt_frm->no_cck,
+		  mgmt_frm->dont_wait_for_ack, mgmt_frm->off_chan);
+
 	if (!soc) {
 		p2p_err("psoc context passed is NULL");
 		return QDF_STATUS_E_INVAL;
@@ -354,11 +359,6 @@ QDF_STATUS ucfg_p2p_mgmt_tx(struct wlan_objmgr_psoc *soc,
 
 	p2p_rand_mac_tx(pdev, tx_action);
 
-	p2p_debug("soc:%pK, vdev_id:%d, freq:%d, wait:%d, buf_len:%d, cck:%d, no ack:%d, off chan:%d cookie = 0x%llx",
-		  soc, mgmt_frm->vdev_id, mgmt_frm->chan_freq,
-		  mgmt_frm->wait, mgmt_frm->len, mgmt_frm->no_cck,
-		  mgmt_frm->dont_wait_for_ack, mgmt_frm->off_chan, *cookie);
-
 	msg.type = P2P_MGMT_TX;
 	msg.bodyptr = tx_action;
 	msg.callback = p2p_process_cmd;
@@ -374,6 +374,8 @@ QDF_STATUS ucfg_p2p_mgmt_tx(struct wlan_objmgr_psoc *soc,
 		qdf_mem_free(tx_action);
 		p2p_err("post msg fail:%d", status);
 	}
+
+	p2p_debug("cookie = 0x%llx", *cookie);
 
 	return status;
 }
@@ -575,30 +577,6 @@ QDF_STATUS ucfg_p2p_register_callbacks(struct wlan_objmgr_psoc *soc,
 	return QDF_STATUS_SUCCESS;
 }
 
-#ifdef WLAN_FEATURE_MCC_QUOTA
-QDF_STATUS
-ucfg_p2p_register_mcc_quota_event_os_if_cb(struct wlan_objmgr_psoc *psoc,
-					   mcc_quota_event_callback cb)
-{
-	struct p2p_soc_priv_obj *p2p_soc_obj;
-
-	if (!psoc) {
-		p2p_err("invalid psoc");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	p2p_soc_obj = wlan_objmgr_psoc_get_comp_private_obj(psoc,
-							    WLAN_UMAC_COMP_P2P);
-	if (!p2p_soc_obj) {
-		p2p_err("p2p soc private object is NULL");
-		return QDF_STATUS_E_FAILURE;
-	}
-	p2p_soc_obj->mcc_quota_ev_os_if_cb = cb;
-
-	return QDF_STATUS_SUCCESS;
-}
-#endif
-
 QDF_STATUS ucfg_p2p_status_scan(struct wlan_objmgr_vdev *vdev)
 {
 	if (!vdev) {
@@ -642,46 +620,4 @@ QDF_STATUS ucfg_p2p_status_stop_bss(struct wlan_objmgr_vdev *vdev)
 	}
 
 	return p2p_status_stop_bss(vdev);
-}
-
-bool ucfg_p2p_get_indoor_ch_support(struct wlan_objmgr_psoc *psoc)
-{
-	struct p2p_soc_priv_obj *p2p_soc_obj;
-
-	if (!psoc) {
-		p2p_err("invalid psoc");
-		return false;
-	}
-
-	p2p_soc_obj = wlan_objmgr_psoc_get_comp_private_obj(psoc,
-							    WLAN_UMAC_COMP_P2P);
-	if (!p2p_soc_obj) {
-		p2p_err("p2p soc private object is NULL");
-		return false;
-	}
-
-	return p2p_soc_obj->param.indoor_channel_support;
-}
-
-#ifdef WLAN_FEATURE_DYNAMIC_MAC_ADDR_UPDATE
-bool
-ucfg_is_p2p_device_dynamic_set_mac_addr_supported(struct wlan_objmgr_psoc *psoc)
-{
-	struct wmi_unified *wmi_handle;
-
-	wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
-	if (!wmi_handle) {
-		p2p_err("wmi handle is NULL");
-		return false;
-	}
-
-	return wmi_service_enabled(wmi_handle,
-				   wmi_service_p2p_device_update_mac_addr_support);
-}
-#endif
-
-bool ucfg_p2p_is_p2p_go_noa_in_progress(struct wlan_objmgr_pdev *pdev,
-					uint8_t vdev_id)
-{
-	return p2p_is_p2p_go_noa_in_progress(pdev, vdev_id);
 }

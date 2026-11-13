@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -44,9 +43,6 @@
 #include "qdf_delayed_work.h"
 #include <qdf_event.h>
 #include "wlan_ipa_public_struct.h"
-#ifdef IPA_OPT_WIFI_DP
-#include "cdp_txrx_ipa.h"
-#endif
 
 #define WLAN_IPA_RX_INACTIVITY_MSEC_DELAY   1000
 #define WLAN_IPA_UC_WLAN_8023_HDR_SIZE      14
@@ -61,22 +57,16 @@
 
 #define WLAN_IPA_WLAN_HDR_DES_MAC_OFFSET    0
 #define WLAN_IPA_MAX_IFACE                  MAX_IPA_IFACE
-#define WLAN_IPA_CLIENT_MAX_IFACE           MAX_IPA_IFACE
+#define WLAN_IPA_CLIENT_MAX_IFACE           3
 #define WLAN_IPA_MAX_SYSBAM_PIPE            4
-
-#if defined(IPA_WDS_EASYMESH_FEATURE) || defined(QCA_WIFI_QCN9224)
-#define WLAN_IPA_MAX_SESSION                MAX_IPA_IFACE //7
-#else
 #define WLAN_IPA_MAX_SESSION                5
-#endif
-
 #ifdef WLAN_MAX_CLIENTS_ALLOWED
 #define WLAN_IPA_MAX_STA_COUNT              WLAN_MAX_CLIENTS_ALLOWED
 #else
 #define WLAN_IPA_MAX_STA_COUNT              41
 #endif
 
-#define WLAN_IPA_RX_PIPE                    (WLAN_IPA_MAX_SYSBAM_PIPE - 1)
+#define WLAN_IPA_RX_PIPE                    WLAN_IPA_MAX_IFACE
 #define WLAN_IPA_ENABLE_MASK                BIT(0)
 #define WLAN_IPA_PRE_FILTER_ENABLE_MASK     BIT(1)
 #define WLAN_IPA_IPV6_ENABLE_MASK           BIT(2)
@@ -85,14 +75,8 @@
 #define WLAN_IPA_UC_ENABLE_MASK             BIT(5)
 #define WLAN_IPA_UC_STA_ENABLE_MASK         BIT(6)
 #define WLAN_IPA_REAL_TIME_DEBUGGING        BIT(8)
-#define WLAN_IPA_OPT_WIFI_DP                BIT(9)
 
-#ifdef QCA_IPA_LL_TX_FLOW_CONTROL
-#define WLAN_IPA_MAX_BANDWIDTH              4800
-#define WLAN_IPA_MAX_BANDWIDTH_2G           1400
-#else /* !QCA_IPA_LL_TX_FLOW_CONTROL */
 #define WLAN_IPA_MAX_BANDWIDTH              800
-#endif /* QCA_IPA_LL_TX_FLOW_CONTROL */
 
 #define WLAN_IPA_MAX_PENDING_EVENT_COUNT    20
 
@@ -101,7 +85,7 @@
 #define WLAN_IPA_UC_BW_MONITOR_LEVEL        3
 
 /**
- * enum wlan_ipa_uc_op_code - IPA UC operation message
+ * enum - IPA UC operation message
  *
  * @WLAN_IPA_UC_OPCODE_TX_SUSPEND: IPA WDI TX pipe suspend
  * @WLAN_IPA_UC_OPCODE_TX_RESUME: IPA WDI TX pipe resume
@@ -112,10 +96,6 @@
  * @WLAN_IPA_UC_OPCODE_QUOTA_RSP: IPA UC quota response
  * @WLAN_IPA_UC_OPCODE_QUOTA_IND: IPA UC quota indication
  * @WLAN_IPA_UC_OPCODE_UC_READY: IPA UC ready indication
- * @WLAN_IPA_FILTER_RSV_NOTIFY: OPT WIFI DP filter reserve notification
- * @WLAN_IPA_FILTER_REL_NOTIFY: OPT WIFI DP filter release notification
- * @WLAN_IPA_SMMU_MAP: IPA SMMU map call
- * @WLAN_IPA_SMMU_UNMAP: IPA SMMU unmap call
  * @WLAN_IPA_UC_OPCODE_MAX: IPA UC max operation code
  */
 enum wlan_ipa_uc_op_code {
@@ -130,10 +110,6 @@ enum wlan_ipa_uc_op_code {
 	WLAN_IPA_UC_OPCODE_QUOTA_IND = 7,
 #endif
 	WLAN_IPA_UC_OPCODE_UC_READY = 8,
-	WLAN_IPA_FILTER_RSV_NOTIFY = 9,
-	WLAN_IPA_FILTER_REL_NOTIFY = 10,
-	WLAN_IPA_SMMU_MAP = 11,
-	WLAN_IPA_SMMU_UNMAP = 12,
 	/* keep this last */
 	WLAN_IPA_UC_OPCODE_MAX
 };
@@ -144,6 +120,7 @@ enum wlan_ipa_uc_op_code {
  * @WLAN_IPA_UC_STAT_REASON_NONE: Initial value
  * @WLAN_IPA_UC_STAT_REASON_DEBUG: For debug/info
  * @WLAN_IPA_UC_STAT_REASON_BW_CAL: For bandwidth calibration
+ * @WLAN_IPA_UC_STAT_REASON_DUMP_INFO: For debug info dump
  */
 enum {
 	WLAN_IPA_UC_STAT_REASON_NONE,
@@ -176,6 +153,18 @@ enum wlan_ipa_forward_type {
 };
 
 /**
+ * enum wlan_ipa_bw_level -ipa bandwidth level
+ * @WLAN_IPA_BW_LEVEL_LOW: vote for low bandwidth
+ * @WLAN_IPA_BW_LEVEL_MEDIUM: vote for medium bandwidth
+ * @WLAN_IPA_BW_LEVEL_HIGH: vote for high bandwidth
+ */
+enum wlan_ipa_bw_level {
+	WLAN_IPA_BW_LEVEL_LOW,
+	WLAN_IPA_BW_LEVEL_MEDIUM,
+	WLAN_IPA_BW_LEVEL_HIGH,
+};
+
+/**
  * struct llc_snap_hdr - LLC snap header
  * @dsap: Destination service access point
  * @ssap: Source service access point
@@ -199,25 +188,19 @@ struct wlan_ipa_tx_hdr {
 	struct llc_snap_hdr llc_snap;
 } qdf_packed;
 
-#if defined(QCA_WIFI_QCA6290) || defined(QCA_WIFI_QCA6390) || \
-    defined(QCA_WIFI_QCA6490) || defined(QCA_WIFI_QCA6750) || \
-    defined(QCA_WIFI_WCN7850) || defined(QCA_WIFI_QCN9000) || \
-    defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_KIWI_V2)
-/**
- * struct frag_header - fragment header type registered to IPA hardware
- * @length:    fragment length
- * @reserved: Reserved not used
- */
-struct frag_header {
-	__QDF_DECLARE_FLEX_ARRAY(uint8_t, reserved);
-};
-#elif defined(QCA_WIFI_3_0)
 /**
  * struct frag_header - fragment header type registered to IPA hardware
  * @length:    fragment length
  * @reserved1: Reserved not used
  * @reserved2: Reserved not used
  */
+#if defined(QCA_WIFI_QCA6290) || defined(QCA_WIFI_QCA6390) || \
+    defined(QCA_WIFI_QCA6490) || defined(QCA_WIFI_QCA6750) || \
+    defined(QCA_WIFI_WCN7850)
+struct frag_header {
+	uint8_t reserved[0];
+};
+#elif defined(QCA_WIFI_3_0)
 struct frag_header {
 	uint16_t length;
 	uint32_t reserved1;
@@ -232,23 +215,19 @@ struct frag_header {
 } qdf_packed;
 #endif
 
-#if defined(QCA_WIFI_QCA6290) || defined(QCA_WIFI_QCA6390) || \
-    defined(QCA_WIFI_QCA6490) || defined(QCA_WIFI_QCA6750) || \
-    defined(QCA_WIFI_WCN7850) || defined(QCA_WIFI_QCN9000) || \
-    defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_KIWI_V2)
-/**
- * struct ipa_header - ipa header type registered to IPA hardware
- * @reserved: Reserved not used
- */
-struct ipa_header {
-	__QDF_DECLARE_FLEX_ARRAY(uint8_t, reserved);
-};
-#else
 /**
  * struct ipa_header - ipa header type registered to IPA hardware
  * @vdev_id:  vdev id
  * @reserved: Reserved not used
  */
+
+#if defined(QCA_WIFI_QCA6290) || defined(QCA_WIFI_QCA6390) || \
+    defined(QCA_WIFI_QCA6490) || defined(QCA_WIFI_QCA6750) || \
+    defined(QCA_WIFI_WCN7850)
+struct ipa_header {
+	uint8_t reserved[0];
+};
+#else
 struct ipa_header {
 	uint32_t
 		vdev_id:8,	/* vdev_id field is LSB of IPA DESC */
@@ -300,13 +279,11 @@ struct wlan_ipa_rx_hdr {
  * @exception: Exception packet
  * @iface_context: Interface context
  * @ipa_tx_desc: IPA TX descriptor
- * @send_to_nw: RX exception packet that needs to be passed up to stack
  */
 struct wlan_ipa_pm_tx_cb {
 	bool exception;
 	struct wlan_ipa_iface_context *iface_context;
 	qdf_ipa_rx_data_t *ipa_tx_desc;
-	bool send_to_nw;
 };
 
 /**
@@ -345,19 +322,15 @@ struct wlan_ipa_priv;
  * @ipa_ctx: IPA private context
  * @cons_client: IPA consumer pipe
  * @prod_client: IPA producer pipe
+ * @prod_client: IPA producer pipe
  * @iface_id: IPA interface ID
  * @dev: Net device structure
  * @device_mode: Interface device mode
- * @mac_addr: MAC address
- * @conn_count: Connect count
- * @disconn_count: Disconnect count
  * @session_id: Session ID
  * @interface_lock: Interface lock
  * @ifa_address: Interface address
  * @stats: Interface stats
- * @bssid: BSSID. valid only for sta iface ctx
- * @is_authenticated: is peer authenticated
- * @alt_pipe: Indicate whether the interface uses alternate TX pipe
+ * @bssid: BSSID. valid only for sta iface ctx;
  */
 struct wlan_ipa_iface_context {
 	struct wlan_ipa_priv *ipa_ctx;
@@ -376,25 +349,20 @@ struct wlan_ipa_iface_context {
 	uint32_t ifa_address;
 	struct wlan_ipa_iface_stats stats;
 	struct qdf_mac_addr bssid;
-	uint8_t is_authenticated;
-#ifdef IPA_WDI3_TX_TWO_PIPES
-	bool alt_pipe;
-#endif
 };
 
 /**
  * struct wlan_ipa_stats - IPA system stats
  * @event: WLAN IPA event record
  * @num_send_msg: Number of sent IPA messages
- * @num_free_msg: Number of freed IPA messages
  * @num_rm_grant: Number of times IPA RM resource granted
  * @num_rm_release: Number of times IPA RM resource released
  * @num_rm_grant_imm: Number of immediate IPA RM granted
- * @num_cons_perf_req: Number of CONS pipe perf request
+ e @num_cons_perf_req: Number of CONS pipe perf request
  * @num_prod_perf_req: Number of PROD pipe perf request
  * @num_rx_drop: Number of RX packet drops
  * @num_tx_desc_q_cnt: Number of TX descriptor queue count
- * @num_tx_desc_error: Number of TX descriptor error
+ * @num_tx_desc_err: Number of TX descriptor error
  * @num_tx_comp_cnt: Number of TX qdf_event_t count
  * @num_tx_queued: Number of TX queued
  * @num_tx_dequeued: Number of TX dequeued
@@ -429,13 +397,11 @@ struct wlan_ipa_stats {
 /**
  * struct ipa_uc_stas_map - IPA UC assoc station map
  * @is_reserved: STA reserved flag
- * @is_authenticated: is peer authenticated
  * @mac_addr: Station mac address
  */
 struct ipa_uc_stas_map {
 	bool is_reserved;
 	struct qdf_mac_addr mac_addr;
-	uint8_t is_authenticated;
 };
 
 /**
@@ -456,16 +422,15 @@ struct op_msg_type {
 
 /**
  * struct ipa_uc_fw_stats - IPA FW stats
- * @tx_comp_ring_base: TX completion ring base address
  * @tx_comp_ring_size: TX completion ring size
- * @tx_comp_ring_dbell_addr: TX completion ring door bell address
- * @tx_comp_ring_dbell_ind_val: TX completion ring door bell indication
- * @tx_comp_ring_dbell_cached_val: TX completion ring cached value
- * @tx_pkts_enqueued: TX packets enqueued
- * @tx_pkts_completed: TX packets completed
+ * @txcomp_ring_dbell_addr: TX comp ring door bell address
+ * @txcomp_ring_dbell_ind_val: TX cop ring door bell indication
+ * @txcomp_ring_dbell_cached_val: TX cop ring cached value
+ * @txpkts_enqueued: TX packets enqueued
+ * @txpkts_completed: TX packets completed
  * @tx_is_suspend: TX suspend flag
  * @tx_reserved: Reserved for TX stat
- * @rx_ind_ring_base: RX indication ring base address
+ * @rx_ind_ring_base: RX indication ring base addess
  * @rx_ind_ring_size: RX indication ring size
  * @rx_ind_ring_dbell_addr: RX indication ring doorbell address
  * @rx_ind_ring_dbell_ind_val: RX indication ring doorbell indication
@@ -510,7 +475,6 @@ struct ipa_uc_fw_stats {
  * struct wlan_ipa_uc_pending_event - WLAN IPA UC pending event
  * @node: Pending event list node
  * @type: WLAN IPA event type
- * @net_dev: network device
  * @device_mode: Device mode
  * @session_id: Session ID
  * @mac_addr: Mac address
@@ -542,14 +506,12 @@ struct uc_rm_work_struct {
  * struct uc_op_work_struct
  * @work: uC OP work
  * @msg: OP message
- * @osdev: pointer to qdf net device, used by osif_psoc_sync_trans_start_wait
- * @ipa_priv_bp: back pointer to ipa_obj
+ * @osdev: poiner to qdf net device, used by osif_psoc_sync_trans_start_wait
  */
 struct uc_op_work_struct {
 	qdf_work_t work;
 	struct op_msg_type *msg;
 	qdf_device_t osdev;
-	struct wlan_ipa_priv *ipa_priv_bp;
 };
 
 /**
@@ -600,7 +562,7 @@ struct ipa_uc_sharing_stats {
 /**
  * struct ipa_uc_quota_rsp - IPA UC quota response
  * @success: Success or fail flag
- * @reserved: Reserved
+ * @reserved[3]: Reserved
  * @quota_lo: Quota limit low bytes
  * @quota_hi: Quota limit high bytes
  */
@@ -636,7 +598,6 @@ struct wlan_ipa_tx_desc {
 
 typedef QDF_STATUS (*wlan_ipa_softap_xmit)(qdf_nbuf_t nbuf, qdf_netdev_t dev);
 typedef void (*wlan_ipa_send_to_nw)(qdf_nbuf_t nbuf, qdf_netdev_t dev);
-typedef bool (*wlan_ipa_driver_unloading)(void);
 
 /**
  * typedef wlan_ipa_rps_enable - Enable/disable RPS for adapter using vdev id
@@ -750,29 +711,21 @@ struct wlan_ipa_priv {
 
 	wlan_ipa_softap_xmit softap_xmit;
 	wlan_ipa_send_to_nw send_to_nw;
+	ipa_uc_offload_control_req ipa_tx_op;
+	ipa_intrabss_control_req ipa_intrabss_op;
 
-#if defined(QCA_CONFIG_RPS) && !defined(MDM_PLATFORM)
+#ifdef QCA_CONFIG_RPS
 	/*Callback to enable RPS for STA in STA+SAP scenario*/
 	wlan_ipa_rps_enable rps_enable;
 #endif
-	wlan_ipa_driver_unloading driver_is_unloading;
+
 	qdf_event_t ipa_resource_comp;
 
 	uint32_t wdi_version;
 	bool is_smmu_enabled;	/* IPA caps returned from ipa_wdi_init */
-	/* Flag to notify whether optional wifi dp feature is enabled or not */
-	bool opt_wifi_datapath;
 	qdf_atomic_t stats_quota;
 	uint8_t curr_bw_level;
 	qdf_atomic_t deinit_in_prog;
-	uint8_t instance_id;
-	bool handle_initialized;
-	qdf_ipa_wdi_hdl_t hdl;
-#ifdef IPA_OPT_WIFI_DP
-	struct wifi_dp_flt_setup dp_cce_super_rule_flt_param;
-	qdf_event_t ipa_flt_evnt;
-	qdf_wake_lock_t opt_dp_wake_lock;
-#endif
 };
 
 #define WLAN_IPA_WLAN_FRAG_HEADER        sizeof(struct frag_header)

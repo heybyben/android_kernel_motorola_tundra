@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2018 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -20,17 +19,17 @@
 /**
  * DOC: This file shall contain all public parameter (struct/macro/enum)
  * definitions to support hardware filtering configuration. No APIs, or
- * implementations of APIs, shall be contained within.
+ * implememtations of APIs, shall be contained within.
  */
 
 #ifndef _WLAN_PMO_HW_FILTER_PUBLIC_STRUCT_H
 #define _WLAN_PMO_HW_FILTER_PUBLIC_STRUCT_H
 
 /**
- * enum pmo_hw_filter_mode - bitmap for enabled hardware filters
- * @PMO_HW_FILTER_DISABLED: hardware filter is completely disabled
- * @PMO_HW_FILTER_NON_ARP_BC: drop all broadcast frames, except ARP
- * @PMO_HW_FILTER_NON_ICMPV6_MC: drop all multicast frames, except ICMPv6
+ * pmo_hw_filter_mode - bitmap for enabled hardware filters
+ * @HW_FILTER_DISABLED: hardware filter is completely disabled
+ * @HW_FILTER_NON_ARP_BC: drop all broadcast frames, except ARP
+ * @HW_FILTER_NON_ICMPV6_MC: drop all multicast frames, except ICMPv6
  *
  * The hardware filter is only effective in DTIM mode. Use this configuration
  * to blanket drop broadcast/multicast packets at the hardware level, without

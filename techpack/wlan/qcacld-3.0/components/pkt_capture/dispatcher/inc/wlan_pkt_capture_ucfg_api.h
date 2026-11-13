@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -64,7 +63,7 @@ ucfg_pkt_capture_get_mode(struct wlan_objmgr_psoc *psoc);
 
 /**
  * ucfg_pkt_capture_suspend_mon_thread() - suspend packet capture mon thread
- * @vdev: pointer to vdev object manager
+ * vdev: pointer to vdev object manager
  *
  * Return: 0 on success, -EINVAL on failure
  */
@@ -72,7 +71,7 @@ int ucfg_pkt_capture_suspend_mon_thread(struct wlan_objmgr_vdev *vdev);
 
 /**
  * ucfg_pkt_capture_resume_mon_thread() - resume packet capture mon thread
- * @vdev: pointer to vdev object manager
+ * vdev: pointer to vdev object manager
  *
  * Resume packet capture MON thread by completing RX thread resume event
  *
@@ -83,8 +82,8 @@ void ucfg_pkt_capture_resume_mon_thread(struct wlan_objmgr_vdev *vdev);
 /**
  * ucfg_pkt_capture_register_callbacks - Register packet capture callbacks
  * @vdev: pointer to wlan vdev object manager
- * @mon_cb: callback to call
- * @context: callback context
+ * mon_cb: callback to call
+ * context: callback context
  *
  * Return: QDF_STATUS
  */
@@ -103,9 +102,9 @@ QDF_STATUS
 ucfg_pkt_capture_deregister_callbacks(struct wlan_objmgr_vdev *vdev);
 
 /**
- * ucfg_pkt_capture_set_pktcap_mode - Set packet capture mode
+ * ucfg_pkt_capturee_set_pktcap_mode - Set packet capture mode
  * @psoc: pointer to psoc object
- * @val: mode to be set
+ * @mode: mode to be set
  *
  * Return: None
  */
@@ -122,7 +121,7 @@ enum pkt_capture_mode
 ucfg_pkt_capture_get_pktcap_mode(struct wlan_objmgr_psoc *psoc);
 
 /**
- * ucfg_pkt_capture_set_pktcap_config - Set packet capture config
+ * ucfg_pkt_capturee_set_pktcap_config - Set packet capture config
  * @vdev: pointer to vdev object
  * @config: config to be set
  *
@@ -252,7 +251,7 @@ struct htt_tx_data_hdr_information *ucfg_pkt_capture_tx_get_txcomplete_data_hdr(
  * @type: data process type
  * @tid:  tid number
  * @status: Tx status
- * @pkt_format: Frame format
+ * @pktformat: Frame format
  * @bssid: bssid
  * @pdev: pdev handle
  * @tx_retry_cnt: tx retry count
@@ -277,7 +276,7 @@ void ucfg_pkt_capture_tx_completion_process(
 void ucfg_pkt_capture_record_channel(struct wlan_objmgr_vdev *vdev);
 
 /**
- * ucfg_pkt_capture_register_wma_callbacks - ucfg API to register WMA callbacks
+ * ucfg_pkt_capture_register_callbacks - ucfg API to register WMA callbacks
  * @psoc: pointer to psoc object
  * @cb_obj: Pointer to packet capture callback structure
  *
@@ -288,7 +287,7 @@ ucfg_pkt_capture_register_wma_callbacks(struct wlan_objmgr_psoc *psoc,
 					struct pkt_capture_callbacks *cb_obj);
 
 /**
- * ucfg_pkt_capture_set_filter() - ucfg API to set frame filter
+ * ucfg_pkt_capture_set_filter ucfg API to set frame filter
  * @frame_filter: pkt capture frame filter data
  * @vdev: pointer to vdev
  *

@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2011-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -35,13 +34,12 @@
 #include "csr_inside_api.h"
 
 #include "rrm_global.h"
-#include <wlan_scan_api.h>
+#include <wlan_scan_ucfg_api.h>
 #include <wlan_scan_utils_api.h>
 #include <wlan_reg_services_api.h>
 #include <wlan_utility.h>
 #include <../../core/src/wlan_cm_vdev_api.h>
 #include "rrm_api.h"
-#include "wlan_cp_stats_mc_ucfg_api.h"
 
 /* Roam score for a neighbor AP will be calculated based on the below
  * definitions. The calculated roam score will be used to select the
@@ -398,7 +396,8 @@ static QDF_STATUS sme_ese_send_beacon_req_scan_results(
 
 		roam_info->pEseBcnReportRsp = bcn_report;
 		status = csr_roam_call_callback(mac_ctx, session_id, roam_info,
-						eCSR_ROAM_ESE_BCN_REPORT_IND, 0);
+						0, eCSR_ROAM_ESE_BCN_REPORT_IND,
+						0);
 
 		/* Free the memory allocated to IE */
 		for (i = 0; i < j; i++)
@@ -442,13 +441,14 @@ static QDF_STATUS sme_rrm_send_scan_result(struct mac_context *mac_ctx,
 					   uint32_t *freq_list,
 					   uint8_t measurementdone)
 {
+	mac_handle_t mac_handle = MAC_HANDLE(mac_ctx);
 	struct scan_filter *filter;
 	tScanResultHandle result_handle;
 	tCsrScanResultInfo *scan_results, *next_result;
 	tCsrScanResultInfo **scanresults_arr = NULL;
 	struct scan_result_list *result_list;
 	QDF_STATUS status;
-	uint32_t num_scan_results, counter = 0;
+	uint8_t num_scan_results, counter = 0;
 	tpRrmSMEContext rrm_ctx =
 		&mac_ctx->rrm.rrmSmeContext[measurement_index];
 	uint32_t session_id;
@@ -507,7 +507,8 @@ static QDF_STATUS sme_rrm_send_scan_result(struct mac_context *mac_ctx,
 		sme_debug("BSSID mismatch, using current session_id");
 		session_id = mac_ctx->roam.roamSession->vdev_id;
 	}
-	status = csr_scan_get_result(mac_ctx, filter, &result_handle);
+	status = sme_scan_get_result(mac_handle, (uint8_t)session_id,
+				     filter, &result_handle);
 	qdf_mem_free(filter);
 
 	sme_debug("RRM Measurement Done %d for index:%d",
@@ -518,7 +519,7 @@ static QDF_STATUS sme_rrm_send_scan_result(struct mac_context *mac_ctx,
 		 * Spec. doesn't say anything about such condition
 		 * Since section 7.4.6.2 (IEEE802.11k-2008) says-rrm report
 		 * frame should contain one or more report IEs. It probably
-		 * means dont send any response if no matching BSS found.
+		 * means dont send any respose if no matching BSS found.
 		 * Moreover, there is no flag or field in measurement report
 		 * IE(7.3.2.22) OR beacon report IE(7.3.2.22.6) that can be set
 		 * to indicate no BSS found on a given channel. If we finished
@@ -541,7 +542,7 @@ static QDF_STATUS sme_rrm_send_scan_result(struct mac_context *mac_ctx,
 							measurementdone, 0);
 		return status;
 	}
-	scan_results = csr_scan_result_get_first(mac_ctx, result_handle);
+	scan_results = sme_scan_result_get_first(mac_handle, result_handle);
 	if (!scan_results && measurementdone) {
 #ifdef FEATURE_WLAN_ESE
 		if (eRRM_MSG_SOURCE_ESE_UPLOAD == rrm_ctx->msgSource) {
@@ -569,21 +570,21 @@ static QDF_STATUS sme_rrm_send_scan_result(struct mac_context *mac_ctx,
 					 sizeof(next_result));
 	if (!scanresults_arr) {
 		status = QDF_STATUS_E_NOMEM;
-		goto send_scan_results;
+		goto rrm_send_scan_results_done;
 	}
 
 	status = wlan_mlme_get_bssid_vdev_id(mac_ctx->pdev, session_id,
 					     &bss_peer_mac);
 	if (QDF_IS_STATUS_ERROR(status)) {
-		sme_err("BSSID not found for vdev: %d", session_id);
+		sme_err("Invaild session %d", session_id);
 		status = QDF_STATUS_E_FAILURE;
-		goto send_scan_results;
+		goto rrm_send_scan_results_done;
 	}
 
 	if (!cm_is_vdevid_connected(mac_ctx->pdev, session_id)) {
-		sme_err("vdev:%d is not connected", session_id);
+		sme_err("Invaild session");
 		status = QDF_STATUS_E_FAILURE;
-		goto send_scan_results;
+		goto rrm_send_scan_results_done;
 	}
 
 	while (scan_results) {
@@ -613,7 +614,7 @@ static QDF_STATUS sme_rrm_send_scan_result(struct mac_context *mac_ctx,
 				sme_debug("Non Tx BSS of Conn AP in results");
 			}
 		}
-		next_result = csr_scan_result_get_next(mac_ctx,
+		next_result = sme_scan_result_get_next(mac_handle,
 						       result_handle);
 		sme_debug("Scan res timer:%lu, rrm scan timer:%llu",
 				scan_results->timer, rrm_scan_timer);
@@ -624,8 +625,6 @@ static QDF_STATUS sme_rrm_send_scan_result(struct mac_context *mac_ctx,
 		if (counter >= num_scan_results)
 			break;
 	}
-
-send_scan_results:
 	/*
 	 * The beacon report should be sent whether the counter is zero or
 	 * non-zero. There might be a few scan results in the cache but not
@@ -654,7 +653,7 @@ send_scan_results:
 rrm_send_scan_results_done:
 	if (scanresults_arr)
 		qdf_mem_free(scanresults_arr);
-	csr_scan_result_purge(mac_ctx, result_handle);
+	sme_scan_result_purge(result_handle);
 
 	return status;
 }
@@ -684,7 +683,7 @@ static QDF_STATUS sme_rrm_scan_request_callback(struct mac_context *mac,
 	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS;
 
 	/*
-	 * Even if RRM scan response is received after roaming to different AP
+	 * Even if RRM scan response is recevied after roaming to different AP
 	 * the messege shall be posted to PE for rrm cleanup.
 	 */
 
@@ -714,130 +713,12 @@ end:
 	return qdf_status;
 }
 
-/**
- * sme_rrm_send_chan_load_report_xmit_ind() -Sends the chan load report xmit
- * to PE
- * @mac: global mac context
- * @rrm_sme_ctx: SME rrm context for measurement request
- * @vdev_id: vdev id
- * @is_report_success: need to send failure report or not
- *
- * The sme module calls this function once it finish the scan request
- * and this function send the chan load report xmit to PE.
- *
- * Return : None
- */
-static void
-sme_rrm_send_chan_load_report_xmit_ind(struct mac_context *mac,
-				       tpRrmSMEContext rrm_sme_ctx,
-				       uint8_t vdev_id,
-				       bool is_report_success)
-{
-	uint8_t measurement_index = rrm_sme_ctx->measurement_idx;
-	struct chan_load_xmit_ind *chan_load_resp;
-	uint16_t length;
-	tpRrmSMEContext rrm_ctx = &mac->rrm.rrmSmeContext[measurement_index];
-	const struct bonded_channel_freq *range;
-	uint8_t chan_load = 0, temp_chan_load;
-	qdf_freq_t start_freq, end_freq, op_freq;
-	enum phy_ch_width req_chan_width;
-
-	length = sizeof(struct chan_load_xmit_ind);
-	chan_load_resp = qdf_mem_malloc(length);
-	if (!chan_load_resp)
-		return;
-
-	chan_load_resp->messageType = eWNI_SME_CHAN_LOAD_REPORT_RESP_XMIT_IND;
-	chan_load_resp->is_report_success = is_report_success;
-	chan_load_resp->length = length;
-	chan_load_resp->measurement_idx = measurement_index;
-	chan_load_resp->dialog_token = rrm_ctx->token;
-	chan_load_resp->duration = rrm_ctx->duration[0];
-	chan_load_resp->op_class = rrm_ctx->regClass;
-	chan_load_resp->channel = rrm_ctx->chan_load_req_info.channel;
-	chan_load_resp->rrm_scan_tsf = rrm_ctx->chan_load_req_info.rrm_scan_tsf;
-
-	op_freq = rrm_ctx->chan_load_req_info.req_freq;
-	req_chan_width = rrm_ctx->chan_load_req_info.req_chan_width;
-	if (req_chan_width == CH_WIDTH_INVALID) {
-		sme_debug("Invalid scanned_ch_width");
-		return;
-	}
-
-	if (req_chan_width == CH_WIDTH_20MHZ) {
-		start_freq = op_freq;
-		end_freq = op_freq;
-		sme_debug("cw %d: start_freq %d, end_freq %d", req_chan_width,
-			  start_freq, end_freq);
-	} else if (req_chan_width == CH_WIDTH_320MHZ) {
-		if (!rrm_ctx->chan_load_req_info.bw_ind.is_bw_ind_element) {
-			sme_debug("is_bw_ind_element is false");
-			return;
-		}
-
-		qdf_mem_copy(&chan_load_resp->bw_ind,
-			     &rrm_ctx->chan_load_req_info.bw_ind,
-			     sizeof(chan_load_resp->bw_ind));
-		range = wlan_reg_get_bonded_chan_entry(op_freq,
-			  rrm_ctx->chan_load_req_info.bw_ind.channel_width,
-			  rrm_ctx->chan_load_req_info.bw_ind.center_freq);
-		if (!range) {
-			sme_debug("vdev %d : range is null for freq %d",
-				  vdev_id, op_freq);
-			return;
-		}
-
-		start_freq = range->start_freq;
-		end_freq = range->end_freq;
-		sme_debug("cw %d: start_freq %d, end_freq %d", req_chan_width,
-			  start_freq, end_freq);
-	} else {
-		if (rrm_ctx->chan_load_req_info.wide_bw.is_wide_bw_chan_switch) {
-			qdf_mem_copy(&chan_load_resp->wide_bw,
-				     &rrm_ctx->chan_load_req_info.wide_bw,
-				     sizeof(chan_load_resp->wide_bw));
-			req_chan_width =
-			    rrm_ctx->chan_load_req_info.wide_bw.channel_width;
-			sme_debug("Fill wide_bw_chan_switch IE for cw:%d",
-				  req_chan_width);
-		}
-
-		range =
-		   wlan_reg_get_bonded_chan_entry(op_freq, req_chan_width, 0);
-		if (!range) {
-			sme_debug("range is NULL for freq %d, ch_width %d",
-				  op_freq, req_chan_width);
-			return;
-		}
-		start_freq = range->start_freq;
-		end_freq = range->end_freq;
-		sme_debug("cw %d: start_freq %d, end_freq %d",
-			  req_chan_width, start_freq, end_freq);
-	}
-
-	for (; start_freq <= end_freq;) {
-		temp_chan_load =
-			wlan_cp_stats_get_rx_clear_count(mac->psoc,
-							 vdev_id,
-							 start_freq);
-		if (chan_load < temp_chan_load)
-			chan_load = temp_chan_load;
-
-		start_freq += BW_20_MHZ;
-	}
-
-	chan_load_resp->chan_load = chan_load;
-
-	sme_debug("SME Sending CHAN_LOAD_REPORT_RESP_XMIT_IND to PE");
-	umac_send_mb_message_to_mac(chan_load_resp);
-}
-
 static void sme_rrm_scan_event_callback(struct wlan_objmgr_vdev *vdev,
 			struct scan_event *event, void *arg)
 {
 	struct mac_context *mac_ctx;
 	uint32_t scan_id;
-	uint8_t vdev_id, i;
+	uint8_t session_id, i;
 	eCsrScanStatus scan_status = eCSR_SCAN_FAILURE;
 	bool success = false;
 	tpRrmSMEContext smerrmctx;
@@ -848,7 +729,7 @@ static void sme_rrm_scan_event_callback(struct wlan_objmgr_vdev *vdev,
 		return;
 	}
 
-	vdev_id = wlan_vdev_get_id(vdev);
+	session_id = wlan_vdev_get_id(vdev);
 	scan_id = event->scan_id;
 
 	qdf_mtrace(QDF_MODULE_ID_SCAN, QDF_MODULE_ID_SME, event->type,
@@ -869,24 +750,10 @@ static void sme_rrm_scan_event_callback(struct wlan_objmgr_vdev *vdev,
 			return;
 	}
 
-	sme_debug("vdev: %d : Scan completed for scan_id:%d idx:%d, type:%d",
-		  vdev_id, scan_id, smerrmctx->measurement_idx,
-		  smerrmctx->measurement_type);
-
-	switch (smerrmctx->measurement_type) {
-	case RRM_CHANNEL_LOAD:
-		sme_rrm_send_chan_load_report_xmit_ind(mac_ctx, smerrmctx,
-						       vdev_id, true);
-		break;
-	case RRM_BEACON_REPORT:
-		sme_rrm_scan_request_callback(mac_ctx, smerrmctx, vdev_id,
-					      scan_id, scan_status);
-		break;
-	default:
-		sme_err("Unknown measurement_type: %d",
-			smerrmctx->measurement_type);
-		break;
-	}
+	sme_debug("Scan completed for scan_id:%d measurement_idx:%d",
+		  scan_id, smerrmctx->measurement_idx);
+	sme_rrm_scan_request_callback(mac_ctx, smerrmctx, session_id,
+				      scan_id, scan_status);
 }
 
 #define RRM_CHAN_WEIGHT_CHAR_LEN 5
@@ -956,8 +823,8 @@ QDF_STATUS sme_rrm_issue_scan_req(struct mac_context *mac_ctx, uint8_t idx)
 			qdf_mem_free(req);
 			goto send_ind;
 		}
-		wlan_scan_init_default_params(vdev, req);
-		req->scan_req.scan_id = wlan_scan_get_scan_id(mac_ctx->psoc);
+		ucfg_scan_init_default_params(vdev, req);
+		req->scan_req.scan_id = ucfg_scan_get_scan_id(mac_ctx->psoc);
 		sme_rrm_ctx->scan_id = req->scan_req.scan_id;
 
 		sme_debug("RRM_SCN: rrm_idx:%d scan_id:%d",
@@ -1080,7 +947,7 @@ QDF_STATUS sme_rrm_issue_scan_req(struct mac_context *mac_ctx, uint8_t idx)
 		 */
 		req->scan_req.scan_type = SCAN_TYPE_RRM;
 
-		status = wlan_scan_start(req);
+		status = ucfg_scan_start(req);
 		wlan_objmgr_vdev_release_ref(vdev, WLAN_LEGACY_SME_ID);
 		if (QDF_IS_STATUS_ERROR(status))
 			goto send_ind;
@@ -1171,7 +1038,7 @@ static QDF_STATUS sme_rrm_fill_scan_channels(struct mac_context *mac,
 	if (sme_rrm_context->channelList.numOfChannels == 0) {
 		qdf_mem_free(sme_rrm_context->channelList.freq_list);
 		sme_rrm_context->channelList.freq_list = NULL;
-		sme_err_rl("No channels populated with requested operation class and current country, Hence abort the rrm operation");
+		sme_err("No channels populated with requested operation class and current country, Hence abort the rrm operation");
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -1188,251 +1055,6 @@ static uint8_t *sme_rrm_get_meas_mode_string(uint8_t meas_mode)
 		return (uint8_t *)"UNKNOWN";
 		break;
 	}
-}
-
-/**
- * sme_rrm_fill_freq_list_for_channel_load() : Trigger wide band scan request
- * to measure channel load
- * @mac_ctx: global mac structure
- * @sme_rrm_ctx: pointer to sme rrm context structure
- * @vdev: vdev common object
- * @req: scan request config
- *
- * Return : QDF_STATUS
- */
-static QDF_STATUS
-sme_rrm_fill_freq_list_for_channel_load(struct mac_context *mac_ctx,
-					tpRrmSMEContext sme_rrm_ctx,
-					struct wlan_objmgr_vdev *vdev,
-					struct scan_start_request *req)
-{
-	struct bw_ind_element *bw_ind;
-	struct wide_bw_chan_switch *wide_bw;
-	uint16_t c_space = 0;
-	uint8_t country_code[REG_ALPHA2_LEN + 1];
-	enum phy_ch_width chan_width = CH_WIDTH_INVALID;
-	qdf_freq_t scan_freq;
-	uint8_t channel = sme_rrm_ctx->chan_load_req_info.channel;
-	qdf_freq_t cen320_freq = 0;
-
-	rrm_get_country_code_from_connected_profile(mac_ctx,
-						    wlan_vdev_get_id(vdev),
-						    country_code);
-	scan_freq = wlan_reg_country_chan_opclass_to_freq(mac_ctx->pdev,
-							  country_code,
-							  channel,
-							  sme_rrm_ctx->regClass,
-							  false);
-	if (!scan_freq) {
-		sme_debug("invalid scan freq");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	bw_ind = &sme_rrm_ctx->chan_load_req_info.bw_ind;
-	wide_bw = &sme_rrm_ctx->chan_load_req_info.wide_bw;
-	if (!bw_ind->is_bw_ind_element && !wide_bw->is_wide_bw_chan_switch) {
-		if (wlan_reg_is_6ghz_op_class(mac_ctx->pdev,
-					      sme_rrm_ctx->regClass))
-			c_space =
-			    wlan_reg_get_op_class_width(mac_ctx->pdev,
-							sme_rrm_ctx->regClass,
-							true);
-		else
-			c_space = wlan_reg_dmn_get_chanwidth_from_opclass_auto(
-							country_code,
-							channel,
-							sme_rrm_ctx->regClass);
-
-		sme_debug("op: %d, ch: %d freq:%d, cc %c%c 0x%x, c_space:%d",
-			  sme_rrm_ctx->regClass, channel, scan_freq,
-			  country_code[0], country_code[1], country_code[2],
-			  c_space);
-
-		switch (c_space) {
-		case 320:
-			fallthrough;
-		case 160:
-			chan_width = CH_WIDTH_160MHZ;
-			break;
-		case 80:
-			chan_width = CH_WIDTH_80MHZ;
-			break;
-		case 40:
-			chan_width = CH_WIDTH_40MHZ;
-			break;
-		case 20:
-		case 25:
-			chan_width = CH_WIDTH_20MHZ;
-			break;
-		default:
-			sme_err("invalid chan_space: %d", c_space);
-			return QDF_STATUS_E_FAILURE;
-		}
-	} else {
-		if (bw_ind->is_bw_ind_element) {
-			chan_width = bw_ind->channel_width;
-			cen320_freq = bw_ind->center_freq;
-		}
-
-		if (wide_bw->is_wide_bw_chan_switch)
-			chan_width = wide_bw->channel_width;
-	}
-
-	sme_rrm_ctx->chan_load_req_info.req_chan_width = chan_width;
-	return mlme_update_freq_in_scan_start_req(vdev, req, chan_width,
-						  scan_freq, cen320_freq);
-}
-
-/**
- * sme_rrm_issue_chan_load_measurement_scan() : Trigger wide band scan request
- * to measure channel load
- * @mac_ctx: global mac structure
- * @idx: measurement request index
- *
- * Return : QDF_STATUS
- */
-static QDF_STATUS
-sme_rrm_issue_chan_load_measurement_scan(struct mac_context *mac_ctx,
-					 uint8_t idx)
-{
-	QDF_STATUS status = QDF_STATUS_SUCCESS;
-	tpRrmSMEContext sme_rrm_ctx = &mac_ctx->rrm.rrmSmeContext[idx];
-	uint32_t max_chan_time;
-	struct scan_start_request *req;
-	struct wlan_objmgr_vdev *vdev;
-	uint32_t vdev_id;
-
-	status = csr_roam_get_session_id_from_bssid(mac_ctx,
-						    &sme_rrm_ctx->sessionBssId,
-						    &vdev_id);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		sme_err("sme session ID not found for bssid "QDF_MAC_ADDR_FMT"",
-			QDF_MAC_ADDR_REF(sme_rrm_ctx->sessionBssId.bytes));
-		goto send_ind;
-	}
-
-	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(mac_ctx->psoc, vdev_id,
-						    WLAN_LEGACY_SME_ID);
-	if (!vdev) {
-		sme_err("VDEV is null %d", vdev_id);
-		status = QDF_STATUS_E_INVAL;
-		goto send_ind;
-	}
-
-	req = qdf_mem_malloc(sizeof(*req));
-	if (!req) {
-		status = QDF_STATUS_E_NOMEM;
-		goto error_handle;
-	}
-
-	status = wlan_scan_init_default_params(vdev, req);
-	if (QDF_IS_STATUS_ERROR(status))
-		goto error_handle;
-
-	req->scan_req.scan_id = wlan_scan_get_scan_id(mac_ctx->psoc);
-	sme_rrm_ctx->scan_id = req->scan_req.scan_id;
-	req->scan_req.vdev_id = wlan_vdev_get_id(vdev);
-	req->scan_req.scan_req_id = sme_rrm_ctx->req_id;
-	req->scan_req.scan_f_passive = true;
-	max_chan_time = sme_rrm_ctx->duration[0];
-	req->scan_req.dwell_time_passive = max_chan_time;
-	req->scan_req.dwell_time_passive_6g = max_chan_time;
-	req->scan_req.adaptive_dwell_time_mode = SCAN_DWELL_MODE_STATIC;
-	req->scan_req.scan_type = SCAN_TYPE_RRM;
-	req->scan_req.scan_f_wide_band = true;
-	/*
-	 * FW report CCA busy for each possible 20Mhz subbands of the
-	 * wideband scan channel if below flag is true
-	 */
-	req->scan_req.scan_f_report_cca_busy_for_each_20mhz = true;
-
-	status = sme_rrm_fill_freq_list_for_channel_load(mac_ctx, sme_rrm_ctx,
-							 vdev, req);
-	if (QDF_IS_STATUS_ERROR(status))
-		goto error_handle;
-	sme_debug("vdev:%d, rrm_idx:%d scan_id:%d num chan: %d dwell_time: %d",
-		  req->scan_req.vdev_id, sme_rrm_ctx->measurement_idx,
-		  sme_rrm_ctx->scan_id,
-		  req->scan_req.chan_list.num_chan,
-		  req->scan_req.dwell_time_passive);
-	/* store jiffies to send it in channel load report */
-	sme_rrm_ctx->chan_load_req_info.rrm_scan_tsf =
-				(uint32_t)qdf_system_ticks();
-	status = wlan_scan_start(req);
-	if (QDF_IS_STATUS_ERROR(status))
-		goto error_handle;
-
-	wlan_objmgr_vdev_release_ref(vdev, WLAN_LEGACY_SME_ID);
-	return status;
-error_handle:
-	qdf_mem_free(req);
-	wlan_objmgr_vdev_release_ref(vdev, WLAN_LEGACY_SME_ID);
-send_ind:
-	sme_rrm_send_chan_load_report_xmit_ind(mac_ctx, sme_rrm_ctx,
-					       vdev_id, false);
-	rrm_cleanup(mac_ctx, idx);
-	return status;
-}
-
-/**
- * sme_rrm_process_chan_load_req_ind() -Process beacon report request
- * @mac: Global Mac structure
- * @msg_buf: a pointer to a buffer that maps to various structures base
- * on the message type.The beginning of the buffer can always
- * map to tSirSmeRsp.
- *
- * This is called to process the channel load report request from peer AP
- * forwarded through PE .
- *
- * Return : QDF_STATUS_SUCCESS - Validation is successful.
- */
-static QDF_STATUS sme_rrm_process_chan_load_req_ind(struct mac_context *mac,
-						    void *msg_buf)
-{
-	struct ch_load_ind *chan_load;
-	tpRrmSMEContext sme_rrm_ctx;
-	tpRrmPEContext rrm_ctx;
-	struct channel_load_req_info *req_info;
-
-	chan_load = (struct ch_load_ind *)msg_buf;
-	sme_rrm_ctx = &mac->rrm.rrmSmeContext[chan_load->measurement_idx];
-	rrm_ctx = &mac->rrm.rrmPEContext;
-	qdf_mem_copy(sme_rrm_ctx->sessionBssId.bytes,
-		     chan_load->peer_addr.bytes, sizeof(struct qdf_mac_addr));
-
-	sme_rrm_ctx->token = chan_load->dialog_token;
-	sme_rrm_ctx->regClass = chan_load->op_class;
-	sme_rrm_ctx->randnIntvl = QDF_MAX(chan_load->randomization_intv,
-			mac->rrm.rrmConfig.max_randn_interval);
-	sme_rrm_ctx->currentIndex = 0;
-	qdf_mem_copy((uint8_t *)&sme_rrm_ctx->duration,
-		     (uint8_t *)&chan_load->meas_duration,
-		     SIR_ESE_MAX_MEAS_IE_REQS);
-	sme_rrm_ctx->measurement_type = RRM_CHANNEL_LOAD;
-	req_info = &sme_rrm_ctx->chan_load_req_info;
-	req_info->channel = chan_load->channel;
-	req_info->req_freq = chan_load->req_freq;
-
-	qdf_mem_copy(&req_info->bw_ind, &chan_load->bw_ind,
-		     sizeof(req_info->bw_ind));
-	qdf_mem_copy(&req_info->wide_bw, &chan_load->wide_bw,
-		     sizeof(req_info->wide_bw));
-
-	sme_debug("idx:%d, token: %d randnIntvl: %d meas_duration %d, rrm_ctx dur %d reg_class: %d, type: %d, channel: %d, freq: %d, [bw_ind present: %d, cw: %d, ccfs0: %d], [wide_bw present: %d, cw: %d]",
-		  chan_load->measurement_idx, sme_rrm_ctx->token,
-		  sme_rrm_ctx->randnIntvl,
-		  chan_load->meas_duration,
-		  sme_rrm_ctx->duration[0], sme_rrm_ctx->regClass,
-		  sme_rrm_ctx->measurement_type,
-		  req_info->channel, req_info->req_freq,
-		  req_info->bw_ind.is_bw_ind_element,
-		  req_info->bw_ind.channel_width,
-		  req_info->bw_ind.center_freq,
-		  req_info->wide_bw.is_wide_bw_chan_switch,
-		  req_info->wide_bw.channel_width);
-
-	return sme_rrm_issue_chan_load_measurement_scan(mac,
-						chan_load->measurement_idx);
 }
 
 /**
@@ -1662,14 +1284,11 @@ QDF_STATUS sme_rrm_process_beacon_report_req_ind(struct mac_context *mac,
 		     (uint8_t *)&beacon_req->measurementDuration,
 		     SIR_ESE_MAX_MEAS_IE_REQS);
 
-	sme_rrm_ctx->measurement_type = RRM_BEACON_REPORT;
-
-	sme_debug("token: %d randnIntvl: %d msgSource: %d measurementduration %d, rrm_ctx duration %d Meas_mode: %s, type: %d",
+	sme_debug("token: %d randnIntvl: %d msgSource: %d measurementduration %d, rrm_ctx duration %d Meas_mode: %s",
 		  sme_rrm_ctx->token, sme_rrm_ctx->randnIntvl,
 		  sme_rrm_ctx->msgSource, beacon_req->measurementDuration[0],
 		  sme_rrm_ctx->duration[0],
-		  sme_rrm_get_meas_mode_string(sme_rrm_ctx->measMode[0]),
-		  sme_rrm_ctx->measurement_type);
+		  sme_rrm_get_meas_mode_string(sme_rrm_ctx->measMode[0]));
 
 	return sme_rrm_issue_scan_req(mac, beacon_req->measurement_idx);
 
@@ -1767,7 +1386,7 @@ QDF_STATUS sme_rrm_neighbor_report_request(struct mac_context *mac, uint8_t
 }
 
 /**
- * rrm_calculate_neighbor_ap_roam_score() - calculates roam score
+ * rrm_calculate_neighbor_ap_roam_score() - caclulates roam score
  * @mac_ctx:                mac global context
  * @pNeighborReportDesc:    Neighbor BSS Descriptor node for which roam score
  *                          should be calculated
@@ -2036,10 +1655,6 @@ QDF_STATUS sme_rrm_msg_processor(struct mac_context *mac, uint16_t msg_type,
 		sme_rrm_process_beacon_report_req_ind(mac, msg_buf);
 		break;
 
-	case eWNI_SME_CHAN_LOAD_REQ_IND:
-		sme_rrm_process_chan_load_req_ind(mac, msg_buf);
-		break;
-
 	default:
 		sme_err("Unknown msg type: %d", msg_type);
 		break;
@@ -2086,10 +1701,10 @@ static void rrm_change_default_config_param(struct mac_context *mac)
 }
 
 /**
- * rrm_open() - Initialize all RRM module
+ * rrm_open() - Initialze all RRM module
  * @ mac: The handle returned by mac_open.
  *
- * Initialize all RRM module.
+ * Initialze all RRM module.
  *
  * Return: QDF_STATUS
  */
@@ -2194,7 +1809,7 @@ QDF_STATUS rrm_start(struct mac_context *mac_ctx)
 
 
 	/* Register with scan component */
-	req_id = wlan_scan_register_requester(mac_ctx->psoc,
+	req_id = ucfg_scan_register_requester(mac_ctx->psoc,
 					      "RRM",
 					      sme_rrm_scan_event_callback,
 					      mac_ctx);
@@ -2219,7 +1834,8 @@ QDF_STATUS rrm_stop(struct mac_context *mac_ctx)
 		smerrmctx->req_id = 0;
 	}
 
-	wlan_scan_unregister_requester(mac_ctx->psoc, req_id);
+	ucfg_scan_unregister_requester(mac_ctx->psoc,
+				       req_id);
 
 	return QDF_STATUS_SUCCESS;
 }

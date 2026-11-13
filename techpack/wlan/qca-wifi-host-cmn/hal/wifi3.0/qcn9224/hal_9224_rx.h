@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -37,11 +36,6 @@
 #include "dp_types.h"
 #include "hal_api_mon.h"
 #include "phyrx_other_receive_info_ru_details.h"
-#if (defined(WLAN_SA_API_ENABLE)) && (defined(QCA_WIFI_QCA9574))
-#include "phyrx_other_receive_info_evm_details.h"
-#endif /* WLAN_SA_API_ENABLE && QCA_WIFI_QCA9574 */
-
-#include "phyrx_other_receive_info_all_sigb_details.h"
 
 #define HAL_RX_MSDU0_BUFFER_ADDR_LSB(link_desc_va)	\
 	(uint8_t *)(link_desc_va) +			\
@@ -65,15 +59,6 @@
 #define HAL_RX_GET_SW_FRAME_GROUP_ID(rx_mpdu_start)	\
 	HAL_RX_GET(rx_mpdu_start, RX_MPDU_INFO, SW_FRAME_GROUP_ID)
 
-/*
- * In Beryllium chipset msdu_start was removed and merged in msdu_end.
- * Due to this valid contents will be present only in last msdu.
- * After setting the 5th bit of spare control field, REO will copy the contents
- * from last buffer to all the other buffers of MSDU.
- */
-#define HAL_REO_MSDU_END_COPY	0x20
-#define HAL_REO_R0_MISC_CTL_SPARE_CONTROL_SHFT	0
-
 #define HAL_REO_R0_CONFIG(soc, reg_val, reo_params)		\
 	do {							\
 		reg_val &=					\
@@ -95,21 +80,18 @@
 		reg_val |= HAL_SM(HWIO_REO_R0_MISC_CTL,		\
 				  FRAGMENT_DEST_RING,		\
 				  (reo_params)->frag_dst_ring); \
-		reg_val |= ((HAL_REO_MSDU_END_COPY) <<	\
-			    HAL_REO_R0_MISC_CTL_SPARE_CONTROL_SHFT);	\
+		reg_val &= (~HWIO_REO_R0_MISC_CTL_BAR_DEST_RING_BMSK | \
+			    (REO_REMAP_TCL <<			\
+			     HWIO_REO_R0_MISC_CTL_BAR_DEST_RING_SHFT)); \
 		HAL_REG_WRITE(soc,				\
-			      HWIO_REO_R0_MISC_CTL_ADDR(	\
-				REO_REG_REG_BASE),		\
-			      reg_val);				\
+			      HWIO_REO_R0_MISC_CTL_ADDR(REO_REG_REG_BASE), \
+			      reg_val); \
 	} while (0)
 
 #define HAL_RX_MSDU_DESC_INFO_GET(msdu_details_ptr) \
 	((struct rx_msdu_desc_info *) \
 	_OFFSET_TO_BYTE_PTR(msdu_details_ptr, \
-	UNIFIED_RX_MSDU_DETAILS_2_RX_MSDU_DESC_INFO_RX_MSDU_DESC_INFO_DETAILS_OFFSET))
-
-#define HAL_RX_TLV_MSDU_DONE_COPY_GET(_rx_pkt_tlv)	\
-	HAL_RX_MSDU_END(_rx_pkt_tlv).msdu_done_copy
+RX_MSDU_DETAILS_RX_MSDU_DESC_INFO_DETAILS_RESERVED_0A_OFFSET))
 
 #define HAL_RX_LINK_DESC_MSDU0_PTR(link_desc)   \
 	((struct rx_msdu_details *) \
@@ -122,9 +104,9 @@
 #define PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS_CHAN_CAPTURE_STATUS_MSB 2
 
 #define HAL_GET_RX_LOCATION_INFO_CHAN_CAPTURE_STATUS(rx_tlv) \
-	((HAL_RX_GET_64((rx_tlv), \
-			PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS, \
-			RTT_CFR_STATUS) & \
+	((HAL_RX_GET((rx_tlv), \
+		     PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS, \
+		     RTT_CFR_STATUS) & \
 	  PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS_CHAN_CAPTURE_STATUS_BMASK) >> \
 	 PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS_CHAN_CAPTURE_STATUS_LSB)
 #endif

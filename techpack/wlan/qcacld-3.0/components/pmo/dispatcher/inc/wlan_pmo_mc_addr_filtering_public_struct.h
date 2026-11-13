@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -42,12 +41,12 @@
 struct pmo_mc_addr_list_params {
 	struct wlan_objmgr_psoc *psoc;
 	uint8_t vdev_id;
-	int count;
+	uint8_t count;
 	struct qdf_mac_addr mc_addr[PMO_MAX_MC_ADDR_LIST];
 };
 
 /**
- * struct pmo_mc_addr_list - pmo mc address list params for vdev
+ * struct pmo_mc_addr_list -pmo mc address list params for vdev
  * @is_filter_applied: is mc list filter applied on vdev
  * @mc_cnt: mc address count
  * @mc_addr:mc address list
@@ -59,7 +58,7 @@ struct pmo_mc_addr_list {
 };
 
 /**
- * struct pmo_mcast_filter_params - mcast filter parameters
+ * struct mcast_filter_params - mcast filter parameters
  * @multicast_addr_cnt: num of addresses
  * @multicast_addr: address array
  * @action: operation to perform

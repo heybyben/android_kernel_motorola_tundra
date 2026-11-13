@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -110,7 +110,7 @@ enum wlan_vdev_state {
  * @WLAN_VDEV_SM_EV_DFS_CAC_COMPLETED:   Notifies on CAC completion
  * @WLAN_VDEV_SM_EV_DOWN:                Invokes VDEV DOWN operation
  * @WLAN_VDEV_SM_EV_CONNECTION_FAIL:     Notifications for UP/connection failure
- * @WLAN_VDEV_SM_EV_STOP_RESP:           Notification of stop response
+ * @WLAN_VDEV_SM_EV_STOP_RESP:           Notifcation of stop response
  * @WLAN_VDEV_SM_EV_STOP_FAIL:           Notification of stop req failure
  * @WLAN_VDEV_SM_EV_DOWN_FAIL:           Notification of down failure
  * @WLAN_VDEV_SM_EV_DISCONNECT_COMPLETE: Notification of Peer cleanup complete
@@ -134,8 +134,6 @@ enum wlan_vdev_state {
  * @WLAN_VDEV_SM_EV_MLO_SYNC_COMPLETE:   MLO mgr triggers this event for the mlo
  *                                       sap in vdev wait up state, if all the
  *                                       links finish vdev start rsp.
- * @WLAN_VDEV_SM_EV_SUSPEND_CSA_RESTART: Invoke peer deletion for only legacy
- *					 peers
  */
 enum wlan_vdev_sm_evt {
 	WLAN_VDEV_SM_EV_START = 0,
@@ -170,11 +168,10 @@ enum wlan_vdev_sm_evt {
 	WLAN_VDEV_SM_EV_STOP_REQ = 29,
 	WLAN_VDEV_SM_EV_CHAN_SWITCH_DISABLED = 30,
 	WLAN_VDEV_SM_EV_MLO_SYNC_COMPLETE = 31,
-	WLAN_VDEV_SM_EV_SUSPEND_CSA_RESTART = 32,
 };
 
 /**
- * wlan_vdev_mlme_init() - Initializes VDEV MLME component
+ * wlan_vdev_mlme_init - Initializes VDEV MLME component
  *
  * Registers callbacks with object manager for create/destroy
  *
@@ -184,7 +181,7 @@ enum wlan_vdev_sm_evt {
 QDF_STATUS wlan_vdev_mlme_init(void);
 
 /**
- * wlan_vdev_mlme_deinit() - Uninitializes VDEV MLME component
+ * wlan_vdev_mlme_deinit - Uninitializes VDEV MLME component
  *
  * Unregisters callbacks with object manager for create/destroy
  *
@@ -194,10 +191,9 @@ QDF_STATUS wlan_vdev_mlme_init(void);
 QDF_STATUS wlan_vdev_mlme_deinit(void);
 
 /**
- * wlan_mlme_psoc_enable() - MLME initializations on PSOC enable
- * @psoc: pointer to psoc object
+ * wlan_mlme_psoc_enable - MLME initializations on PSOC enable
  *
- * Initializes MLME params on PSOC enable
+ * Initializes MLME params on PSOC eable
  *
  * Return: SUCCESS on successful initialization
  *         FAILURE, if initialization fails
@@ -205,10 +201,9 @@ QDF_STATUS wlan_vdev_mlme_deinit(void);
 QDF_STATUS wlan_mlme_psoc_enable(struct wlan_objmgr_psoc *psoc);
 
 /**
- * wlan_mlme_psoc_disable() - MLME clean up on PSOC disable
- * @psoc: pointer to psoc object
+ * wlan_mlme_psoc_disable - MLME clean up on PSOC disable
  *
- * cleanup MLME params on PSOC disable
+ * cleanup MLME params on PSOC eable
  *
  * Return: SUCCESS on successful cleanup
  *         FAILURE, if cleanup fails
@@ -227,22 +222,5 @@ QDF_STATUS wlan_mlme_psoc_disable(struct wlan_objmgr_psoc *psoc);
 QDF_STATUS wlan_vdev_mlme_send_set_mac_addr(struct qdf_mac_addr mac_addr,
 					    struct qdf_mac_addr mld_addr,
 					    struct wlan_objmgr_vdev *vdev);
-
-/**
- * wlan_vdev_mlme_notify_set_mac_addr_response() - Notify FW set mac address
- * response.
- * @vdev: VDEV object manager.
- * @resp_status: FW response status.
- *
- * Return: void
- */
-void wlan_vdev_mlme_notify_set_mac_addr_response(struct wlan_objmgr_vdev *vdev,
-						 uint8_t resp_status);
-#else
-static inline
-void wlan_vdev_mlme_notify_set_mac_addr_response(struct wlan_objmgr_vdev *vdev,
-						 uint8_t resp_status)
-{
-}
 #endif
 #endif

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -23,8 +23,6 @@
 #include "hal_be_reo.h"
 #include "hal_tx.h"	//HAL_SET_FLD
 #include "hal_be_rx.h"	//HAL_RX_BUF_RBM_GET
-#include "rx_reo_queue_1k.h"
-#include "hal_be_rx_tlv.h"
 
 /*
  * The 4 bits REO destination ring value is defined as: 0: TCL
@@ -36,21 +34,6 @@ uint32_t reo_dest_ring_remap[] = {REO_REMAP_SW1, REO_REMAP_SW2,
 				  REO_REMAP_SW3, REO_REMAP_SW4,
 				  REO_REMAP_SW5, REO_REMAP_SW6,
 				  REO_REMAP_SW7, REO_REMAP_SW8};
-/*
- * WBM idle link descriptor for Return Buffer Manager in case of
- * multi-chip configuration.
- */
-#define HAL_NUM_CHIPS 4
-#define HAL_WBM_CHIP_INVALID	    0
-#define HAL_WBM_CHIP0_IDLE_DESC_MAP 1
-#define HAL_WBM_CHIP1_IDLE_DESC_MAP 2
-#define HAL_WBM_CHIP2_IDLE_DESC_MAP 3
-#define HAL_WBM_CHIP3_IDLE_DESC_MAP 12
-
-uint8_t wbm_idle_link_bm_map[] = {HAL_WBM_CHIP0_IDLE_DESC_MAP,
-				  HAL_WBM_CHIP1_IDLE_DESC_MAP,
-				  HAL_WBM_CHIP2_IDLE_DESC_MAP,
-				  HAL_WBM_CHIP3_IDLE_DESC_MAP};
 
 #if defined(QDF_BIG_ENDIAN_MACHINE)
 void hal_setup_reo_swap(struct hal_soc *soc)
@@ -75,7 +58,7 @@ void hal_setup_reo_swap(struct hal_soc *soc)
 /**
  * hal_tx_init_data_ring_be() - Initialize all the TCL Descriptors in SRNG
  * @hal_soc_hdl: Handle to HAL SoC structure
- * @hal_ring_hdl: Handle to HAL SRNG structure
+ * @hal_srng: Handle to HAL SRNG structure
  *
  * Return: none
  */
@@ -85,8 +68,7 @@ hal_tx_init_data_ring_be(hal_soc_handle_t hal_soc_hdl,
 {
 }
 
-void hal_reo_setup_generic_be(struct hal_soc *soc, void *reoparams,
-			      int qref_reset)
+void hal_reo_setup_generic_be(struct hal_soc *soc, void *reoparams)
 {
 	uint32_t reg_val;
 	struct hal_reo_params *reo_params = (struct hal_reo_params *)reoparams;
@@ -181,19 +163,8 @@ void hal_set_link_desc_addr_be(void *desc, uint32_t cookie,
 			   cookie);
 }
 
-static uint16_t hal_get_rx_max_ba_window_be(int tid)
-{
-	return  HAL_RX_BA_WINDOW_256;
-}
-
 static uint32_t hal_get_reo_qdesc_size_be(uint32_t ba_window_size, int tid)
 {
-	/* Hardcode the ba_window_size to HAL_RX_MAX_BA_WINDOW for
-	 * NON_QOS_TID until HW issues are resolved.
-	 */
-	if (tid != HAL_NON_QOS_TID)
-		ba_window_size = hal_get_rx_max_ba_window_be(tid);
-
 	/* Return descriptor size corresponding to window size of 2 since
 	 * we set ba_window_size to 2 while setting up REO descriptors as
 	 * a WAR to get 2k jump exception aggregates are received without
@@ -315,6 +286,155 @@ static uint8_t hal_get_wbm_internal_error_generic_be(void *hal_desc)
 }
 
 /**
+ * hal_setup_link_idle_list_generic_be - Setup scattered idle list using the
+ * buffer list provided
+ *
+ * @hal_soc: Opaque HAL SOC handle
+ * @scatter_bufs_base_paddr: Array of physical base addresses
+ * @scatter_bufs_base_vaddr: Array of virtual base addresses
+ * @num_scatter_bufs: Number of scatter buffers in the above lists
+ * @scatter_buf_size: Size of each scatter buffer
+ * @last_buf_end_offset: Offset to the last entry
+ * @num_entries: Total entries of all scatter bufs
+ *
+ * Return: None
+ */
+static void
+hal_setup_link_idle_list_generic_be(struct hal_soc *soc,
+				    qdf_dma_addr_t scatter_bufs_base_paddr[],
+				    void *scatter_bufs_base_vaddr[],
+				    uint32_t num_scatter_bufs,
+				    uint32_t scatter_buf_size,
+				    uint32_t last_buf_end_offset,
+				    uint32_t num_entries)
+{
+	int i;
+	uint32_t *prev_buf_link_ptr = NULL;
+	uint32_t reg_scatter_buf_size, reg_tot_scatter_buf_size;
+	uint32_t val;
+
+	/* Link the scatter buffers */
+	for (i = 0; i < num_scatter_bufs; i++) {
+		if (i > 0) {
+			prev_buf_link_ptr[0] =
+				scatter_bufs_base_paddr[i] & 0xffffffff;
+			prev_buf_link_ptr[1] = HAL_SM(
+				HWIO_WBM_R0_SCATTERED_LINK_DESC_LIST_BASE_MSB,
+				BASE_ADDRESS_39_32,
+				((uint64_t)(scatter_bufs_base_paddr[i])
+				 >> 32)) | HAL_SM(
+				HWIO_WBM_R0_SCATTERED_LINK_DESC_LIST_BASE_MSB,
+				ADDRESS_MATCH_TAG,
+				ADDRESS_MATCH_TAG_VAL);
+		}
+		prev_buf_link_ptr = (uint32_t *)(scatter_bufs_base_vaddr[i] +
+			scatter_buf_size - WBM_IDLE_SCATTER_BUF_NEXT_PTR_SIZE);
+	}
+
+	/* TBD: Register programming partly based on MLD & the rest based on
+	 * inputs from HW team. Not complete yet.
+	 */
+
+	reg_scatter_buf_size = (scatter_buf_size -
+				WBM_IDLE_SCATTER_BUF_NEXT_PTR_SIZE) / 64;
+	reg_tot_scatter_buf_size = ((scatter_buf_size -
+		WBM_IDLE_SCATTER_BUF_NEXT_PTR_SIZE) * num_scatter_bufs) / 64;
+
+	HAL_REG_WRITE(soc,
+		HWIO_WBM_R0_IDLE_LIST_CONTROL_ADDR(
+		WBM_REG_REG_BASE),
+		HAL_SM(HWIO_WBM_R0_IDLE_LIST_CONTROL, SCATTER_BUFFER_SIZE,
+		reg_scatter_buf_size) |
+		HAL_SM(HWIO_WBM_R0_IDLE_LIST_CONTROL, LINK_DESC_IDLE_LIST_MODE,
+		0x1));
+
+	HAL_REG_WRITE(soc,
+		HWIO_WBM_R0_IDLE_LIST_SIZE_ADDR(
+		WBM_REG_REG_BASE),
+		HAL_SM(HWIO_WBM_R0_IDLE_LIST_SIZE,
+		SCATTER_RING_SIZE_OF_IDLE_LINK_DESC_LIST,
+		reg_tot_scatter_buf_size));
+
+	HAL_REG_WRITE(soc,
+		HWIO_WBM_R0_SCATTERED_LINK_DESC_LIST_BASE_LSB_ADDR(
+		WBM_REG_REG_BASE),
+		scatter_bufs_base_paddr[0] & 0xffffffff);
+
+	HAL_REG_WRITE(soc,
+		HWIO_WBM_R0_SCATTERED_LINK_DESC_LIST_BASE_MSB_ADDR(
+		WBM_REG_REG_BASE),
+		((uint64_t)(scatter_bufs_base_paddr[0]) >> 32) &
+		HWIO_WBM_R0_SCATTERED_LINK_DESC_LIST_BASE_MSB_BASE_ADDRESS_39_32_BMSK);
+
+	HAL_REG_WRITE(soc,
+		HWIO_WBM_R0_SCATTERED_LINK_DESC_LIST_BASE_MSB_ADDR(
+		WBM_REG_REG_BASE),
+		HAL_SM(HWIO_WBM_R0_SCATTERED_LINK_DESC_LIST_BASE_MSB,
+		BASE_ADDRESS_39_32, ((uint64_t)(scatter_bufs_base_paddr[0])
+								>> 32)) |
+		HAL_SM(HWIO_WBM_R0_SCATTERED_LINK_DESC_LIST_BASE_MSB,
+		ADDRESS_MATCH_TAG, ADDRESS_MATCH_TAG_VAL));
+
+	/* ADDRESS_MATCH_TAG field in the above register is expected to match
+	 * with the upper bits of link pointer. The above write sets this field
+	 * to zero and we are also setting the upper bits of link pointers to
+	 * zero while setting up the link list of scatter buffers above
+	 */
+
+	/* Setup head and tail pointers for the idle list */
+	HAL_REG_WRITE(soc,
+		HWIO_WBM_R0_SCATTERED_LINK_DESC_PTR_HEAD_INFO_IX0_ADDR(
+		WBM_REG_REG_BASE),
+		scatter_bufs_base_paddr[num_scatter_bufs - 1] & 0xffffffff);
+	HAL_REG_WRITE(soc,
+		HWIO_WBM_R0_SCATTERED_LINK_DESC_PTR_HEAD_INFO_IX1_ADDR(
+		WBM_REG_REG_BASE),
+		HAL_SM(HWIO_WBM_R0_SCATTERED_LINK_DESC_PTR_HEAD_INFO_IX1,
+		BUFFER_ADDRESS_39_32,
+		((uint64_t)(scatter_bufs_base_paddr[num_scatter_bufs - 1])
+								>> 32)) |
+		HAL_SM(HWIO_WBM_R0_SCATTERED_LINK_DESC_PTR_HEAD_INFO_IX1,
+		HEAD_POINTER_OFFSET, last_buf_end_offset >> 2));
+
+	HAL_REG_WRITE(soc,
+		HWIO_WBM_R0_SCATTERED_LINK_DESC_PTR_HEAD_INFO_IX0_ADDR(
+		WBM_REG_REG_BASE),
+		scatter_bufs_base_paddr[0] & 0xffffffff);
+
+	HAL_REG_WRITE(soc,
+		HWIO_WBM_R0_SCATTERED_LINK_DESC_PTR_TAIL_INFO_IX0_ADDR(
+		WBM_REG_REG_BASE),
+		scatter_bufs_base_paddr[0] & 0xffffffff);
+	HAL_REG_WRITE(soc,
+		HWIO_WBM_R0_SCATTERED_LINK_DESC_PTR_TAIL_INFO_IX1_ADDR(
+		WBM_REG_REG_BASE),
+		HAL_SM(HWIO_WBM_R0_SCATTERED_LINK_DESC_PTR_TAIL_INFO_IX1,
+		BUFFER_ADDRESS_39_32,
+		((uint64_t)(scatter_bufs_base_paddr[0]) >>
+		32)) | HAL_SM(HWIO_WBM_R0_SCATTERED_LINK_DESC_PTR_TAIL_INFO_IX1,
+		TAIL_POINTER_OFFSET, 0));
+
+	HAL_REG_WRITE(soc,
+		HWIO_WBM_R0_SCATTERED_LINK_DESC_PTR_HP_ADDR(
+		WBM_REG_REG_BASE),
+		2 * num_entries);
+
+	/* Set RING_ID_DISABLE */
+	val = HAL_SM(HWIO_WBM_R0_WBM_IDLE_LINK_RING_MISC, RING_ID_DISABLE, 1);
+
+	/*
+	 * SRNG_ENABLE bit is not available in HWK v1 (QCA8074v1). Hence
+	 * check the presence of the bit before toggling it.
+	 */
+#ifdef HWIO_WBM_R0_WBM_IDLE_LINK_RING_MISC_SRNG_ENABLE_BMSK
+	val |= HAL_SM(HWIO_WBM_R0_WBM_IDLE_LINK_RING_MISC, SRNG_ENABLE, 1);
+#endif
+	HAL_REG_WRITE(soc,
+		      HWIO_WBM_R0_WBM_IDLE_LINK_RING_MISC_ADDR(WBM_REG_REG_BASE),
+		      val);
+}
+
+/**
  * hal_rx_wbm_err_src_get_be() - Get WBM error source from descriptor
  * @ring_desc: ring descriptor
  *
@@ -326,6 +446,12 @@ static uint32_t hal_rx_wbm_err_src_get_be(hal_ring_desc_t ring_desc)
 					     HAL_BE_WBM_RELEASE_DIR_RX);
 }
 
+/**
+ * hal_rx_ret_buf_manager_get_be() - Get return buffer manager from ring desc
+ * @ring_desc: ring descriptor
+ *
+ * Return: rbm
+ */
 uint8_t hal_rx_ret_buf_manager_get_be(hal_ring_desc_t ring_desc)
 {
 	/*
@@ -358,6 +484,13 @@ uint8_t hal_rx_ret_buf_manager_get_be(hal_ring_desc_t ring_desc)
 	WBM2SW_COMPLETION_RING_RX_RXDMA_ERROR_CODE_MASK) >>	\
 	WBM2SW_COMPLETION_RING_RX_RXDMA_ERROR_CODE_LSB)
 
+/**
+ * hal_rx_wbm_err_info_get_generic_be(): Retrieves WBM error code and reason and
+ *	save it to hal_wbm_err_desc_info structure passed by caller
+ * @wbm_desc: wbm ring descriptor
+ * @wbm_er_info1: hal_wbm_err_desc_info structure, output parameter.
+ * Return: void
+ */
 void hal_rx_wbm_err_info_get_generic_be(void *wbm_desc, void *wbm_er_info1)
 {
 	struct hal_wbm_err_desc_info *wbm_er_info =
@@ -428,11 +561,13 @@ static void hal_rx_msdu_link_desc_set_be(hal_soc_handle_t hal_soc_hdl,
 }
 
 /**
- * hal_rx_buf_cookie_rbm_get_be() - Get the cookie and return buffer
- *                                  manager from the REO entrance ring desc
- * @buf_addr_info_hdl: Buffer address info element from ring desc
- * @buf_info_hdl: structure to return the buffer information
+ * hal_rx_reo_ent_buf_paddr_get_be: Gets the physical address and
+ * cookie from the REO entrance ring element
  *
+ * @ hal_rx_desc_cookie: Opaque cookie pointer used by HAL to get to
+ * the current descriptor
+ * @ buf_info: structure to return the buffer information
+ * @ msdu_cnt: pointer to msdu count in MPDU
  * Return: void
  */
 static
@@ -453,18 +588,7 @@ void hal_rx_buf_cookie_rbm_get_be(uint32_t *buf_addr_info_hdl,
 						(hal_ring_desc_t)buf_addr_info);
 }
 
-/**
- * hal_rx_en_mcast_fp_data_filter_generic_be() - Is mcast filter pass enabled
- *
- * Return: true default for BE WIN
- */
-static inline
-bool hal_rx_en_mcast_fp_data_filter_generic_be(void)
-{
-	return true;
-}
-
-/**
+/*
  * hal_rxdma_buff_addr_info_set_be() - set the buffer_addr_info of the
  *				    rxdma ring entry.
  * @rxdma_entry: descriptor entry
@@ -503,7 +627,6 @@ static uint32_t hal_rx_get_reo_error_code_be(hal_ring_desc_t rx_desc)
 
 /**
  * hal_gen_reo_remap_val_generic_be() - Generate the reo map value
- * @remap_reg: remap register
  * @ix0_map: mapping values for reo
  *
  * Return: IX0 reo remap register value to be written
@@ -623,63 +746,132 @@ static uint8_t hal_rx_reo_buf_type_get_be(hal_ring_desc_t rx_desc)
 void hal_cookie_conversion_reg_cfg_be(hal_soc_handle_t hal_soc_hdl,
 				      struct hal_hw_cc_config *cc_cfg)
 {
-	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+	uint32_t reg_addr, reg_val = 0;
+	struct hal_soc *soc = (struct hal_soc *)hal_soc_hdl;
 
-	hal_soc->ops->hal_cookie_conversion_reg_cfg_be(hal_soc_hdl, cc_cfg);
+	/* REO CFG */
+	reg_addr = HWIO_REO_R0_SW_COOKIE_CFG0_ADDR(REO_REG_REG_BASE);
+	reg_val = cc_cfg->lut_base_addr_31_0;
+	HAL_REG_WRITE(soc, reg_addr, reg_val);
+
+	reg_addr = HWIO_REO_R0_SW_COOKIE_CFG1_ADDR(REO_REG_REG_BASE);
+	reg_val = 0;
+	reg_val |= HAL_SM(HWIO_REO_R0_SW_COOKIE_CFG1,
+			  SW_COOKIE_CONVERT_GLOBAL_ENABLE,
+			  cc_cfg->cc_global_en);
+	reg_val |= HAL_SM(HWIO_REO_R0_SW_COOKIE_CFG1,
+			  SW_COOKIE_CONVERT_ENABLE,
+			  cc_cfg->cc_global_en);
+	reg_val |= HAL_SM(HWIO_REO_R0_SW_COOKIE_CFG1,
+			  PAGE_ALIGNMENT,
+			  cc_cfg->page_4k_align);
+	reg_val |= HAL_SM(HWIO_REO_R0_SW_COOKIE_CFG1,
+			  COOKIE_OFFSET_MSB,
+			  cc_cfg->cookie_offset_msb);
+	reg_val |= HAL_SM(HWIO_REO_R0_SW_COOKIE_CFG1,
+			  COOKIE_PAGE_MSB,
+			  cc_cfg->cookie_page_msb);
+	reg_val |= HAL_SM(HWIO_REO_R0_SW_COOKIE_CFG1,
+			  CMEM_LUT_BASE_ADDR_39_32,
+			  cc_cfg->lut_base_addr_39_32);
+	HAL_REG_WRITE(soc, reg_addr, reg_val);
+
+	/* WBM CFG */
+	reg_addr = HWIO_WBM_R0_SW_COOKIE_CFG0_ADDR(WBM_REG_REG_BASE);
+	reg_val = cc_cfg->lut_base_addr_31_0;
+	HAL_REG_WRITE(soc, reg_addr, reg_val);
+
+	reg_addr = HWIO_WBM_R0_SW_COOKIE_CFG1_ADDR(WBM_REG_REG_BASE);
+	reg_val = 0;
+	reg_val |= HAL_SM(HWIO_WBM_R0_SW_COOKIE_CFG1,
+			  PAGE_ALIGNMENT,
+			  cc_cfg->page_4k_align);
+	reg_val |= HAL_SM(HWIO_WBM_R0_SW_COOKIE_CFG1,
+			  COOKIE_OFFSET_MSB,
+			  cc_cfg->cookie_offset_msb);
+	reg_val |= HAL_SM(HWIO_WBM_R0_SW_COOKIE_CFG1,
+			  COOKIE_PAGE_MSB,
+			  cc_cfg->cookie_page_msb);
+	reg_val |= HAL_SM(HWIO_WBM_R0_SW_COOKIE_CFG1,
+			  CMEM_LUT_BASE_ADDR_39_32,
+			  cc_cfg->lut_base_addr_39_32);
+	HAL_REG_WRITE(soc, reg_addr, reg_val);
+
+	/*
+	 * WCSS_UMAC_WBM_R0_SW_COOKIE_CONVERT_CFG default value is 0x1FE,
+	 */
+	reg_addr = HWIO_WBM_R0_SW_COOKIE_CONVERT_CFG_ADDR(WBM_REG_REG_BASE);
+	reg_val = 0;
+	reg_val |= HAL_SM(HWIO_WBM_R0_SW_COOKIE_CONVERT_CFG,
+			  WBM_COOKIE_CONV_GLOBAL_ENABLE,
+			  cc_cfg->cc_global_en);
+	reg_val |= HAL_SM(HWIO_WBM_R0_SW_COOKIE_CONVERT_CFG,
+			  WBM2SW6_COOKIE_CONVERSION_EN,
+			  cc_cfg->wbm2sw6_cc_en);
+	reg_val |= HAL_SM(HWIO_WBM_R0_SW_COOKIE_CONVERT_CFG,
+			  WBM2SW5_COOKIE_CONVERSION_EN,
+			  cc_cfg->wbm2sw5_cc_en);
+	reg_val |= HAL_SM(HWIO_WBM_R0_SW_COOKIE_CONVERT_CFG,
+			  WBM2SW4_COOKIE_CONVERSION_EN,
+			  cc_cfg->wbm2sw4_cc_en);
+	reg_val |= HAL_SM(HWIO_WBM_R0_SW_COOKIE_CONVERT_CFG,
+			  WBM2SW3_COOKIE_CONVERSION_EN,
+			  cc_cfg->wbm2sw3_cc_en);
+	reg_val |= HAL_SM(HWIO_WBM_R0_SW_COOKIE_CONVERT_CFG,
+			  WBM2SW2_COOKIE_CONVERSION_EN,
+			  cc_cfg->wbm2sw2_cc_en);
+	reg_val |= HAL_SM(HWIO_WBM_R0_SW_COOKIE_CONVERT_CFG,
+			  WBM2SW1_COOKIE_CONVERSION_EN,
+			  cc_cfg->wbm2sw1_cc_en);
+	reg_val |= HAL_SM(HWIO_WBM_R0_SW_COOKIE_CONVERT_CFG,
+			  WBM2SW0_COOKIE_CONVERSION_EN,
+			  cc_cfg->wbm2sw0_cc_en);
+	reg_val |= HAL_SM(HWIO_WBM_R0_SW_COOKIE_CONVERT_CFG,
+			  WBM2FW_COOKIE_CONVERSION_EN,
+			  cc_cfg->wbm2fw_cc_en);
+	HAL_REG_WRITE(soc, reg_addr, reg_val);
+
+#ifdef HWIO_WBM_R0_WBM_CFG_2_COOKIE_DEBUG_SEL_BMSK
+	reg_addr = HWIO_WBM_R0_WBM_CFG_2_ADDR(WBM_REG_REG_BASE);
+	reg_val = 0;
+	reg_val |= HAL_SM(HWIO_WBM_R0_WBM_CFG_2,
+			  COOKIE_DEBUG_SEL,
+			  cc_cfg->cc_global_en);
+
+	reg_val |= HAL_SM(HWIO_WBM_R0_WBM_CFG_2,
+			  COOKIE_CONV_INDICATION_EN,
+			  cc_cfg->cc_global_en);
+
+	reg_val |= HAL_SM(HWIO_WBM_R0_WBM_CFG_2,
+			  ERROR_PATH_COOKIE_CONV_EN,
+			  cc_cfg->error_path_cookie_conv_en);
+
+	reg_val |= HAL_SM(HWIO_WBM_R0_WBM_CFG_2,
+			  RELEASE_PATH_COOKIE_CONV_EN,
+			  cc_cfg->release_path_cookie_conv_en);
+
+	HAL_REG_WRITE(soc, reg_addr, reg_val);
+#endif
+#ifdef DP_HW_COOKIE_CONVERT_EXCEPTION
+	/*
+	 * To enable indication for HW cookie conversion done or not for
+	 * WBM, WCSS_UMAC_WBM_R0_MISC_CONTROL spare_control field 15th
+	 * bit spare_control[15] should be set.
+	 */
+	reg_addr = HWIO_WBM_R0_MISC_CONTROL_ADDR(WBM_REG_REG_BASE);
+	reg_val = HAL_REG_READ(soc, reg_addr);
+	reg_val |= HAL_SM(HWIO_WCSS_UMAC_WBM_R0_MISC_CONTROL,
+			  SPARE_CONTROL,
+			  HAL_WBM_MISC_CONTROL_SPARE_CONTROL_FIELD_BIT15);
+	HAL_REG_WRITE(soc, reg_addr, reg_val);
+#endif
 }
 qdf_export_symbol(hal_cookie_conversion_reg_cfg_be);
 
-static inline void
-hal_msdu_desc_info_set_be(hal_soc_handle_t hal_soc_hdl,
-			  void *msdu_desc, uint32_t dst_ind,
-			  uint32_t nbuf_len)
-{
-	struct rx_msdu_desc_info *msdu_desc_info =
-		(struct rx_msdu_desc_info *)msdu_desc;
-	struct rx_msdu_ext_desc_info *msdu_ext_desc_info =
-		(struct rx_msdu_ext_desc_info *)(msdu_desc_info + 1);
-
-	HAL_RX_MSDU_DESC_INFO_SET(msdu_desc_info,
-				  FIRST_MSDU_IN_MPDU_FLAG, 1);
-	HAL_RX_MSDU_DESC_INFO_SET(msdu_desc_info,
-				  LAST_MSDU_IN_MPDU_FLAG, 1);
-	HAL_RX_MSDU_DESC_INFO_SET(msdu_desc_info,
-				  MSDU_CONTINUATION, 0x0);
-	HAL_RX_MSDU_DESC_INFO_SET(msdu_desc_info,
-				  MSDU_LENGTH, nbuf_len);
-	HAL_RX_MSDU_DESC_INFO_SET(msdu_desc_info,
-				  SA_IS_VALID, 1);
-	HAL_RX_MSDU_DESC_INFO_SET(msdu_desc_info,
-				  DA_IS_VALID, 1);
-	HAL_RX_MSDU_REO_DST_IND_SET(msdu_ext_desc_info,
-				    REO_DESTINATION_INDICATION, dst_ind);
-}
-
-static inline void
-hal_mpdu_desc_info_set_be(hal_soc_handle_t hal_soc_hdl,
-			  void *ent_desc,
-			  void *mpdu_desc,
-			  uint32_t seq_no)
-{
-	struct rx_mpdu_desc_info *mpdu_desc_info =
-			(struct rx_mpdu_desc_info *)mpdu_desc;
-	uint8_t *desc = (uint8_t *)ent_desc;
-
-	HAL_RX_FLD_SET(desc, REO_ENTRANCE_RING,
-		       MPDU_SEQUENCE_NUMBER, seq_no);
-
-	HAL_RX_MPDU_DESC_INFO_SET(mpdu_desc_info,
-				  MSDU_COUNT, 0x1);
-	HAL_RX_MPDU_DESC_INFO_SET(mpdu_desc_info,
-				  FRAGMENT_FLAG, 0x1);
-	HAL_RX_MPDU_DESC_INFO_SET(mpdu_desc_info,
-				  RAW_MPDU, 0x0);
-}
-
 /**
- * hal_rx_msdu_reo_dst_ind_get_be() - Gets the REO destination ring ID
- *                                    from the msdu desc info
- * @hal_soc_hdl: hal_soc handle
+ * hal_rx_msdu_reo_dst_ind_get: Gets the REO
+ * destination ring ID from the msdu desc info
+ *
  * @msdu_link_desc : Opaque cookie pointer used by HAL to get to
  * the current descriptor
  *
@@ -697,7 +889,7 @@ uint32_t hal_rx_msdu_reo_dst_ind_get_be(hal_soc_handle_t hal_soc_hdl,
 
 	msdu_details = hal_rx_link_desc_msdu0_ptr(msdu_link, hal_soc);
 
-	/* The first msdu in the link should exist */
+	/* The first msdu in the link should exsist */
 	msdu_desc_info = hal_rx_msdu_ext_desc_info_get_ptr(&msdu_details[0],
 							   hal_soc);
 	dst_ind = HAL_RX_MSDU_REO_DST_IND_GET(msdu_desc_info);
@@ -760,184 +952,29 @@ qdf_export_symbol(hal_reo_ring_remap_value_get_be);
 
 uint8_t hal_get_idle_link_bm_id_be(uint8_t chip_id)
 {
-	if (chip_id >= HAL_NUM_CHIPS)
-		return HAL_WBM_CHIP_INVALID;
-
-	return wbm_idle_link_bm_map[chip_id];
-}
-
-#ifdef DP_FEATURE_HW_COOKIE_CONVERSION
-#ifdef DP_HW_COOKIE_CONVERT_EXCEPTION
-static inline void
-hal_rx_wbm_rel_buf_paddr_get_be(hal_ring_desc_t rx_desc,
-				struct hal_buf_info *buf_info)
-{
-	if (hal_rx_wbm_get_cookie_convert_done(rx_desc))
-		buf_info->paddr =
-			(HAL_RX_WBM_COMP_BUF_ADDR_31_0_GET(rx_desc) |
-			 ((uint64_t)(HAL_RX_WBM_COMP_BUF_ADDR_39_32_GET(rx_desc)) << 32));
-	else
-		buf_info->paddr =
-			(HAL_RX_WBM_BUF_ADDR_31_0_GET(rx_desc) |
-			 ((uint64_t)(HAL_RX_WBM_BUF_ADDR_39_32_GET(rx_desc)) << 32));
-}
-#else
-static inline void
-hal_rx_wbm_rel_buf_paddr_get_be(hal_ring_desc_t rx_desc,
-				struct hal_buf_info *buf_info)
-{
-	buf_info->paddr =
-		(HAL_RX_WBM_COMP_BUF_ADDR_31_0_GET(rx_desc) |
-		 ((uint64_t)(HAL_RX_WBM_COMP_BUF_ADDR_39_32_GET(rx_desc)) << 32));
-}
-#endif
-#else /* !DP_FEATURE_HW_COOKIE_CONVERSION */
-static inline void
-hal_rx_wbm_rel_buf_paddr_get_be(hal_ring_desc_t rx_desc,
-				struct hal_buf_info *buf_info)
-{
-	buf_info->paddr =
-		(HAL_RX_WBM_BUF_ADDR_31_0_GET(rx_desc) |
-		 ((uint64_t)(HAL_RX_WBM_BUF_ADDR_39_32_GET(rx_desc)) << 32));
-}
-#endif
-
-#ifdef DP_UMAC_HW_RESET_SUPPORT
-/**
- * hal_unregister_reo_send_cmd_be() - Unregister Reo send command callback.
- * @hal_soc: HAL soc handle
- *
- * Return: None
- */
-static
-void hal_unregister_reo_send_cmd_be(struct hal_soc *hal_soc)
-{
-	hal_soc->ops->hal_reo_send_cmd = NULL;
+	return (WBM_IDLE_DESC_LIST + chip_id);
 }
 
 /**
- * hal_register_reo_send_cmd_be() - Register Reo send command callback.
- * @hal_soc: HAL soc handle
+ * hal_hw_txrx_default_ops_attach_be() - Attach the default hal ops for
+ *		beryllium chipsets.
+ * @hal_soc_hdl: HAL soc handle
  *
  * Return: None
  */
-static
-void hal_register_reo_send_cmd_be(struct hal_soc *hal_soc)
-{
-	hal_soc->ops->hal_reo_send_cmd = hal_reo_send_cmd_be;
-}
-
-/**
- * hal_reset_rx_reo_tid_q_be() - reset the reo tid queue.
- * @hal_soc: HAL soc handle
- * @hw_qdesc_vaddr: start address of the tid queue
- * @size: size of address pointed by hw_qdesc_vaddr
- *
- * Return: None
- */
-static void
-hal_reset_rx_reo_tid_q_be(struct hal_soc *hal_soc, void *hw_qdesc_vaddr,
-			  uint32_t size)
-{
-	struct rx_reo_queue *hw_qdesc = (struct rx_reo_queue *)hw_qdesc_vaddr;
-	int i;
-
-	if (!hw_qdesc)
-		return;
-
-	hw_qdesc->svld = 0;
-	hw_qdesc->ssn = 0;
-	hw_qdesc->current_index = 0;
-	hw_qdesc->pn_valid = 0;
-	hw_qdesc->pn_31_0 = 0;
-	hw_qdesc->pn_63_32 = 0;
-	hw_qdesc->pn_95_64 = 0;
-	hw_qdesc->pn_127_96 = 0;
-	hw_qdesc->last_rx_enqueue_timestamp = 0;
-	hw_qdesc->last_rx_dequeue_timestamp = 0;
-	hw_qdesc->ptr_to_next_aging_queue_39_32 = 0;
-	hw_qdesc->ptr_to_next_aging_queue_31_0 = 0;
-	hw_qdesc->ptr_to_previous_aging_queue_31_0 = 0;
-	hw_qdesc->ptr_to_previous_aging_queue_39_32 = 0;
-	hw_qdesc->rx_bitmap_31_0 = 0;
-	hw_qdesc->rx_bitmap_63_32 = 0;
-	hw_qdesc->rx_bitmap_95_64 = 0;
-	hw_qdesc->rx_bitmap_127_96 = 0;
-	hw_qdesc->rx_bitmap_159_128 = 0;
-	hw_qdesc->rx_bitmap_191_160 = 0;
-	hw_qdesc->rx_bitmap_223_192 = 0;
-	hw_qdesc->rx_bitmap_255_224 = 0;
-	hw_qdesc->rx_bitmap_287_256 = 0;
-	hw_qdesc->current_msdu_count = 0;
-	hw_qdesc->current_mpdu_count = 0;
-	hw_qdesc->last_sn_reg_index = 0;
-
-	if (size > sizeof(struct rx_reo_queue)) {
-		struct rx_reo_queue_ext *ext_desc;
-		struct rx_reo_queue_1k *kdesc;
-
-		i = ((size - sizeof(struct rx_reo_queue)) /
-				sizeof(struct rx_reo_queue_ext));
-
-		if (i > 10) {
-			i = 10;
-			kdesc = (struct rx_reo_queue_1k *)
-				(hw_qdesc_vaddr + sizeof(struct rx_reo_queue) +
-				 (10 * sizeof(struct rx_reo_queue_ext)));
-
-			kdesc->rx_bitmap_319_288 = 0;
-			kdesc->rx_bitmap_351_320 = 0;
-			kdesc->rx_bitmap_383_352 = 0;
-			kdesc->rx_bitmap_415_384 = 0;
-			kdesc->rx_bitmap_447_416 = 0;
-			kdesc->rx_bitmap_479_448 = 0;
-			kdesc->rx_bitmap_511_480 = 0;
-			kdesc->rx_bitmap_543_512 = 0;
-			kdesc->rx_bitmap_575_544 = 0;
-			kdesc->rx_bitmap_607_576 = 0;
-			kdesc->rx_bitmap_639_608 = 0;
-			kdesc->rx_bitmap_671_640 = 0;
-			kdesc->rx_bitmap_703_672 = 0;
-			kdesc->rx_bitmap_735_704 = 0;
-			kdesc->rx_bitmap_767_736 = 0;
-			kdesc->rx_bitmap_799_768 = 0;
-			kdesc->rx_bitmap_831_800 = 0;
-			kdesc->rx_bitmap_863_832 = 0;
-			kdesc->rx_bitmap_895_864 = 0;
-			kdesc->rx_bitmap_927_896 = 0;
-			kdesc->rx_bitmap_959_928 = 0;
-			kdesc->rx_bitmap_991_960 = 0;
-			kdesc->rx_bitmap_1023_992 = 0;
-		}
-
-		ext_desc = (struct rx_reo_queue_ext *)
-			(hw_qdesc_vaddr + (sizeof(struct rx_reo_queue)));
-
-		while (i > 0) {
-			qdf_mem_zero(&ext_desc->mpdu_link_pointer_0,
-				     (15 * sizeof(struct rx_mpdu_link_ptr)));
-
-			ext_desc++;
-			i--;
-		}
-	}
-}
-#endif
-
-static inline uint8_t hal_rx_get_phy_ppdu_id_size_be(void)
-{
-	return sizeof(uint64_t);
-}
-
 void hal_hw_txrx_default_ops_attach_be(struct hal_soc *hal_soc)
 {
 	hal_soc->ops->hal_get_reo_qdesc_size = hal_get_reo_qdesc_size_be;
-	hal_soc->ops->hal_get_rx_max_ba_window = hal_get_rx_max_ba_window_be;
 	hal_soc->ops->hal_set_link_desc_addr = hal_set_link_desc_addr_be;
 	hal_soc->ops->hal_tx_init_data_ring = hal_tx_init_data_ring_be;
+	hal_soc->ops->hal_get_ba_aging_timeout = hal_get_ba_aging_timeout_be;
+	hal_soc->ops->hal_set_ba_aging_timeout = hal_set_ba_aging_timeout_be;
 	hal_soc->ops->hal_get_reo_reg_base_offset =
 					hal_get_reo_reg_base_offset_be;
+	hal_soc->ops->hal_setup_link_idle_list =
+				hal_setup_link_idle_list_generic_be;
 	hal_soc->ops->hal_reo_setup = hal_reo_setup_generic_be;
+
 	hal_soc->ops->hal_rx_reo_buf_paddr_get = hal_rx_reo_buf_paddr_get_be;
 	hal_soc->ops->hal_rx_msdu_link_desc_set = hal_rx_msdu_link_desc_set_be;
 	hal_soc->ops->hal_rx_buf_cookie_rbm_get = hal_rx_buf_cookie_rbm_get_be;
@@ -961,8 +998,6 @@ void hal_hw_txrx_default_ops_attach_be(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_rx_err_status_get = hal_rx_err_status_get_be;
 	hal_soc->ops->hal_rx_reo_buf_type_get = hal_rx_reo_buf_type_get_be;
 	hal_soc->ops->hal_rx_wbm_err_src_get = hal_rx_wbm_err_src_get_be;
-	hal_soc->ops->hal_rx_wbm_rel_buf_paddr_get =
-					hal_rx_wbm_rel_buf_paddr_get_be;
 
 	hal_soc->ops->hal_reo_send_cmd = hal_reo_send_cmd_be;
 	hal_soc->ops->hal_reo_qdesc_setup = hal_reo_qdesc_setup_be;
@@ -971,29 +1006,4 @@ void hal_hw_txrx_default_ops_attach_be(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_rx_msdu_reo_dst_ind_get =
 						hal_rx_msdu_reo_dst_ind_get_be;
 	hal_soc->ops->hal_get_idle_link_bm_id = hal_get_idle_link_bm_id_be;
-	hal_soc->ops->hal_rx_msdu_ext_desc_info_get_ptr =
-					hal_rx_msdu_ext_desc_info_get_ptr_be;
-	hal_soc->ops->hal_msdu_desc_info_set = hal_msdu_desc_info_set_be;
-	hal_soc->ops->hal_mpdu_desc_info_set = hal_mpdu_desc_info_set_be;
-#ifdef DP_UMAC_HW_RESET_SUPPORT
-	hal_soc->ops->hal_unregister_reo_send_cmd =
-					hal_unregister_reo_send_cmd_be;
-	hal_soc->ops->hal_register_reo_send_cmd = hal_register_reo_send_cmd_be;
-	hal_soc->ops->hal_reset_rx_reo_tid_q = hal_reset_rx_reo_tid_q_be;
-#endif
-	hal_soc->ops->hal_rx_tlv_get_pn_num = hal_rx_tlv_get_pn_num_be;
-#ifndef CONFIG_WORD_BASED_TLV
-	hal_soc->ops->hal_rx_get_qdesc_addr = hal_rx_get_qdesc_addr_be;
-#endif
-	hal_soc->ops->hal_set_reo_ent_desc_reo_dest_ind =
-					hal_set_reo_ent_desc_reo_dest_ind_be;
-	hal_soc->ops->hal_get_reo_ent_desc_qdesc_addr =
-					hal_get_reo_ent_desc_qdesc_addr_be;
-	hal_soc->ops->hal_rx_en_mcast_fp_data_filter =
-				hal_rx_en_mcast_fp_data_filter_generic_be;
-	hal_soc->ops->hal_rx_get_phy_ppdu_id_size =
-					hal_rx_get_phy_ppdu_id_size_be;
-	hal_soc->ops->hal_rx_phy_legacy_get_rssi =
-					hal_rx_phy_legacy_get_rssi_be;
-	hal_soc->ops->hal_rx_parse_eht_sig_hdr = hal_rx_parse_eht_sig_hdr_be;
 }

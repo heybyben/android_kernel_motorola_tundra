@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -18,7 +17,7 @@
  */
 
 /**
- * DOC: wlan_vdev_mlme_ser.h
+ * @file wlan_vdev_mlme_ser.h
  * This file implements the APIs to support interface between vdev_mlme and
  * serialization module
  */

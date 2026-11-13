@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2014, 2017, 2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -26,10 +25,9 @@
 #ifndef __DL_LIST_H___
 #define __DL_LIST_H___
 
-#include "qdf_util.h"
-
 #define A_CONTAINING_STRUCT(address, struct_type, field_name) \
-	(qdf_container_of(address, struct_type, field_name))
+			((struct_type *)((char *)(address) - \
+				 (char *)(&((struct_type *)0)->field_name)))
 
 /* list functions */
 /* pointers for the list */

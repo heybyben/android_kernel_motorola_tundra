@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -164,19 +163,6 @@ int ce_send_fast(struct CE_handle *copyeng, qdf_nbuf_t msdu,
 
 #endif
 
-/*
- * ce_enqueue_desc() - enqueu desc to CE ring.
- * @copyeng: which copy engine to use
- * @msdu: data buffer
- * @transfer_id: arbitrary ID; reflected to destination
- * @download_len: length of the packet download to FW.
- * @encap_type: packet encap type
- *
- */
-int ce_enqueue_desc(struct CE_handle *copyeng, qdf_nbuf_t msdu,
-		    unsigned int transfer_id, uint32_t download_len,
-		    uint8_t encap_type);
-
 void ce_update_tx_ring(struct CE_handle *ce_tx_hdl, uint32_t num_htt_cmpls);
 extern qdf_nbuf_t ce_batch_send(struct CE_handle *ce_tx_hdl,
 		qdf_nbuf_t msdu,
@@ -212,7 +198,7 @@ void ce_sendlist_init(struct ce_sendlist *sendlist);
  * ce_sendlist_buf_add() - Append a simple buffer (address/length) to a sendlist
  * @sendlist: Sendlist
  * @buffer: buffer
- * @nbytes: number of bytes to append
+ * @nbytes: numer of bytes to append
  * @flags: flags
  * @user_flags: user flags
  *
@@ -388,63 +374,11 @@ QDF_STATUS ce_completed_send_next(struct CE_handle *copyeng,
 				  unsigned int *hw_idx,
 				  uint32_t *toeplitz_hash_result);
 
-#ifdef CUSTOM_CB_SCHEDULER_SUPPORT
-/*==================CE custom callbacks=================================*/
-
-/**
- * ce_register_custom_cb() - Helper API to register the custom callback
- * @copyeng: Pointer to CE handle
- * @custom_cb: Custom call back function pointer
- * @custom_cb_context: Custom callback context
- *
- * return: void
- */
-void
-ce_register_custom_cb(struct CE_handle *copyeng, void (*custom_cb)(void *),
-		      void *custom_cb_context);
-
-/**
- * ce_unregister_custom_cb() - Helper API to unregister the custom callback
- * @copyeng: Pointer to CE handle
- *
- * return: void
- */
-void
-ce_unregister_custom_cb(struct CE_handle *copyeng);
-
-/**
- * ce_enable_custom_cb() - Helper API to enable the custom callback
- * @copyeng: Pointer to CE handle
- *
- * return: void
- */
-void
-ce_enable_custom_cb(struct CE_handle *copyeng);
-
-/**
- * ce_disable_custom_cb() - Helper API to disable the custom callback
- * @copyeng: Pointer to CE handle
- *
- * return: void
- */
-void
-ce_disable_custom_cb(struct CE_handle *copyeng);
-#endif /* CUSTOM_CB_SCHEDULER_SUPPORT */
-
 /*==================CE Engine Initialization=================================*/
 
 /* Initialize an instance of a CE */
 struct CE_handle *ce_init(struct hif_softc *scn,
 			  unsigned int CE_id, struct CE_attr *attr);
-
-/*
- * hif_ce_desc_history_log_register() - Register hif_ce_desc_history buffers
- * to SSR driver dump.
- * @scn: HIF context
- *
- * Return: None
- */
-void hif_ce_desc_history_log_register(struct hif_softc *scn);
 
 /*==================CE Engine Shutdown=======================================*/
 /*
@@ -474,14 +408,6 @@ ce_cancel_send_next(struct CE_handle *copyeng,
 
 void ce_fini(struct CE_handle *copyeng);
 
-/*
- * hif_ce_desc_history_log_unregister() - unregister hif_ce_desc_history
- * buffers from SSR driver dump.
- *
- * Return: None
- */
-void hif_ce_desc_history_log_unregister(void);
-
 /*==================CE Interrupt Handlers====================================*/
 void ce_per_engine_service_any(int irq, struct hif_softc *scn);
 int ce_per_engine_service(struct hif_softc *scn, unsigned int CE_id);
@@ -492,15 +418,12 @@ void ce_disable_any_copy_compl_intr_nolock(struct hif_softc *scn);
 void ce_enable_any_copy_compl_intr_nolock(struct hif_softc *scn);
 
 /* API to check if any of the copy engine pipes has
- * pending frames for processing
+ * pending frames for prcoessing
  */
 bool ce_get_rx_pending(struct hif_softc *scn);
 
 /**
  * war_ce_src_ring_write_idx_set() - Set write index for CE source ring
- * @scn: HIF context
- * @ctrl_addr: address
- * @write_index: write index
  *
  * Return: None
  */
@@ -534,18 +457,6 @@ struct CE_attr {
 	unsigned int src_sz_max;
 	unsigned int dest_nentries;
 	void *reserved;
-};
-
-/**
- * struct CE_cmn_register_config - CE common register configuration structure
- * @offset:  offset of common register from base address of CE register.
- * @mask:    bit mask for values which are going to be set.
- * @value:   final value of the ce common register
- */
-struct CE_cmn_register_config {
-	uint32_t offset;
-	uint32_t mask;
-	uint32_t value;
 };
 
 /*
@@ -589,7 +500,7 @@ void ce_ipa_get_resource(struct CE_handle *ce,
  * Micro controller needs
  *  - Copy engine source descriptor base address
  *  - Copy engine source descriptor size
- *  - PCI BAR address to access copy engine register
+ *  - PCI BAR address to access copy engine regiser
  *
  * Return: None
  */
@@ -680,28 +591,6 @@ struct ce_ops {
 			    int *num_shadow_registers_configured);
 	int (*ce_get_index_info)(struct hif_softc *scn, void *ce_state,
 				 struct ce_index *info);
-#ifdef CONFIG_SHADOW_V3
-	void (*ce_prepare_shadow_register_v3_cfg)(struct hif_softc *scn,
-			    struct pld_shadow_reg_v3_cfg **shadow_config,
-			    int *num_shadow_registers_configured);
-#endif
-#ifdef FEATURE_DIRECT_LINK
-	QDF_STATUS (*ce_set_irq_config_by_ceid)(struct hif_softc *scn,
-						uint8_t ce_id, uint64_t addr,
-						uint32_t data);
-	uint16_t (*ce_get_direct_link_dest_buffers)(struct hif_softc *scn,
-						    uint64_t **dma_addr,
-						    uint32_t *buf_size);
-	QDF_STATUS (*ce_get_direct_link_ring_info)(struct hif_softc *scn,
-					   struct hif_direct_link_ce_info *info,
-					   uint8_t max_ce_info_len);
-#endif
-#ifdef CE_CMN_REG_CFG_QMI
-	int (*ce_prepare_cmn_reg_cfg)(
-			struct hif_softc *scn,
-			struct CE_cmn_register_config **host_ce_cmn_reg_cfg_ret,
-			uint32_t *host_ce_cmn_reg_num_ret);
-#endif
 };
 
 int hif_ce_bus_early_suspend(struct hif_softc *scn);
@@ -728,15 +617,4 @@ void ce_engine_service_reg(struct hif_softc *scn, int CE_id);
  */
 void ce_per_engine_service_fast(struct hif_softc *scn, int ce_id);
 
-void ce_tx_ring_write_idx_update_wrapper(struct CE_handle *ce_tx_hdl,
-					int coalesce);
-
-/*
- * ce_ring_flush_write_idx() - CE handler to flush write index
- * @ce_tx_hdl: ce handle
- * @force_flush: force flush the write idx if it set to true.
- *
- * Returns void
- */
-void ce_flush_tx_ring_write_idx(struct CE_handle *ce_tx_hdl, bool force_flush);
 #endif /* __COPY_ENGINE_API_H__ */

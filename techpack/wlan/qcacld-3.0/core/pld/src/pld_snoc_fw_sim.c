@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -157,7 +156,7 @@ static int pld_snoc_fw_sim_pm_suspend(struct device *dev)
 
 /**
  * pld_snoc_fw_sim_pm_resume() -PM resume callback function for power management
- * @dev: device
+ * @pdev: device
  *
  * This function is to resume the platform device when power management
  * is enabled.
@@ -200,7 +199,7 @@ static int pld_snoc_fw_sim_suspend_noirq(struct device *dev)
 
 /**
  * pld_snoc_fw_sim_resume_noirq() - Prepare for the execution of resume()
- * @dev: device
+ * @pdev: device
  *
  * Prepare for the execution of resume() by carrying out any
  * operations required for resuming the device that might be racing with

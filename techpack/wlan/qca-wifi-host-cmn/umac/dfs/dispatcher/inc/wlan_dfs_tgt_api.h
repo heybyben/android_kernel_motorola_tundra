@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -49,21 +48,19 @@
  *                         2). Chirp information (is chirp or non chirp),
  *                         3). Frequency offset.
  *                         4). Detector ID.
- *                         5). Frequency Hopping(FH) Radar type
- *                             (is frequency hopping or not).
  *
  * The packed argument structure is:
  *
- * ------------------------------32 bits arg----------------------------------
+ * ------------------------------32 bits arg----------------------------
  *
- * -------17 bits------|1 bit|1 bit|--2 bits-|-------8 bits------|1 bit|2 bits|
- * ____________________________________________________________________________
- *|                    |     |     |   | |   | | | | | | | | | | |     |   |   |
- *|---17 Unused bits---|  x  |  x  | x | | x |x|x|x| |x|x|x|x| |x|  x  | x | x |
- *|____________________|_____|_____|___|_|___|_|_|_|_|_|_|_|_|_|_|_____|___|___|
+ * ------------19 bits-------|--2 bits-|-------8 bits------|1 bit|2 bits|
+ * ______________________________________________________________________
+ *|                          |   | |   | | | | | | | | | | |     |   |   |
+ *|------19 Unused bits------| x | | x |x|x|x| |x|x|x|x| |x|  x  | x | x |
+ *|__________________________|___|_|___|_|_|_|_|_|_|_|_|_|_|_____|___|___|
  *
- *                     |_____|_____|_________|___________________|_____|_______|
- *                       FH   sign   det.ID     freq.offset       Chirp  seg.ID
+ *                           |_________|___________________|_____|_______|
+ *                              det.ID     freq.offset      Chirp  seg.ID
  *
  * @DFS_UNIT_TEST_NUM_ARGS:     Number of arguments for bangradar unit test
  *                              command.
@@ -78,18 +75,14 @@ enum {
 	DFS_MAX_NUM_UNIT_TEST_ARGS = DFS_UNIT_TEST_NUM_ARGS
 };
 
-#define SEG_ID_SHIFT               0
-#define IS_CHIRP_SHIFT             2
-#define FREQ_OFF_SHIFT             3
-#define DET_ID_SHIFT              11
-#define FREQ_OFFSET_SIGNBIT_SHIFT 13
-#define IS_FH_SHIFT               14
-#define SEG_ID_MASK              0x03
-#define IS_CHIRP_MASK            0x01
-#define FREQ_OFFSET_MASK         0xFF
-#define DET_ID_MASK              0x03
-#define FREQ_OFFSET_SIGNBIT_MASK 0x01
-#define IS_FH_MASK               0x01
+#define SEG_ID_SHIFT         0
+#define IS_CHIRP_SHIFT       2
+#define FREQ_OFF_SHIFT       3
+#define DET_ID_SHIFT        11
+#define SEG_ID_MASK       0x03
+#define IS_CHIRP_MASK     0x01
+#define FREQ_OFFSET_MASK  0xFF
+#define DET_ID_MASK       0x03
 
 /**
  * struct dfs_emulate_bang_radar_test_cmd - Unit test command structure to send
@@ -122,7 +115,7 @@ struct vdev_adfs_complete_status {
 	uint32_t chan_width;
 	uint32_t center_freq1;
 	uint32_t center_freq2;
-	enum ocac_status_type ocac_status;
+	uint32_t ocac_status;
 };
 
 extern struct dfs_to_mlme global_dfs_to_mlme;
@@ -164,7 +157,6 @@ tgt_dfs_set_current_channel_for_freq(struct wlan_objmgr_pdev *pdev,
  * tgt_dfs_radar_enable() - Enables the radar.
  * @pdev: Pointer to DFS pdev object.
  * @no_cac: If no_cac is 0, it cancels the CAC.
- * @opmode: operating mode
  * @enable: disable/enable radar
  *
  * This is called each time a channel change occurs, to (potentially) enable
@@ -182,7 +174,6 @@ QDF_STATUS tgt_dfs_radar_enable(
  * @insize: size of the input buffer.
  * @outdata: A buffer for the results.
  * @outsize: Size of the output buffer.
- * @error: returned error
  */
 QDF_STATUS tgt_dfs_control(struct wlan_objmgr_pdev *pdev,
 	u_int id,
@@ -245,7 +236,6 @@ static inline QDF_STATUS tgt_dfs_process_radar_ind(
 }
 #endif
 
-#ifdef WLAN_DFS_PARTIAL_OFFLOAD
 /**
  * tgt_dfs_process_phyerr() - Process phyerr.
  * @pdev: Pointer to DFS pdev object.
@@ -266,18 +256,6 @@ QDF_STATUS tgt_dfs_process_phyerr(struct wlan_objmgr_pdev *pdev,
 	uint8_t r_ext_rssi,
 	uint32_t r_rs_tstamp,
 	uint64_t r_fulltsf);
-#else
-static inline QDF_STATUS tgt_dfs_process_phyerr(struct wlan_objmgr_pdev *pdev,
-						void *buf,
-						uint16_t datalen,
-						uint8_t r_rssi,
-						uint8_t r_ext_rssi,
-						uint32_t r_rs_tstamp,
-						uint64_t r_fulltsf)
-{
-	return QDF_STATUS_SUCCESS;
-}
-#endif
 
 /**
  * tgt_dfs_process_phyerr_filter_offload() - Process radar event.
@@ -362,13 +340,38 @@ QDF_STATUS tgt_dfs_agile_precac_start(struct wlan_objmgr_pdev *pdev);
 /**
  * tgt_dfs_ocac_complete() - Process off channel cac complete indication.
  * @pdev: Pointer to DFS pdev object.
- * @ocac_status: Off channel CAC complete status.
+ * @vdev_adfs_complete_status: Off channel CAC complete status.
  *
  * wrapper function for  dfs_set_agile_precac_state.
  * This function called from outside of dfs component.
  */
 QDF_STATUS tgt_dfs_ocac_complete(struct wlan_objmgr_pdev *pdev,
 				 struct vdev_adfs_complete_status *ocac_status);
+
+/**
+ * tgt_dfs_find_vht80_precac_chan_freq() - Find VHT80 channel for precac
+ * @pdev: Pointer to DFS pdev object.
+ * @chan_mode: Channel mode.
+ * @ch_freq_seg1_mhz: Segment1 channel freq in MHZ.
+ * @cfreq1: cfreq1.
+ * @cfreq2: cfreq2.
+ * @phy_mode: Precac phymode.
+ * @dfs_set_cfreq2: Precac cfreq2
+ * @set_agile: Agile mode flag.
+ *
+ * wrapper function for  dfs_find_vht80_chan_for_precac_for_freq().
+ */
+#ifdef CONFIG_CHAN_FREQ_API
+QDF_STATUS
+tgt_dfs_find_vht80_precac_chan_freq(struct wlan_objmgr_pdev *pdev,
+				    uint32_t chan_mode,
+				    uint16_t ch_freq_mhz_seg1,
+				    uint32_t *cfreq1,
+				    uint32_t *cfreq2,
+				    uint32_t *phy_mode,
+				    bool *dfs_set_cfreq2,
+				    bool *set_agile);
+#endif
 
 /**
  * tgt_dfs_cac_complete() - Process cac complete indication.
@@ -394,7 +397,7 @@ QDF_STATUS tgt_dfs_reg_ev_handler(struct wlan_objmgr_psoc *psoc);
 
 /**
  * tgt_dfs_stop() - Clear dfs timers.
- * @pdev: Pointer to pdev object
+ * @dfs: Pointer to wlan_dfs structure.
  */
 QDF_STATUS tgt_dfs_stop(struct wlan_objmgr_pdev *pdev);
 
@@ -402,7 +405,6 @@ QDF_STATUS tgt_dfs_stop(struct wlan_objmgr_pdev *pdev);
 * tgt_dfs_process_emulate_bang_radar_cmd() - Process to emulate dfs bangradar
 *                                            command.
 * @pdev: Pointer to DFS pdev object.
-* @dfs_unit_test: bang radar emulation command
 *
 * Process  to emulate dfs bangradar command.
 *
@@ -561,20 +563,17 @@ tgt_dfs_send_subchan_marking(struct wlan_objmgr_pdev *pdev, bool subchanmark)
  * @pdev: Pointer to pdev object.
  * @fw_adfs_support_160: aDFS enabled when pdev is on 160/80P80MHz.
  * @fw_adfs_support_non_160: aDFS enabled when pdev is on 20/40/80MHz.
- * @fw_adfs_support_320: aDFS enabled when pdev is on 320 MHz.
  *
  * Return: void.
  */
 void tgt_dfs_set_fw_adfs_support(struct wlan_objmgr_pdev *pdev,
 				 bool fw_adfs_support_160,
-				 bool fw_adfs_support_non_160,
-				 bool fw_adfs_support_320);
+				 bool fw_adfs_support_non_160);
 #else
 static inline
 void tgt_dfs_set_fw_adfs_support(struct wlan_objmgr_pdev *pdev,
 				 bool fw_adfs_support_160,
-				 bool fw_adfs_support_non_160,
-				 bool fw_adfs_support_320)
+				 bool fw_adfs_support_non_160)
 {
 }
 #endif

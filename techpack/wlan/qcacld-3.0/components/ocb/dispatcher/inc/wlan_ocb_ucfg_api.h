@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2018-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -115,7 +114,7 @@ QDF_STATUS ucfg_ocb_dcc_clear_stats(struct wlan_objmgr_vdev *vdev,
  * ucfg_ocb_dcc_update_ndl() - ucfg API to update NDL
  * @vdev: vdev handle
  * @request: request parameters
- * @dcc_update_ndl_cb: callback for update response
+ * @dcc_update_ndl_cb: callback for update resposne
  * @arg: argument for the callback
  *
  * Return: QDF_STATUS_SUCCESS on success
@@ -129,14 +128,13 @@ QDF_STATUS ucfg_ocb_dcc_update_ndl(struct wlan_objmgr_vdev *vdev,
  * ucfg_ocb_register_for_dcc_stats_event() - register dcc stats
  * events callback
  * @pdev: pdev handle
- * @ctx: argument for the callback
+ * @context: argument for the callback
  * @dcc_stats_cb: callback for dcc stats event
  *
  * Return: QDF_STATUS_SUCCESS on success
  */
 QDF_STATUS ucfg_ocb_register_for_dcc_stats_event(struct wlan_objmgr_pdev *pdev,
 				void *ctx, ocb_sync_callback dcc_stats_cb);
-
 /**
  * ucfg_ocb_init() - OCB module initialization
  *
@@ -197,7 +195,7 @@ QDF_STATUS ucfg_ocb_update_dp_handle(struct wlan_objmgr_psoc *soc,
 
 /**
  * ucfg_ocb_set_txrx_pdev_id() - register txrx pdev id
- * @psoc: soc handle
+ * @soc: soc handle
  * @pdev_id: data path pdev ID
  *
  * Return: QDF_STATUS_SUCCESS on success
@@ -277,7 +275,7 @@ QDF_STATUS ucfg_ocb_update_dp_handle(struct wlan_objmgr_psoc *soc,
 
 /**
  * ucfg_ocb_set_txrx_pdev_id() - register txrx pdev id
- * @psoc: soc handle
+ * @soc: soc handle
  * @pdev_id: data path pdev ID
  *
  * Return: QDF_STATUS_SUCCESS on success

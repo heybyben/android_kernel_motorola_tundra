@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2012-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -64,7 +63,6 @@ __wlan_hdd_cfg80211_get_concurrency_matrix(struct wiphy *wiphy,
 	uint8_t i, feature_sets, max_feature_sets;
 	struct nlattr *tb[MAX_CONCURRENT_MATRIX + 1];
 	struct sk_buff *reply_skb;
-	uint32_t skb_len = NLMSG_HDRLEN;
 	struct hdd_context *hdd_ctx = wiphy_priv(wiphy);
 	int ret;
 
@@ -107,8 +105,8 @@ __wlan_hdd_cfg80211_get_concurrency_matrix(struct wiphy *wiphy,
 	for (i = 0; i < feature_sets; i++)
 		hdd_debug("[%d] 0x%02X", i, feature_set_matrix[i]);
 
-	skb_len += sizeof(u32) + sizeof(u32) * feature_sets;
-	reply_skb = wlan_cfg80211_vendor_cmd_alloc_reply_skb(wiphy, skb_len);
+	reply_skb = cfg80211_vendor_cmd_alloc_reply_skb(wiphy, sizeof(u32) +
+			sizeof(u32) * feature_sets + NLMSG_HDRLEN);
 	if (!reply_skb) {
 		hdd_err("Feature set matrix: buffer alloc fail");
 		return -ENOMEM;
@@ -122,10 +120,10 @@ __wlan_hdd_cfg80211_get_concurrency_matrix(struct wiphy *wiphy,
 		    sizeof(u32) * feature_sets,
 		    feature_set_matrix)) {
 		hdd_err("nla put fail");
-		wlan_cfg80211_vendor_free_skb(reply_skb);
+		kfree_skb(reply_skb);
 		return -EINVAL;
 	}
-	return wlan_cfg80211_vendor_cmd_reply(reply_skb);
+	return cfg80211_vendor_cmd_reply(reply_skb);
 }
 
 #undef MAX_CONCURRENT_MATRIX

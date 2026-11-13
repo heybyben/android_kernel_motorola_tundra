@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -761,33 +761,6 @@ void wlan_util_vdev_mgr_set_cac_timeout_for_vdev(struct wlan_objmgr_vdev *vdev,
 }
 #endif /* MOBILE_DFS_SUPPORT */
 
-void wlan_util_vdev_mgr_set_acs_mode_for_vdev(struct wlan_objmgr_vdev *vdev,
-					      bool is_acs_mode)
-{
-	struct vdev_mlme_obj *vdev_mlme;
-
-	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
-	if (!vdev_mlme) {
-		mlme_err("vdev_mlme is null");
-		return;
-	}
-
-	vdev_mlme->mgmt.ap.is_acs_mode = is_acs_mode;
-}
-
-bool wlan_util_vdev_mgr_get_acs_mode_for_vdev(struct wlan_objmgr_vdev *vdev)
-{
-	struct vdev_mlme_obj *vdev_mlme;
-
-	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
-	if (!vdev_mlme) {
-		mlme_err("vdev_mlme is null");
-		return false;
-	}
-
-	return vdev_mlme->mgmt.ap.is_acs_mode;
-}
-
 QDF_STATUS wlan_util_vdev_mgr_get_csa_channel_switch_time(
 		struct wlan_objmgr_vdev *vdev,
 		uint32_t *chan_switch_time)
@@ -919,14 +892,3 @@ QDF_STATUS wlan_util_vdev_mgr_quiet_offload(
 	return QDF_STATUS_SUCCESS;
 }
 #endif /* WLAN_FEATURE_11BE_MLO */
-
-QDF_STATUS wlan_util_vdev_peer_set_param_send(struct wlan_objmgr_vdev *vdev,
-					      uint8_t *peer_mac_addr,
-					      uint32_t param_id,
-					      uint32_t param_value)
-{
-	return tgt_vdev_peer_set_param_send(vdev, peer_mac_addr,
-					    param_id, param_value);
-}
-
-qdf_export_symbol(wlan_util_vdev_peer_set_param_send);

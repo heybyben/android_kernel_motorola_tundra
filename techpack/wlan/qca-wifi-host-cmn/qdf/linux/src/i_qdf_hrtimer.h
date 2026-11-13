@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2014-2019,2021 The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -32,9 +31,8 @@
 #include <qdf_types.h>
 #include <i_qdf_trace.h>
 
-struct __qdf_hrtimer_data_internal_t;
 /* hrtimer data type */
-typedef struct __qdf_hrtimer_data_internal_t {
+typedef struct {
 	union {
 		struct hrtimer hrtimer;
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 2, 0))
@@ -42,9 +40,6 @@ typedef struct __qdf_hrtimer_data_internal_t {
 #endif
 	} u;
 	enum qdf_context_mode ctx;
-	struct __qdf_hrtimer_data_internal_t *cb_ctx;
-	enum qdf_hrtimer_restart_status (*callback)
-				(struct __qdf_hrtimer_data_internal_t *);
 } __qdf_hrtimer_data_t;
 
 /**
@@ -76,12 +71,8 @@ static inline
 void __qdf_hrtimer_start(__qdf_hrtimer_data_t *timer, ktime_t interval,
 			 enum qdf_hrtimer_mode mode)
 {
-	enum hrtimer_mode hrt_mode;
+	enum hrtimer_mode hrt_mode = __qdf_hrtimer_get_mode(mode);
 
-	if (timer->ctx == QDF_CONTEXT_TASKLET)
-		mode |= HRTIMER_MODE_SOFT;
-
-	hrt_mode = __qdf_hrtimer_get_mode(mode);
 	hrtimer_start(&timer->u.hrtimer, interval, hrt_mode);
 }
 #else
@@ -111,7 +102,10 @@ void __qdf_hrtimer_start(__qdf_hrtimer_data_t *timer, ktime_t interval,
 static inline
 int __qdf_hrtimer_cancel(__qdf_hrtimer_data_t *timer)
 {
-	return hrtimer_cancel(&timer->u.hrtimer);
+	if (timer->ctx == QDF_CONTEXT_HARDWARE)
+		return hrtimer_cancel(&timer->u.hrtimer);
+
+	return 0;
 }
 #else
 static inline
@@ -126,49 +120,12 @@ int __qdf_hrtimer_cancel(__qdf_hrtimer_data_t *timer)
 }
 #endif
 
-static enum hrtimer_restart __qdf_hrtimer_cb(struct hrtimer *arg)
-{
-	__qdf_hrtimer_data_t *timer = container_of(arg, __qdf_hrtimer_data_t,
-						   u.hrtimer);
-
-	return (enum hrtimer_restart)timer->callback(timer->cb_ctx);
-}
-
-/**
- * __qdf_init_hrtimer() - Initialize a high-resolution timer
- * @hrtimer: pointer to the hrtimer object
- * @clock: clock id
- * @hrt_mode: mode of hrtimer
- *
- * Initialize a high-resolution timer with the appropriate setup function
- * based on the kernel version
- *
- * Return: None
- */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0))
-static inline void
-__qdf_init_hrtimer(struct hrtimer *hrtimer, enum qdf_clock_id clock,
-		   enum hrtimer_mode hrt_mode)
-{
-	hrtimer_setup(hrtimer, __qdf_hrtimer_cb, clock, hrt_mode);
-}
-#else
-static inline void
-__qdf_init_hrtimer(struct hrtimer *hrtimer, enum qdf_clock_id clock,
-		   enum hrtimer_mode hrt_mode)
-{
-	hrtimer_init(hrtimer, clock, hrt_mode);
-	hrtimer->function = __qdf_hrtimer_cb;
-}
-#endif /* KERNEL_VERSION(6, 15, 0)*/
-
 /**
  * __qdf_hrtimer_init() - init hrtimer in a given context
  * @timer: pointer to the hrtimer object
  * @cback: callback function to be fired
  * @clock: clock id
- * @mode: mode of hrtimer
- * @ctx:  interrupt context mode
+ * @hrtimer_mode: mode of hrtimer
  *
  * starts hrtimer in a context passed as per the context
  *
@@ -182,17 +139,16 @@ static inline void  __qdf_hrtimer_init(__qdf_hrtimer_data_t *timer,
 				       enum qdf_context_mode ctx)
 {
 	struct hrtimer *hrtimer = &timer->u.hrtimer;
-	enum hrtimer_mode hrt_mode;
+	enum hrtimer_mode hrt_mode = __qdf_hrtimer_get_mode(mode);
 
 	timer->ctx = ctx;
-	timer->callback = cback;
-	timer->cb_ctx = timer;
 
-	if (timer->ctx == QDF_CONTEXT_TASKLET)
-		mode |= HRTIMER_MODE_SOFT;
-
-	hrt_mode = __qdf_hrtimer_get_mode(mode);
-	__qdf_init_hrtimer(hrtimer, clock, hrt_mode);
+	if (timer->ctx == QDF_CONTEXT_HARDWARE) {
+		hrtimer_init(hrtimer, clock, hrt_mode);
+		hrtimer->function = cback;
+	} else if (timer->ctx == QDF_CONTEXT_TASKLET) {
+		QDF_BUG(0);
+	}
 }
 #else
 static inline void  __qdf_hrtimer_init(__qdf_hrtimer_data_t *timer,
@@ -206,13 +162,13 @@ static inline void  __qdf_hrtimer_init(__qdf_hrtimer_data_t *timer,
 	enum hrtimer_mode hrt_mode = __qdf_hrtimer_get_mode(mode);
 
 	timer->ctx = ctx;
-	timer->callback = cback;
-	timer->cb_ctx = timer;
 
-	if (timer->ctx == QDF_CONTEXT_HARDWARE)
-		__qdf_init_hrtimer(hrtimer, clock, hrt_mode);
-	else if (timer->ctx == QDF_CONTEXT_TASKLET)
+	if (timer->ctx == QDF_CONTEXT_HARDWARE) {
+		hrtimer_init(hrtimer, clock, hrt_mode);
+		hrtimer->function = cback;
+	} else if (timer->ctx == QDF_CONTEXT_TASKLET) {
 		tasklet_hrtimer_init(tasklet_hrtimer, cback, clock, hrt_mode);
+	}
 }
 #endif
 
@@ -404,7 +360,6 @@ static inline uint64_t __qdf_hrtimer_forward(__qdf_hrtimer_data_t *timer,
 
 	return hrtimer_forward(hrtimer, now, interval);
 }
-
 #else
 static inline uint64_t __qdf_hrtimer_forward(__qdf_hrtimer_data_t *timer,
 					     ktime_t now,
@@ -420,18 +375,4 @@ static inline uint64_t __qdf_hrtimer_forward(__qdf_hrtimer_data_t *timer,
 }
 #endif
 
-/**
- * __qdf_hrtimer_add_expires() - Add expiry to hrtimer with given interval
- * @timer: pointer to the __qdf_hrtimer_data_t object
- * @interval: interval to add as ktime_t object
- *
- * Add the timer expiry so it will expire in the future
- *
- * Return: None
- */
-static inline
-void __qdf_hrtimer_add_expires(__qdf_hrtimer_data_t *timer, ktime_t interval)
-{
-	hrtimer_add_expires(&timer->u.hrtimer, interval);
-}
 #endif /* _I_QDF_HRTIMER_H */

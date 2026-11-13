@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -88,7 +88,7 @@ struct pkt_capture_vdev_priv {
  * struct pkt_psoc_priv - Private object to be stored in psoc
  * @psoc: pointer to psoc object
  * @cfg_param: INI config params for packet capture
- * @cb_obj: struct containing callback pointers
+ * @cb_obj: struct contaning callback pointers
  * @rx_ops: rx ops
  * @tx_ops: tx ops
  */

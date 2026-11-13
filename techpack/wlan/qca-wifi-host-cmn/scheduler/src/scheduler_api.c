@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -271,7 +271,7 @@ QDF_STATUS scheduler_post_msg_by_priority(uint32_t qid,
 		sched_err("Src_id/Dest_id invalid, cannot post message");
 		return QDF_STATUS_E_FAILURE;
 	}
-	/* Target_If is a special message queue in phase 3 convergence because
+	/* Target_If is a special message queue in phase 3 convergence beacause
 	 * its used by both legacy WMA and as well as new UMAC components which
 	 * directly populate callback handlers in message body.
 	 * 1) WMA legacy messages should not have callback
@@ -296,7 +296,7 @@ QDF_STATUS scheduler_post_msg_by_priority(uint32_t qid,
 	}
 
 	if (!sched_ctx->queue_ctx.scheduler_msg_process_fn[qidx]) {
-		sched_err("callback not registered for qid[%d]", que_id);
+		QDF_DEBUG_PANIC("callback not registered for qid[%d]", que_id);
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -423,7 +423,7 @@ QDF_STATUS scheduler_target_if_mq_handler(struct scheduler_msg *msg)
 
 	target_if_msg_handler = msg->callback;
 
-	/* Target_If is a special message queue in phase 3 convergence because
+	/* Target_If is a special message queue in phase 3 convergence beacause
 	 * its used by both legacy WMA and as well as new UMAC components. New
 	 * UMAC components directly pass their message handlers as callback in
 	 * message body.
@@ -664,13 +664,6 @@ void scheduler_mc_timer_callback(qdf_mc_timer_t *timer)
 	QDF_BUG(timer);
 	if (!timer)
 		return;
-
-	/*
-	 * Save the jiffies value in a per-timer context in qdf_mc_timer_t.
-	 * It will help the debugger to know the exact time at which the host
-	 * stops/expiry of the QDF timer.
-	 */
-	timer->timer_end_jiffies = jiffies;
 
 	qdf_spin_lock_irqsave(&timer->platform_info.spinlock);
 

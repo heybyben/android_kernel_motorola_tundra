@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2011-2015, 2017-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -58,22 +57,6 @@ void lim_init_pre_auth_list(struct mac_context *);
 void lim_delete_pre_auth_list(struct mac_context *);
 struct tLimPreAuthNode *lim_search_pre_auth_list(struct mac_context *,
 						 tSirMacAddr);
-
-#ifdef WLAN_FEATURE_11BE_MLO
-/**
- * lim_search_pre_auth_list_by_mld_addr() - This function is called when
- * Authentication frame is received by AP (or at a STA in IBSS supporting MAC
- * based authentication) to search using MLD address if a STA is in the middle
- * of MAC Authentication transaction sequence.
- * @mac: MAC context
- * @mldaddr: MLD address of the STA that sent
- *
- * Return: Pointer to pre-auth node if found, else NULL
- */
-struct tLimPreAuthNode *lim_search_pre_auth_list_by_mld_addr(
-							struct mac_context *mac,
-							tSirMacAddr mldaddr);
-#endif
 void lim_add_pre_auth_node(struct mac_context *, struct tLimPreAuthNode *);
 void lim_delete_pre_auth_node(struct mac_context *, tSirMacAddr);
 void lim_release_pre_auth_node(struct mac_context *mac,
@@ -89,6 +72,9 @@ void lim_encrypt_auth_frame(struct mac_context *, uint8_t, uint8_t *, uint8_t *,
 			    uint8_t *, uint32_t);
 uint8_t lim_decrypt_auth_frame(struct mac_context *, uint8_t *, uint8_t *,
 			       uint8_t *, uint32_t, uint16_t);
+
+void lim_post_sme_set_keys_cnf(struct mac_context *, tLimMlmSetKeysReq *,
+			       tLimMlmSetKeysCnf *);
 
 #define  PTAPS  0xedb88320
 

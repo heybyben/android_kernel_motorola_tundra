@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -54,7 +54,7 @@ static inline uint16_t sir_swap_u16(uint16_t val)
  *
  * FUNCTION:
  * This function is called to swap two U8s of an uint16_t value depending
- * on endianness of the target processor/compiler the software is
+ * on endiannes of the target processor/compiler the software is
  * running on
  *
  * LOGIC:
@@ -106,7 +106,7 @@ static inline uint32_t sir_swap_u32(uint32_t val)
  *
  * FUNCTION:
  * This function is called to swap U8s of an uint32_t value depending
- * on endianness of the target processor/compiler the software is
+ * on endiannes of the target processor/compiler the software is
  * running on
  *
  * LOGIC:

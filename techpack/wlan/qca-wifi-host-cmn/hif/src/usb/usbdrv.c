@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -229,7 +228,7 @@ static void usb_hif_free_pipe_resources(struct HIF_USB_PIPE *pipe)
 
 #ifdef QCN7605_SUPPORT
 /**
- * usb_hif_get_logical_pipe_num() - get pipe number for a particular endpoint
+ * usb_hif_get_logical_pipe_num() - get pipe number for a particular enpoint
  * @device: pointer to HIF_DEVICE_USB structure
  * @ep_address: endpoint address
  * @urb_count: number of urb resources to be allocated to the pipe
@@ -269,7 +268,7 @@ static uint8_t usb_hif_get_logical_pipe_num(struct HIF_DEVICE_USB *device,
 }
 #else
 /**
- * usb_hif_get_logical_pipe_num() - get pipe number for a particular endpoint
+ * usb_hif_get_logical_pipe_num() - get pipe number for a particular enpoint
  * @device: pointer to HIF_DEVICE_USB structure
  * @ep_address: endpoint address
  * @urb_count: number of urb resources to be allocated to the pipe
@@ -326,7 +325,7 @@ static uint8_t usb_hif_get_logical_pipe_num
 #endif /* QCN7605_SUPPORT */
 
 /**
- * usb_hif_setup_pipe_resources() - setup urb resources for all pipes
+ * usb_hif_get_logical_pipe_num() - setup urb resources for all pipes
  * @device: pointer to HIF_DEVICE_USB structure
  *
  * Return: QDF_STATUS_SUCCESS if success else an appropriate QDF_STATUS error
@@ -342,7 +341,7 @@ QDF_STATUS usb_hif_setup_pipe_resources(struct HIF_DEVICE_USB *device)
 	struct HIF_USB_PIPE *pipe;
 	uint8_t pipe_num;
 
-	/* walk descriptors and setup pipes */
+	/* walk decriptors and setup pipes */
 	for (i = 0; i < iface_desc->desc.bNumEndpoints; ++i) {
 		endpoint = &iface_desc->endpoint[i].desc;
 
@@ -1169,7 +1168,7 @@ QDF_STATUS usb_hif_submit_ctrl_out(struct HIF_DEVICE_USB *device,
 }
 
 /**
- * usb_hif_submit_ctrl_in() - recv a response to the ctrl message sent out
+ * usb_hif_submit_ctrl_in() - recv a resonse to the ctrl message sent out
  * @device: HIF device for which urb needs to be received
  * @req: request value for the ctrl message
  * @value: USB message value

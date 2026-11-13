@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -95,47 +94,6 @@ QDF_STATUS wlan_coex_config_send(struct wlan_objmgr_vdev *vdev,
 	return status;
 }
 
-QDF_STATUS wlan_coex_multi_config_send(struct wlan_objmgr_vdev *vdev,
-				       struct coex_multi_config *param)
-{
-	struct wlan_objmgr_psoc *psoc;
-	struct coex_config_params one_param;
-	QDF_STATUS status, ret = QDF_STATUS_SUCCESS;
-	uint32_t i;
-
-	if (!vdev) {
-		coex_err("Null vdev");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	psoc = wlan_vdev_get_psoc(vdev);
-	if (!psoc) {
-		coex_err("failed to get coex_obj");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	if (tgt_get_coex_multi_config_support(psoc))
-		return tgt_send_coex_multi_config(vdev, param);
-
-	for (i = 0; i < param->num_configs; i++) {
-		one_param.vdev_id = param->vdev_id;
-		one_param.config_type = param->cfg_items[i].config_type;
-		one_param.config_arg1 = param->cfg_items[i].config_arg1;
-		one_param.config_arg2 = param->cfg_items[i].config_arg2;
-		one_param.config_arg3 = param->cfg_items[i].config_arg3;
-		one_param.config_arg4 = param->cfg_items[i].config_arg4;
-		one_param.config_arg5 = param->cfg_items[i].config_arg5;
-		one_param.config_arg6 = param->cfg_items[i].config_arg6;
-		status = tgt_send_coex_config(vdev, &one_param);
-		if (QDF_IS_STATUS_ERROR(status)) {
-			coex_err("fail to send one coex config");
-			ret = status;
-		}
-	}
-
-	return ret;
-}
-
 QDF_STATUS
 wlan_coex_config_updated(struct wlan_objmgr_vdev *vdev, uint8_t type)
 {
@@ -170,8 +128,7 @@ wlan_coex_config_updated(struct wlan_objmgr_vdev *vdev, uint8_t type)
 }
 
 QDF_STATUS
-wlan_coex_psoc_set_btc_chain_mode(struct wlan_objmgr_psoc *psoc,
-				  enum coex_btc_chain_mode val)
+wlan_coex_psoc_set_btc_chain_mode(struct wlan_objmgr_psoc *psoc, uint8_t val)
 {
 	struct coex_psoc_obj *coex_obj;
 
@@ -185,8 +142,7 @@ wlan_coex_psoc_set_btc_chain_mode(struct wlan_objmgr_psoc *psoc,
 }
 
 QDF_STATUS
-wlan_coex_psoc_get_btc_chain_mode(struct wlan_objmgr_psoc *psoc,
-				  enum coex_btc_chain_mode *val)
+wlan_coex_psoc_get_btc_chain_mode(struct wlan_objmgr_psoc *psoc, uint8_t *val)
 {
 	struct coex_psoc_obj *coex_obj;
 
@@ -202,63 +158,3 @@ wlan_coex_psoc_get_btc_chain_mode(struct wlan_objmgr_psoc *psoc,
 	*val = coex_obj->btc_chain_mode;
 	return QDF_STATUS_SUCCESS;
 }
-
-#ifdef WLAN_FEATURE_DBAM_CONFIG
-QDF_STATUS wlan_dbam_config_send(struct wlan_objmgr_vdev *vdev,
-				 struct coex_dbam_config_params *param)
-{
-	QDF_STATUS status;
-
-	status = tgt_send_dbam_config(vdev, param);
-	if (QDF_IS_STATUS_ERROR(status))
-		coex_err("failed to send dbam config");
-
-	return status;
-}
-
-QDF_STATUS wlan_dbam_attach(struct wlan_objmgr_psoc *psoc)
-{
-	struct wlan_lmac_if_dbam_tx_ops *dbam_tx_ops;
-
-	if (!psoc) {
-		coex_err("psoc is Null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	dbam_tx_ops = wlan_psoc_get_dbam_tx_ops(psoc);
-	if (!dbam_tx_ops) {
-		coex_err("dbam_tx_ops is Null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	if (!dbam_tx_ops->dbam_event_attach) {
-		coex_err("dbam_event_attach function is Null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	return dbam_tx_ops->dbam_event_attach(psoc);
-}
-
-QDF_STATUS wlan_dbam_detach(struct wlan_objmgr_psoc *psoc)
-{
-	struct wlan_lmac_if_dbam_tx_ops *dbam_tx_ops;
-
-	if (!psoc) {
-		coex_err("psoc is Null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	dbam_tx_ops = wlan_psoc_get_dbam_tx_ops(psoc);
-	if (!dbam_tx_ops) {
-		coex_err("dbam_tx_ops is Null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	if (!dbam_tx_ops->dbam_event_detach) {
-		coex_err("dbam_event_detach function is Null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	return dbam_tx_ops->dbam_event_detach(psoc);
-}
-#endif

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -65,9 +65,6 @@ typedef struct sDphQosParams {
  * @ht_operation: HT operation IE
  * @vht_operation: VHT operation IE
  * @hs20vendor_ie: HS2.0 vendor IE
- * @he_operation: HE operation IE
- * @srp_ie: Spatial Reuse Parameter IE
- * @eht_operation: EHT IE
  *
  * This structure holds the parsed IE of connected BSS
  * and this is not the intersection of BSS and STA
@@ -83,9 +80,6 @@ struct parsed_ies {
 	tDot11fIEhs20vendor_ie hs20vendor_ie;
 #ifdef WLAN_FEATURE_11AX
 	tDot11fIEhe_op he_operation;
-#endif
-#ifdef WLAN_FEATURE_SR
-	tDot11fIEspatial_reuse srp_ie;
 #endif
 #ifdef WLAN_FEATURE_11BE
 	tDot11fIEeht_op eht_operation;
@@ -200,7 +194,6 @@ typedef struct sDphHashNode {
 
 #ifdef WLAN_FEATURE_11BE
 	tDot11fIEeht_cap eht_config;
-	tDot11fIEeht_op eht_op;
 #endif
 
 	/* Peer operation class, extracted from ASSOC request frame*/

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -35,7 +35,6 @@
 #include <wlan_lmac_if_def.h>
 #include <target_if_vdev_mgr_tx_ops.h>
 #include "connection_mgr/core/src/wlan_cm_main.h"
-#include <wlan_mlo_mgr_public_api.h>
 
 static QDF_STATUS mlme_vdev_obj_create_handler(struct wlan_objmgr_vdev *vdev,
 					       void *arg)
@@ -77,13 +76,9 @@ static QDF_STATUS mlme_vdev_obj_create_handler(struct wlan_objmgr_vdev *vdev,
 
 	status = txops->psoc_vdev_rsp_timer_inuse(psoc, wlan_vdev_get_id(vdev));
 	if (QDF_IS_STATUS_ERROR(status)) {
-		if (status == QDF_STATUS_E_ALREADY) {
-			mlme_err("Go through, since timer initializes later.");
-		} else {
-			mlme_err("The vdev response is pending for VDEV_%d status:%d",
-				 wlan_vdev_get_id(vdev), status);
-			return QDF_STATUS_E_FAILURE;
-		}
+		mlme_err("The vdev response is pending for VDEV_%d status:%d",
+			 wlan_vdev_get_id(vdev), status);
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	pdev_mlme = wlan_pdev_mlme_get_cmpt_obj(pdev);
@@ -121,10 +116,6 @@ static QDF_STATUS mlme_vdev_obj_create_handler(struct wlan_objmgr_vdev *vdev,
 		goto ext_hdl_create_failed;
 	}
 
-	qdf_timer_init(NULL, &vdev_mlme->ml_reconfig_timer,
-		       mlme_vdev_reconfig_timer_cb, (void *)(vdev_mlme),
-		       QDF_TIMER_TYPE_WAKE_APPS);
-
 	wlan_objmgr_vdev_component_obj_attach((struct wlan_objmgr_vdev *)vdev,
 					      WLAN_UMAC_COMP_MLME,
 					      (void *)vdev_mlme,
@@ -143,7 +134,6 @@ static QDF_STATUS mlme_vdev_obj_create_handler(struct wlan_objmgr_vdev *vdev,
 	return QDF_STATUS_SUCCESS;
 
 ext_hdl_post_create_failed:
-	qdf_timer_free(&vdev_mlme->ml_reconfig_timer);
 	mlme_vdev_ops_ext_hdl_destroy(vdev_mlme);
 	wlan_objmgr_vdev_component_obj_detach(vdev, WLAN_UMAC_COMP_MLME,
 					      vdev_mlme);
@@ -175,7 +165,6 @@ static QDF_STATUS mlme_vdev_obj_destroy_handler(struct wlan_objmgr_vdev *vdev,
 		return QDF_STATUS_SUCCESS;
 	}
 
-	qdf_timer_free(&vdev_mlme->ml_reconfig_timer);
 	wlan_cm_deinit(vdev_mlme);
 	mlme_vdev_sm_destroy(vdev_mlme);
 	mlme_vdev_ops_ext_hdl_destroy(vdev_mlme);
@@ -235,20 +224,13 @@ QDF_STATUS wlan_mlme_psoc_enable(struct wlan_objmgr_psoc *psoc)
 	QDF_STATUS status;
 	struct wlan_lmac_if_mlme_tx_ops *tx_ops;
 
-	status = mlme_psoc_ext_enable_cb(psoc);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		mlme_err("Failed to register enable mlme ext param handler cb");
-		return status;
-	}
-
 	status = wlan_serialization_register_comp_info_cb
 			(psoc,
 			 WLAN_UMAC_COMP_MLME,
 			 WLAN_SER_CMD_SCAN,
 			 mlme_scan_serialization_comp_info_cb);
-	if (QDF_IS_STATUS_ERROR(status)) {
+	if (status != QDF_STATUS_SUCCESS) {
 		mlme_err("Serialize scan cmd register failed");
-		mlme_psoc_ext_disable_cb(psoc);
 		return status;
 	}
 
@@ -257,7 +239,7 @@ QDF_STATUS wlan_mlme_psoc_enable(struct wlan_objmgr_psoc *psoc)
 	if (tx_ops && tx_ops->vdev_mlme_attach)
 		tx_ops->vdev_mlme_attach(psoc);
 
-	return status;
+	return QDF_STATUS_SUCCESS;
 }
 
 QDF_STATUS wlan_mlme_psoc_disable(struct wlan_objmgr_psoc *psoc)
@@ -265,23 +247,21 @@ QDF_STATUS wlan_mlme_psoc_disable(struct wlan_objmgr_psoc *psoc)
 	QDF_STATUS status;
 	struct wlan_lmac_if_mlme_tx_ops *tx_ops;
 
+	status = wlan_serialization_deregister_comp_info_cb
+						(psoc,
+						 WLAN_UMAC_COMP_MLME,
+						 WLAN_SER_CMD_SCAN);
+	if (status != QDF_STATUS_SUCCESS) {
+		mlme_err("Serialize scan cmd deregister failed");
+		return status;
+	}
+
 	/* Unregister WMI events  */
 	tx_ops = wlan_mlme_get_lmac_tx_ops(psoc);
 	if (tx_ops && tx_ops->vdev_mlme_detach)
 		tx_ops->vdev_mlme_detach(psoc);
 
-	status = wlan_serialization_deregister_comp_info_cb
-						(psoc,
-						 WLAN_UMAC_COMP_MLME,
-						 WLAN_SER_CMD_SCAN);
-	if (QDF_IS_STATUS_ERROR(status))
-		mlme_err("Serialize scan cmd deregister failed");
-
-	status = mlme_psoc_ext_disable_cb(psoc);
-	if (QDF_IS_STATUS_ERROR(status))
-		mlme_err("Failed to unregister enable mlme ext param hdl cb");
-
-	return status;
+	return QDF_STATUS_SUCCESS;
 }
 
 QDF_STATUS wlan_vdev_mlme_init(void)
@@ -331,17 +311,5 @@ QDF_STATUS wlan_vdev_mlme_send_set_mac_addr(struct qdf_mac_addr mac_addr,
 					    struct wlan_objmgr_vdev *vdev)
 {
 	return mlme_vdev_ops_send_set_mac_address(mac_addr, mld_addr, vdev);
-}
-
-void wlan_vdev_mlme_notify_set_mac_addr_response(struct wlan_objmgr_vdev *vdev,
-						 uint8_t resp_status)
-{
-	if (wlan_vdev_mlme_is_mlo_link_switch_in_progress(vdev)) {
-		wlan_mlo_mgr_link_switch_set_mac_addr_resp(vdev, resp_status);
-		return;
-	}
-
-	mlme_vdev_mgr_notify_set_mac_addr_response(wlan_vdev_get_id(vdev),
-						   resp_status);
 }
 #endif

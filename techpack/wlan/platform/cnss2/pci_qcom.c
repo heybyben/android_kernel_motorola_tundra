@@ -3,6 +3,7 @@
 
 #include "pci_platform.h"
 #include "debug.h"
+#include "linux/of_address.h"
 
 static struct cnss_msi_config msi_config = {
 	.total_vectors = 32,
@@ -15,32 +16,9 @@ static struct cnss_msi_config msi_config = {
 	},
 };
 
-#define ENUM_RETRY_MAX_TIMES 8
-#define ENUM_RETRY_DELAY_MS 500
-
 int _cnss_pci_enumerate(struct cnss_plat_data *plat_priv, u32 rc_num)
 {
-	u32 retry = 0;
-	int ret;
-
-	if (plat_priv->pcie_switch_type == PCIE_SWITCH_NTN3) {
-		while (retry++ < ENUM_RETRY_MAX_TIMES) {
-			ret = msm_pcie_enumerate(rc_num);
-			/* For PCIe switch platform, cnss_probe may called
-			 * before PCIe switch hardware ready, wait for
-			 * msm_pcie_enumerate complete.
-			 */
-			if (ret == -EPROBE_DEFER) {
-				cnss_pr_dbg("PCIe RC%d not ready, retry:%dth\n",
-					    rc_num, retry);
-				msleep(ENUM_RETRY_DELAY_MS);
-			}
-		}
-	} else {
-		return msm_pcie_enumerate(rc_num);
-	}
-
-	return ret;
+	return msm_pcie_enumerate(rc_num);
 }
 
 int cnss_pci_assert_perst(struct cnss_pci_data *pci_priv)
@@ -51,6 +29,18 @@ int cnss_pci_assert_perst(struct cnss_pci_data *pci_priv)
 				   pci_dev->bus->number, pci_dev, NULL,
 				   PM_OPTIONS_DEFAULT);
 }
+
+#ifdef CNSS2_FMD_FEATURE_ENABLE
+int cnss_pci_fmd_enable(struct cnss_pci_data *pci_priv)
+{
+	return msm_pcie_fmd_enable(pci_priv->pci_dev);
+}
+#else
+int cnss_pci_fmd_enable(struct cnss_pci_data *pci_priv)
+{
+	return -EOPNOTSUPP;
+}
+#endif
 
 int cnss_pci_disable_pc(struct cnss_pci_data *pci_priv, bool vote)
 {
@@ -143,7 +133,6 @@ static int cnss_pci_set_link_up(struct cnss_pci_data *pci_priv)
 static int cnss_pci_set_link_down(struct cnss_pci_data *pci_priv)
 {
 	struct pci_dev *pci_dev = pci_priv->pci_dev;
-	struct cnss_plat_data *plat_priv = pci_priv->plat_priv;
 	enum msm_pcie_pm_opt pm_ops;
 	u32 pm_options = PM_OPTIONS_DEFAULT;
 	int ret;
@@ -152,10 +141,6 @@ static int cnss_pci_set_link_down(struct cnss_pci_data *pci_priv)
 		cnss_pr_vdbg("Use PCIe DRV suspend\n");
 		pm_ops = MSM_PCIE_DRV_SUSPEND;
 	} else {
-		if (plat_priv && PCIE_SWITCH_NTN3 == plat_priv->pcie_switch_type) {
-			cnss_pr_dbg("Skip suspend from client side for pcie switch case\n");
-			return 0;
-		}
 		pm_ops = MSM_PCIE_SUSPEND;
 	}
 
@@ -412,128 +397,6 @@ retry:
 	return ret;
 }
 
-#ifdef CONFIG_PCIE_SWITCH_SUPPORT
-int cnss_pci_dsp_link_control(struct cnss_pci_data *pci_priv,
-			      bool link_enable)
-{
-	if (!pci_priv)
-		return -ENODEV;
-
-	pci_priv->pci_dsp_link_status = link_enable;
-	return msm_pcie_dsp_link_control(pci_priv->pci_dev, link_enable);
-}
-
-int cnss_pci_set_dsp_link_status(struct cnss_pci_data *pci_priv,
-				 bool link_enable)
-{
-	if (!pci_priv)
-		return -ENODEV;
-
-	pci_priv->pci_dsp_link_status = link_enable;
-
-	return 0;
-}
-
-int cnss_pci_get_dsp_link_status(struct cnss_pci_data *pci_priv)
-{
-	if (!pci_priv)
-		return -ENODEV;
-
-	return pci_priv->pci_dsp_link_status;
-}
-
-int cnss_pci_dsp_link_enable(struct cnss_pci_data *pci_priv)
-{
-	int ret = 0;
-	int retry_count = 0;
-	struct cnss_plat_data *plat_priv;
-
-	if (!pci_priv)
-		return -ENODEV;
-
-	plat_priv = pci_priv->plat_priv;
-	/* For PCIe switch platform, wait for link train of DSP<->WLAN complete
-	 */
-	while (retry_count++ < DSP_LINK_ENABLE_RETRY_COUNT_MAX) {
-		ret = cnss_pci_dsp_link_control(pci_priv, true);
-		if (!ret)
-			break;
-
-		cnss_pci_dsp_link_control(pci_priv, false);
-		cnss_pr_err("DSP<->WLAN link train failed, retry...\n");
-		cnss_select_pinctrl_state(plat_priv, false);
-		usleep_range(DSP_LINK_ENABLE_DELAY_TIME_US_MIN,
-			     DSP_LINK_ENABLE_DELAY_TIME_US_MAX);
-		ret = cnss_select_pinctrl_enable(plat_priv);
-		if (ret) {
-			cnss_pr_err("Failed to select pinctrl state, err = %d\n", ret);
-			return ret;
-		}
-		usleep_range(DSP_LINK_ENABLE_DELAY_TIME_US_MIN,
-			     DSP_LINK_ENABLE_DELAY_TIME_US_MAX);
-	}
-
-	return ret;
-}
-
-#ifdef CONFIG_PCIE_SWITCH_RETRAIN_LINK_SUPPORT
-int cnss_pci_dsp_link_retrain(struct cnss_pci_data *pci_priv,
-			      u16 target_link_speed)
-{
-	int ret = 0;
-
-	if (!pci_priv)
-		return -ENODEV;
-
-	cnss_pr_dbg("Setting DSP <-> EP link speed:0x%x\n", target_link_speed);
-
-	ret = msm_pcie_retrain_port_link(pci_priv->pci_dev, target_link_speed);
-	if (ret) {
-		cnss_pr_err("Failed to retrain link, err = %d\n", ret);
-		return ret;
-	}
-
-	pci_priv->def_link_speed = target_link_speed;
-
-	return ret;
-}
-#else
-int cnss_pci_dsp_link_retrain(struct cnss_pci_data *pci_priv,
-			      u16 target_link_speed)
-{
-	return -EOPNOTSUPP;
-}
-#endif
-#else
-int cnss_pci_dsp_link_control(struct cnss_pci_data *pci_priv,
-			      bool link_enable)
-{
-	return -EOPNOTSUPP;
-}
-
-int cnss_pci_set_dsp_link_status(struct cnss_pci_data *pci_priv,
-				 bool link_enable)
-{
-	return -EOPNOTSUPP;
-}
-
-int cnss_pci_get_dsp_link_status(struct cnss_pci_data *pci_priv)
-{
-	return -EOPNOTSUPP;
-}
-
-int cnss_pci_dsp_link_enable(struct cnss_pci_data *pci_priv)
-{
-	return -EOPNOTSUPP;
-}
-
-int cnss_pci_dsp_link_retrain(struct cnss_pci_data *pci_priv,
-			      u16 target_link_speed)
-{
-	return -EOPNOTSUPP;
-}
-#endif
-
 int cnss_pci_prevent_l1(struct device *dev)
 {
 	struct pci_dev *pci_dev = to_pci_dev(dev);
@@ -545,8 +408,27 @@ int cnss_pci_prevent_l1(struct device *dev)
 		return -ENODEV;
 	}
 
+	mutex_lock(&pci_priv->bus_lock);
+	ret = __cnss_pci_prevent_l1(dev);
+	mutex_unlock(&pci_priv->bus_lock);
+
+	return ret;
+}
+EXPORT_SYMBOL(cnss_pci_prevent_l1);
+
+int __cnss_pci_prevent_l1(struct device *dev)
+{
+	struct pci_dev *pci_dev = to_pci_dev(dev);
+	struct cnss_pci_data *pci_priv = cnss_get_pci_priv(pci_dev);
+	int ret;
+
+	if (!pci_priv) {
+		cnss_pr_err("pci_priv is NULL\n");
+		return -ENODEV;
+	}
+
 	if (pci_priv->pci_link_state == PCI_LINK_DOWN) {
-		cnss_pr_dbg("PCIe link is in suspend state\n");
+		cnss_pr_err("PCIe link is in suspend state\n");
 		return -EIO;
 	}
 
@@ -563,7 +445,6 @@ int cnss_pci_prevent_l1(struct device *dev)
 
 	return ret;
 }
-EXPORT_SYMBOL(cnss_pci_prevent_l1);
 
 void cnss_pci_allow_l1(struct device *dev)
 {
@@ -575,8 +456,24 @@ void cnss_pci_allow_l1(struct device *dev)
 		return;
 	}
 
+	mutex_lock(&pci_priv->bus_lock);
+	__cnss_pci_allow_l1(dev);
+	mutex_unlock(&pci_priv->bus_lock);
+}
+EXPORT_SYMBOL(cnss_pci_allow_l1);
+
+void __cnss_pci_allow_l1(struct device *dev)
+{
+	struct pci_dev *pci_dev = to_pci_dev(dev);
+	struct cnss_pci_data *pci_priv = cnss_get_pci_priv(pci_dev);
+
+	if (!pci_priv) {
+		cnss_pr_err("pci_priv is NULL\n");
+		return;
+	}
+
 	if (pci_priv->pci_link_state == PCI_LINK_DOWN) {
-		cnss_pr_dbg("PCIe link is in suspend state\n");
+		cnss_pr_err("PCIe link is in suspend state\n");
 		return;
 	}
 
@@ -587,12 +484,6 @@ void cnss_pci_allow_l1(struct device *dev)
 
 	_cnss_pci_allow_l1(pci_priv);
 }
-EXPORT_SYMBOL(cnss_pci_allow_l1);
-
-bool cnss_pci_is_sync_probe(void)
-{
-	return true;
-}
 
 int cnss_pci_get_msi_assignment(struct cnss_pci_data *pci_priv)
 {
@@ -601,6 +492,39 @@ int cnss_pci_get_msi_assignment(struct cnss_pci_data *pci_priv)
 	return 0;
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)) && \
+    (LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0))
+static int
+cnss_pci_smmu_dev_fault_handler(struct iommu_fault *fault,  void *data)
+{
+	struct cnss_pci_data *pci_priv = data;
+
+	cnss_fatal_err("SMMU fault happened with IOVA 0x%llx\n",
+		       fault->event.addr);
+
+	if (!pci_priv) {
+		cnss_pr_err("pci_priv is NULL\n");
+		return -ENODEV;
+	}
+
+	pci_priv->is_smmu_fault = true;
+	cnss_pci_update_status(pci_priv, CNSS_FW_DOWN);
+	cnss_force_fw_assert(&pci_priv->pci_dev->dev);
+
+	/* IOMMU driver requires -ENOSYS to print debug info. */
+	return -ENOSYS;
+}
+
+static
+void cnss_register_iommu_fault_handler(struct cnss_pci_data *pci_priv)
+{
+	struct pci_dev *pci_dev = pci_priv->pci_dev;
+
+	iommu_register_device_fault_handler(&pci_dev->dev,
+					    cnss_pci_smmu_dev_fault_handler,
+					    pci_priv);
+}
+#else
 static int cnss_pci_smmu_fault_handler(struct iommu_domain *domain,
 				       struct device *dev, unsigned long iova,
 				       int flags, void *handler_token)
@@ -616,30 +540,82 @@ static int cnss_pci_smmu_fault_handler(struct iommu_domain *domain,
 
 	pci_priv->is_smmu_fault = true;
 	cnss_pci_update_status(pci_priv, CNSS_FW_DOWN);
-	if (cnss_force_fw_assert(&pci_priv->pci_dev->dev) == -EOPNOTSUPP)
-		CNSS_ASSERT(0);
+	cnss_force_fw_assert(&pci_priv->pci_dev->dev);
 
 	/* IOMMU driver requires -ENOSYS to print debug info. */
 	return -ENOSYS;
 }
 
+static
+void cnss_register_iommu_fault_handler(struct cnss_pci_data *pci_priv)
+{
+	iommu_set_fault_handler(pci_priv->iommu_domain,
+				cnss_pci_smmu_fault_handler, pci_priv);
+}
+#endif
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0))
 int cnss_pci_get_iommu_addr(struct cnss_pci_data *pci_priv,
-			    struct device_node *of_node)
+			    struct device_node *iommu_group_node)
 {
-	pci_priv->smmu_iova_start = 0xa0000000;
-	pci_priv->smmu_iova_len = 0x10000000;
+	struct pci_dev *pci_dev = pci_priv->pci_dev;
+	struct device_node *of_node;
+	const u32 *maps;
+	const u32 *end;
+	int size;
 
-	return 0;
+	of_node = of_find_node_by_name(pci_dev->dev.of_node,
+				       "cnss_pci0_iommu_region_partition");
+	if (!of_node)
+		return -EINVAL;
+
+	maps = of_get_property(of_node, "iommu-addresses", &size);
+	if (!maps) {
+		of_node_put(of_node);
+		return -EINVAL;
+	}
+
+	end = maps + size / sizeof(u32);
+
+	pci_priv->smmu_iova_start = 0;
+
+	while (maps < end) {
+		phys_addr_t iova;
+		size_t length;
+
+		/*
+		 * Skip the device phandle and if required later, we can
+		 * check if the device phandle matches with pci_dev->dev.of_node
+		 */
+		maps++;
+
+		maps = of_translate_dma_region(pci_dev->dev.of_node, maps,
+					       &iova, &length);
+
+		/*
+		 * Assuming a single contiguous DMA address range
+		 */
+		if (!pci_priv->smmu_iova_start)
+			pci_priv->smmu_iova_start = length;
+		else
+			pci_priv->smmu_iova_len =
+					iova - pci_priv->smmu_iova_start;
+	}
+
+	of_node_put(of_node);
+
+	return (pci_priv->smmu_iova_start && pci_priv->smmu_iova_len) ?
+		0 : -EINVAL;
 }
 #else
 int cnss_pci_get_iommu_addr(struct cnss_pci_data *pci_priv,
-			    struct device_node *of_node)
+			    struct device_node *iommu_group_node)
 {
 	u32 addr_win[2];
 	int ret;
 
-	ret = of_property_read_u32_array(of_node,  "qcom,iommu-dma-addr-pool",
+	ret = of_property_read_u32_array(iommu_group_node,
+					 "qcom,iommu-dma-addr-pool",
 					 addr_win, ARRAY_SIZE(addr_win));
 
 	pci_priv->smmu_iova_start = addr_win[0];
@@ -670,8 +646,7 @@ int cnss_pci_init_smmu(struct cnss_pci_data *pci_priv)
 	if (!ret && !strcmp("fastmap", iommu_dma_type)) {
 		cnss_pr_dbg("Enabling SMMU S1 stage\n");
 		pci_priv->smmu_s1_enable = true;
-		iommu_set_fault_handler(pci_priv->iommu_domain,
-					cnss_pci_smmu_fault_handler, pci_priv);
+		cnss_register_iommu_fault_handler(pci_priv);
 		cnss_register_iommu_fault_handler_irq(pci_priv);
 	}
 
@@ -711,3 +686,50 @@ int _cnss_pci_get_reg_dump(struct cnss_pci_data *pci_priv,
 {
 	return msm_pcie_reg_dump(pci_priv->pci_dev, buf, len);
 }
+
+#if IS_ENABLED(CONFIG_ARCH_QCOM)
+/**
+ * cnss_pci_of_reserved_mem_device_init() - Assign reserved memory region
+ *                                          to given PCI device
+ * @pci_priv: driver PCI bus context pointer
+ *
+ * This function shall call corresponding of_reserved_mem_device* API to
+ * assign reserved memory region to PCI device based on where the memory is
+ * defined and attached to (platform device of_node or PCI device of_node)
+ * in device tree.
+ *
+ * Return: 0 for success, negative value for error
+ */
+int cnss_pci_of_reserved_mem_device_init(struct cnss_pci_data *pci_priv)
+{
+	struct device *dev_pci = &pci_priv->pci_dev->dev;
+	int ret;
+
+	/* Use of_reserved_mem_device_init_by_idx() if reserved memory is
+	 * attached to platform device of_node.
+	 */
+	ret = of_reserved_mem_device_init(dev_pci);
+	if (ret) {
+		if (ret == -EINVAL)
+			cnss_pr_vdbg("Ignore, no specific reserved-memory assigned\n");
+		else
+			cnss_pr_err("Failed to init reserved mem device, err = %d\n",
+				    ret);
+	}
+	if (dev_pci->cma_area)
+		cnss_pr_dbg("CMA area is %s\n",
+			    cma_get_name(dev_pci->cma_area));
+
+	return ret;
+}
+
+int cnss_pci_wake_gpio_init(struct cnss_pci_data *pci_priv)
+{
+	return 0;
+}
+
+void cnss_pci_wake_gpio_deinit(struct cnss_pci_data *pci_priv)
+{
+}
+#endif
+

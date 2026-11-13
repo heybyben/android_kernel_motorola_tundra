@@ -82,7 +82,7 @@ hdd_thermal_fill_clientid_priority(struct hdd_context *hdd_ctx, uint8_t mon_id,
 }
 #endif
 
-QDF_STATUS
+static QDF_STATUS
 hdd_send_thermal_mitigation_val(struct hdd_context *hdd_ctx, uint32_t level,
 				uint8_t mon_id)
 {
@@ -391,7 +391,7 @@ hdd_get_curr_thermal_stats_val(struct wiphy *wiphy,
 	skb = wlan_cfg80211_vendor_cmd_alloc_reply_skb(wiphy,
 						       skb_len);
 	if (!skb) {
-		hdd_err_rl("wlan_cfg80211_vendor_cmd_alloc_reply_skb failed");
+		hdd_err_rl("cfg80211_vendor_cmd_alloc_reply_skb failed");
 		ret = -ENOMEM;
 		goto completed;
 	}
@@ -400,7 +400,7 @@ hdd_get_curr_thermal_stats_val(struct wiphy *wiphy,
 	if (!therm_attr) {
 		hdd_err_rl("nla_nest_start failed for attr failed");
 		ret = -EINVAL;
-		goto nla_failed;
+		goto completed;
 	}
 
 	for (i = 0; i < get_tt_stats->therm_throt_levels; i++) {
@@ -409,7 +409,7 @@ hdd_get_curr_thermal_stats_val(struct wiphy *wiphy,
 			hdd_err_rl("nla_nest_start failed for thermal level %d",
 				   i);
 			ret = -EINVAL;
-			goto nla_failed;
+			goto completed;
 		}
 
 		hdd_debug("level %d, Temp Range: %d - %d, Dwell time %d, Counter %d",
@@ -427,17 +427,16 @@ hdd_get_curr_thermal_stats_val(struct wiphy *wiphy,
 		    nla_put_u32(skb, THERMAL_LVL_COUNT,
 				get_tt_stats->level_info[i].num_entry)) {
 			hdd_err("nla put failure");
+			kfree_skb(skb);
 			ret =  -EINVAL;
-			goto nla_failed;
+			hdd_ctx->is_therm_stats_in_progress = false;
+			break;
 		}
 		nla_nest_end(skb, tt_levels);
 	}
 	nla_nest_end(skb, therm_attr);
 	wlan_cfg80211_vendor_cmd_reply(skb);
-	goto completed;
 
-nla_failed:
-	wlan_cfg80211_vendor_free_skb(skb);
 completed:
 	hdd_ctx->is_therm_stats_in_progress = false;
 	osif_request_put(request);
@@ -727,7 +726,7 @@ void hdd_thermal_mitigation_unregister(struct hdd_context *hdd_ctx,
  * @psoc: psoc object
  * @info: thermal throttle information from target
  *
- * Return: QDF_STATUS_SUCCESS for success.
+ * Retrun: QDF_STATUS_SUCCESS for success.
  */
 static QDF_STATUS
 hdd_notify_thermal_throttle_handler(struct wlan_objmgr_psoc *psoc,
@@ -756,7 +755,7 @@ hdd_notify_thermal_throttle_handler(struct wlan_objmgr_psoc *psoc,
 				QCA_NL80211_VENDOR_SUBCMD_THERMAL_INDEX,
 				GFP_KERNEL);
 	if (!vendor_event) {
-		hdd_err("wlan_cfg80211_vendor_event_alloc failed");
+		hdd_err("cfg80211_vendor_event_alloc failed");
 		return QDF_STATUS_E_NOMEM;
 	}
 	level = convert_level_to_vendor_thermal_level(info->level);

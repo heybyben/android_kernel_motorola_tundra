@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -34,7 +33,6 @@
 #include <wlan_osif_priv.h>
 #include "wlan_cfg80211.h"
 #include "wlan_cfg80211_p2p.h"
-#include "wlan_mlo_mgr_sta.h"
 
 #define MAX_NO_OF_2_4_CHANNELS 14
 #define MAX_OFFCHAN_TIME_FOR_DNBS 150
@@ -52,10 +50,9 @@ static void wlan_p2p_rx_callback(void *user_data,
 	struct p2p_rx_mgmt_frame *rx_frame)
 {
 	struct wlan_objmgr_psoc *psoc;
-	struct wlan_objmgr_vdev *vdev, *assoc_vdev;
+	struct wlan_objmgr_vdev *vdev;
 	struct vdev_osif_priv *osif_priv;
 	struct wireless_dev *wdev;
-	enum QDF_OPMODE opmode;
 
 	psoc = user_data;
 	if (!psoc) {
@@ -70,18 +67,7 @@ static void wlan_p2p_rx_callback(void *user_data,
 		return;
 	}
 
-	assoc_vdev = vdev;
-	opmode = wlan_vdev_mlme_get_opmode(assoc_vdev);
-
-	if (opmode == QDF_STA_MODE && wlan_vdev_mlme_is_mlo_vdev(vdev)) {
-		assoc_vdev = ucfg_mlo_get_assoc_link_vdev(vdev);
-		if (!assoc_vdev) {
-			osif_err("Assoc vdev is NULL");
-			goto fail;
-		}
-	}
-
-	osif_priv = wlan_vdev_get_ospriv(assoc_vdev);
+	osif_priv = wlan_vdev_get_ospriv(vdev);
 	if (!osif_priv) {
 		osif_err("osif_priv is null");
 		goto fail;
@@ -184,8 +170,6 @@ static void wlan_p2p_lo_event_callback(void *user_data,
 	struct vdev_osif_priv *osif_priv;
 	struct wireless_dev *wdev;
 	struct sk_buff *vendor_event;
-	enum qca_nl80211_vendor_subcmds_index index =
-		QCA_NL80211_VENDOR_SUBCMD_P2P_LO_EVENT_INDEX;
 
 	osif_debug("user data:%pK, vdev id:%d, reason code:%d",
 		   user_data, p2p_lo_event->vdev_id,
@@ -216,12 +200,12 @@ static void wlan_p2p_lo_event_callback(void *user_data,
 		goto fail;
 	}
 
-	vendor_event = wlan_cfg80211_vendor_event_alloc(wdev->wiphy, NULL,
-							sizeof(uint32_t) +
-							NLMSG_HDRLEN,
-							index, GFP_KERNEL);
+	vendor_event = cfg80211_vendor_event_alloc(wdev->wiphy, NULL,
+			sizeof(uint32_t) + NLMSG_HDRLEN,
+			QCA_NL80211_VENDOR_SUBCMD_P2P_LO_EVENT_INDEX,
+			GFP_KERNEL);
 	if (!vendor_event) {
-		osif_err("wlan_cfg80211_vendor_event_alloc failed");
+		osif_err("cfg80211_vendor_event_alloc failed");
 		goto fail;
 	}
 
@@ -229,11 +213,11 @@ static void wlan_p2p_lo_event_callback(void *user_data,
 		QCA_WLAN_VENDOR_ATTR_P2P_LISTEN_OFFLOAD_STOP_REASON,
 		p2p_lo_event->reason_code)) {
 		osif_err("nla put failed");
-		wlan_cfg80211_vendor_free_skb(vendor_event);
+		kfree_skb(vendor_event);
 		goto fail;
 	}
 
-	wlan_cfg80211_vendor_event(vendor_event, GFP_KERNEL);
+	cfg80211_vendor_event(vendor_event, GFP_KERNEL);
 
 fail:
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_P2P_ID);

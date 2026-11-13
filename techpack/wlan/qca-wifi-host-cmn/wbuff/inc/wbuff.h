@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2018-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -28,27 +27,25 @@
 #include <qdf_status.h>
 #include <qdf_nbuf.h>
 
-/* Number of pools supported per module */
-#define WBUFF_MAX_POOLS 16
-#define WBUFF_MAX_POOL_ID WBUFF_MAX_POOLS
-
-enum wbuff_module_id {
-	WBUFF_MODULE_WMI_TX,
-	WBUFF_MODULE_CE_RX,
-	WBUFF_MAX_MODULES,
-};
+/* wbuff available pools */
+/* Pool of nbuf size 256 bytes */
+#define WBUFF_POOL_0 0
+/* Pool of nbuf size 512 bytes */
+#define WBUFF_POOL_1 1
+/* Pool of nbuf size 1024 bytes */
+#define WBUFF_POOL_2 2
+/* Pool of nbuf 2048 bytes */
+#define WBUFF_POOL_3 3
 
 /**
  * struct wbuff_alloc_request - allocation structure for registering each
  * pool for wbuff module.
- * @pool_id: pool identifier
- * @pool_size: number of buffers for @pool_id
- * @buffer_size: size of each buffer in this @pool_id
+ * @slot: pool_slot identifier
+ * @size: number of buffers for @pool_slot
  */
 struct wbuff_alloc_request {
-	uint8_t pool_id;
-	uint16_t pool_size;
-	uint16_t buffer_size;
+	uint8_t slot;
+	uint16_t size;
 };
 
 /* Opaque handle for wbuff */
@@ -74,17 +71,16 @@ QDF_STATUS wbuff_module_deinit(void);
 /**
  * wbuff_module_register() - Registers a module with wbuff
  * @req: allocation request from registered module
- * @num_pools: number of pools required
+ * @num: number of pools required
  * @reserve: nbuf headroom to start with
  * @align: alignment for the nbuf
- * @module_id: module identifier
  *
  * Return: Handle if registration success
  *         NULL if registration failure
  */
 struct wbuff_mod_handle *
-wbuff_module_register(struct wbuff_alloc_request *req, uint8_t num_pools,
-		      int reserve, int align, enum wbuff_module_id module_id);
+wbuff_module_register(struct wbuff_alloc_request *req, uint8_t num,
+		      int reserve, int align);
 
 /**
  * wbuff_module_deregister() - De-registers a module with wbuff
@@ -97,8 +93,7 @@ QDF_STATUS wbuff_module_deregister(struct wbuff_mod_handle *hdl);
 
 /**
  * wbuff_buff_get() - return buffer to the requester
- * @hdl: wbuff_handle corresponding to the module
- * @pool_id: pool identifier
+ * @handle: wbuff_handle corresponding to the module
  * @len: length of buffer requested
  * @func_name: function from which buffer is requested
  * @line_num: line number in the file
@@ -106,12 +101,12 @@ QDF_STATUS wbuff_module_deregister(struct wbuff_mod_handle *hdl);
  * Return: Network buffer if success
  *         NULL if failure
  */
-qdf_nbuf_t
-wbuff_buff_get(struct wbuff_mod_handle *hdl, uint8_t pool_id, uint32_t len,
-	       const char *func_name, uint32_t line_num);
+qdf_nbuf_t wbuff_buff_get(struct wbuff_mod_handle *hdl, uint32_t len,
+			  const char *func_name, uint32_t line_num);
 
 /**
  * wbuff_buff_put() - put the buffer back to wbuff pool
+ * @hdl: wbuff_handle corresponding to the module
  * @buf: pointer to network buffer
  *
  * Return: NULL if success (buffer consumed)
@@ -132,8 +127,8 @@ static inline QDF_STATUS wbuff_module_deinit(void)
 }
 
 static inline struct wbuff_mod_handle *
-wbuff_module_register(struct wbuff_alloc_request *req, uint8_t num_pools,
-		      int reserve, int align, enum wbuff_module_id module_id)
+wbuff_module_register(struct wbuff_alloc_request *req, uint8_t num,
+		      int reserve, int align)
 {
 	return NULL;
 }
@@ -144,8 +139,8 @@ static inline QDF_STATUS wbuff_module_deregister(struct wbuff_mod_handle *hdl)
 }
 
 static inline qdf_nbuf_t
-wbuff_buff_get(struct wbuff_mod_handle *hdl, uint8_t pool_id, uint32_t len,
-	       const char *func_name, uint32_t line_num)
+wbuff_buff_get(struct wbuff_mod_handle *hdl, uint32_t len, const char *func_name,
+	       uint32_t line_num)
 {
 	return NULL;
 }

@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -30,17 +29,11 @@
 #include <i_qdf_nbuf_frag.h>
 
 /*
- * typedef qdf_frag_cache_t - Platform independent
- * frag cache abstraction
- */
-typedef __qdf_frag_cache_t qdf_frag_cache_t;
-
-/*
  * typedef qdf_frag_t - Platform independent frag address abstraction
  */
 typedef __qdf_frag_t qdf_frag_t;
 
-/*
+/**
  * Maximum number of frags an SKB can hold
  */
 #define QDF_NBUF_MAX_FRAGS __QDF_NBUF_MAX_FRAGS
@@ -54,9 +47,7 @@ typedef __qdf_frag_t qdf_frag_t;
 void qdf_frag_debug_init(void);
 
 /**
- * qdf_frag_debug_exit() - Exit network frag debug functionality
- *
- * Exit network frag tracking debug functionality and log frag memory leaks
+ * qdf_frag_debug_exit() - Destroy frag debug tracker
  *
  * Return: none
  */
@@ -118,21 +109,18 @@ void qdf_frag_debug_delete_node(qdf_frag_t fragp, const char *func_name,
 void qdf_frag_debug_update_addr(qdf_frag_t p_fragp, qdf_frag_t n_fragp,
 				const char *func_name, uint32_t line_num);
 
-#define qdf_frag_alloc(p, s) \
-	qdf_frag_alloc_debug(p, s, __func__, __LINE__)
+#define qdf_frag_alloc(s) \
+	qdf_frag_alloc_debug(s, __func__, __LINE__)
 
 /**
  * qdf_frag_alloc_debug() - Allocate frag memory
- * @pf_cache: page frag cache
  * @fragsz: Size of frag memory to be allocated
  * @func_name: Caller function name
  * @line_num: Caller function line no.
  *
  * Return: Allocated frag address
  */
-qdf_frag_t qdf_frag_alloc_debug(qdf_frag_cache_t *pf_cache,
-				unsigned int fragsz,
-				const char *func_name,
+qdf_frag_t qdf_frag_alloc_debug(unsigned int fragsz, const char *func_name,
 				uint32_t line_num);
 
 #define qdf_frag_free(p) \
@@ -192,15 +180,13 @@ static inline void qdf_frag_debug_update_addr(qdf_frag_t p_fragp,
 
 /**
  * qdf_frag_alloc() - Allocate frag memory
- * @pf_cache: page frag cache
  * @fragsz: Size of frag memory to be allocated
  *
  * Return: Allocated frag address
  */
-static inline qdf_frag_t qdf_frag_alloc(qdf_frag_cache_t *pf_cache,
-					unsigned int fragsz)
+static inline qdf_frag_t qdf_frag_alloc(unsigned int fragsz)
 {
-	return __qdf_frag_alloc(pf_cache, fragsz);
+	return __qdf_frag_alloc(fragsz);
 }
 
 /**
@@ -274,7 +260,7 @@ static inline void qdf_frag_mod_exit(void)
  * @buf: Virtual page address to be mapped
  * @dir: qdf_dma_dir_t
  * @nbytes: Size of memory to be mapped
- * @phy_addr: Corresponding mapped physical address
+ * @paddr: Corresponding mapped physical address
  *
  * Return: QDF_STATUS
  */
@@ -298,15 +284,4 @@ static inline void qdf_mem_unmap_page(qdf_device_t osdev, qdf_dma_addr_t paddr,
 	__qdf_mem_unmap_page(osdev, paddr, nbytes, dir);
 }
 
-/*
- * qdf_frag_cache_drain() - Drain page frag cache
- *
- * @pf_cache: page frag cache
- *
- * Return: void
- */
-static inline void qdf_frag_cache_drain(qdf_frag_cache_t *pf_cache)
-{
-	__qdf_frag_cache_drain(pf_cache);
-}
 #endif /* _QDF_NBUF_FRAG_H */

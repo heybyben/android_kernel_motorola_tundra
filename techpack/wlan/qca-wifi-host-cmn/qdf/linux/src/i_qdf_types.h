@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -65,10 +65,6 @@
 #ifdef IPA_OFFLOAD
 #include <linux/ipa.h>
 #endif
-#ifdef WLAN_SUPPORT_DPDK
-#include <linux/uio_driver.h>
-#endif
-#include <net/cfg80211.h>
 
 #define __qdf_must_check __must_check
 
@@ -146,20 +142,6 @@ typedef unsigned long __sgtable_t;
  */
 #define __QDF_MAX_SCATTER        1
 #define __QDF_NSEC_PER_MSEC NSEC_PER_MSEC
-#define __QDF_NSEC_PER_USEC NSEC_PER_USEC
-#define __QDF_USEC_PER_MSEC USEC_PER_MSEC
-#define __QDF_NSEC_PER_SEC NSEC_PER_SEC
-
-/*
- * Monitor flags defined in kernel "enum monitor_flags"
- */
-#define __QDF_MONITOR_FLAG_CHANGED MONITOR_FLAG_CHANGED
-#define __QDF_MONITOR_FLAG_FCSFAIL MONITOR_FLAG_FCSFAIL
-#define __QDF_MONITOR_FLAG_PLCPFAIL MONITOR_FLAG_PLCPFAIL
-#define __QDF_MONITOR_FLAG_CONTROL MONITOR_FLAG_CONTROL
-#define __QDF_MONITOR_FLAG_OTHER_BSS MONITOR_FLAG_OTHER_BSS
-#define __QDF_MONITOR_FLAG_COOK_FRAMES MONITOR_FLAG_COOK_FRAMES
-#define __QDF_MONITOR_FLAG_ACTIVE MONITOR_FLAG_ACTIVE
 
 #if defined(__LITTLE_ENDIAN_BITFIELD)
 #define QDF_LITTLE_ENDIAN_MACHINE
@@ -174,7 +156,7 @@ typedef unsigned long __sgtable_t;
 #define __bool_already_defined__
 
 /**
- * typedef bool - This is an enum for boolean
+ * bool - This is an enum for boolean
  * @false: zero
  * @true: one
  */
@@ -188,15 +170,13 @@ typedef enum bool {
 #define __qdf_packed    __attribute__((packed))
 
 typedef int (*__qdf_os_intr)(void *);
-/*
+/**
  * Private definitions of general data types
  */
 typedef dma_addr_t __qdf_dma_addr_t;
 typedef size_t __qdf_dma_size_t;
 typedef dma_addr_t __qdf_dma_context_t;
-typedef struct napi_struct __qdf_napi_struct;
 typedef struct net_device *__qdf_netdev_t;
-typedef struct net_device_stats __qdf_net_dev_stats;
 typedef struct cpumask __qdf_cpu_mask;
 typedef __le16 __qdf_le16_t;
 typedef __le32 __qdf_le32_t;
@@ -204,7 +184,6 @@ typedef __le64 __qdf_le64_t;
 typedef __be16 __qdf_be16_t;
 typedef __be32 __qdf_be32_t;
 typedef __be64 __qdf_be64_t;
-typedef struct net_device __qdf_dummy_netdev_t;
 
 #if defined(IPA_OFFLOAD) && defined(__KERNEL__)
 typedef struct ipa_wdi_buffer_info __qdf_mem_info_t;
@@ -228,9 +207,9 @@ typedef struct __qdf_shared_mem_info {
 #define qdf_get_dma_mem_context(var, field)   ((qdf_dma_context_t)(var->field))
 
 /**
- * typedef __qdf_resource_t - qdf resource type
+ * typedef struct __qdf_resource_t - qdf resource type
  * @paddr: Physical address
- * @vaddr: Virtual address
+ * @paddr: Virtual address
  * @len: Length
  */
 typedef struct __qdf_resource {
@@ -250,7 +229,6 @@ struct __qdf_mempool_ctxt;
  * @QDF_BUS_TYPE_AHB: AHB Bus
  * @QDF_BUS_TYPE_SNOC: SNOC Bus
  * @QDF_BUS_TYPE_SIM: Simulator
- * @QDF_BUS_TYPE_SDIO: SDIO
  * @QDF_BUS_TYPE_USB: USB Bus
  * @QDF_BUS_TYPE_IPCI: IPCI Bus
  */
@@ -270,7 +248,6 @@ enum qdf_bus_type {
  * @drv: Pointer to driver
  * @drv_hdl: Pointer to driver handle
  * @drv_name: Pointer to driver name
- * @cnss_pdev: Pointer to platform device
  * @irq: IRQ
  * @dev: Pointer to device
  * @res: QDF resource
@@ -279,14 +256,12 @@ enum qdf_bus_type {
  * @bus_type: Bus type
  * @bid: Bus ID
  * @smmu_s1_enabled: SMMU S1 enabled or not
- * @domain: domain type
  * @iommu_mapping: DMA iommu mapping pointer
  */
 struct __qdf_device {
 	void *drv;
 	void *drv_hdl;
 	char *drv_name;
-	void *cnss_pdev;
 	int irq;
 	struct device *dev;
 	__qdf_resource_t res;
@@ -322,7 +297,7 @@ typedef struct __qdf_segment {
 } __qdf_segment_t;
 
 /**
- * struct __qdf_dma_map: dma map of memory
+ * __qdf_dma_map - dma map of memory
  * @mapped: mapped address
  * @nsegs: number of segments
  * @coherent: coherency status
@@ -337,7 +312,7 @@ struct __qdf_dma_map {
 typedef struct  __qdf_dma_map  *__qdf_dma_map_t;
 
 /**
- * enum __qdf_net_wireless_evcode: enum for event code
+ * __qdf_net_wireless_evcode - enum for event code
  * @__QDF_IEEE80211_ASSOC: association event code
  * @__QDF_IEEE80211_REASSOC: reassociation event code
  * @__QDF_IEEE80211_DISASSOC: disassociation event code
@@ -379,10 +354,6 @@ enum __qdf_net_wireless_evcode {
 #define __QDF_DMA_FROM_DEVICE    DMA_TO_DEVICE
 #endif
 #define __qdf_inline             inline
-
-#if defined(WLAN_SUPPORT_DPDK) && defined(__KERNEL__)
-typedef struct uio_info qdf_uio_info_t;
-#endif
 
 /*
  * 1. GNU C/C++ Compiler

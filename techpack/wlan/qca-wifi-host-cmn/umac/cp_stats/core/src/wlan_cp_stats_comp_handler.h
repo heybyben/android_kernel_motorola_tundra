@@ -21,7 +21,7 @@
  * DOC: wlan_cp_stats_comp_handler.h
  *
  * This header file API declarations required to attach/detach and
- * enable/disable other UMAC component specific control plane statistics
+ * enable/disable other UMAC component specific control plane statitics
  * to cp stats component object
  */
 

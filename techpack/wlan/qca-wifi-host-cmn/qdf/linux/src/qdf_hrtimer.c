@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -52,13 +51,6 @@ void qdf_hrtimer_init(qdf_hrtimer_data_t *timer,
 
 qdf_export_symbol(qdf_hrtimer_init);
 
-qdf_ktime_t qdf_time_ms_to_ktime(uint64_t ms)
-{
-	return __qdf_time_ms_to_ktime(ms);
-}
-
-qdf_export_symbol(qdf_time_ms_to_ktime);
-
 void qdf_hrtimer_kill(qdf_hrtimer_data_t *timer)
 {
 	__qdf_hrtimer_kill(timer);
@@ -109,10 +101,3 @@ uint64_t qdf_hrtimer_forward(qdf_hrtimer_data_t *timer,
 }
 
 qdf_export_symbol(qdf_hrtimer_forward);
-
-void qdf_hrtimer_add_expires(qdf_hrtimer_data_t *timer, qdf_ktime_t interval)
-{
-	return __qdf_hrtimer_add_expires(timer, interval);
-}
-
-qdf_export_symbol(qdf_hrtimer_add_expires);

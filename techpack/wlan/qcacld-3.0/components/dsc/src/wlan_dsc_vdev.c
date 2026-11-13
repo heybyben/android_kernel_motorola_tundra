@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -104,37 +104,6 @@ void dsc_vdev_destroy(struct dsc_vdev **out_vdev)
 	__dsc_vdev_destroy(out_vdev);
 }
 
-static void __dsc_vdev_wait_for_uptree_ops(struct dsc_vdev *vdev)
-{
-	bool wait;
-
-	if (!dsc_assert(vdev))
-		return;
-
-	__dsc_driver_lock(vdev);
-	wait = vdev->psoc->ops.count > 0;
-	if (wait)
-		qdf_event_reset(&vdev->psoc->ops.event);
-	__dsc_driver_unlock(vdev);
-
-	if (wait)
-		qdf_wait_single_event(&vdev->psoc->ops.event, 0);
-
-	__dsc_driver_lock(vdev);
-	wait = vdev->psoc->driver->ops.count > 0;
-	if (wait)
-		qdf_event_reset(&vdev->psoc->driver->ops.event);
-	__dsc_driver_unlock(vdev);
-
-	if (wait)
-		qdf_wait_single_event(&vdev->psoc->driver->ops.event, 0);
-}
-
-void dsc_vdev_wait_for_uptree_ops(struct dsc_vdev *vdev)
-{
-	__dsc_vdev_wait_for_uptree_ops(vdev);
-}
-
 #define __dsc_vdev_can_op(vdev) __dsc_vdev_can_trans(vdev)
 
 /*
@@ -153,7 +122,7 @@ void dsc_vdev_wait_for_uptree_ops(struct dsc_vdev *vdev)
  * resumed after the current trans/op is completed. return QDF_STATUS_E_BUSY
  * in this case.
  *
- * If there is a psoc transition taking place because of psoc idle shutdown,
+ * If there is a psoc transition taking place becasue of psoc idle shutdown,
  * then the vdev trans/ops should be rejected and queued in the DSC queue so
  * that it may be resumed after the current trans/ops is completed. Return
  * QDF_STATUS_E_BUSY in this case.

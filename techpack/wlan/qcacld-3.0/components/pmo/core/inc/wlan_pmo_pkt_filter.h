@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -38,7 +37,7 @@ struct wlan_objmgr_psoc;
 uint32_t pmo_get_num_packet_filters(struct wlan_objmgr_psoc *psoc);
 
 /**
- * pmo_core_set_pkt_filter() - Set packet filter
+ * pmo_set_pkt_fltr_req() - Set packet filter
  * @psoc: objmgr psoc
  * @pmo_set_pkt_fltr_req: packet filter set param
  * @vdev_id: vdev id

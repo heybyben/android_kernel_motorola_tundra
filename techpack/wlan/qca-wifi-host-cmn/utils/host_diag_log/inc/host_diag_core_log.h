@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2014-2017, 2019-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -177,7 +176,7 @@ typedef struct {
 } host_log_beacon_update_pkt_type;
 
 /*---------------------------------------------------------------------------
-   This packet contains the information related to a WoW pattern value when set
+   This packet contains the information related to a WoW patern value when set
    LOG_WLAN_POWERSAVE_WOW_ADD_PTRN_C               0x149C
    ---------------------------------------------------------------------------*/
 typedef struct {
@@ -252,8 +251,6 @@ typedef struct {
 /**
  * struct host_log_pktlog_info - Packet log info
  * @log_hdr: Log header
- * @version: Version
- * @seq_no:  Sequence number
  * @buf_len: Length of the buffer that follows
  * @buf:     Buffer containing the packet log info
  *
@@ -293,7 +290,7 @@ struct host_log_cold_boot_cal_data_type {
 #define WLAN_MAX_SSID_SIZE              32
 
 /**
- * struct host_log_wlan_mgmt_tx_rx_info - To capture TX/RX mgmt frames' payload
+ * host_log_wlan_mgmt_tx_rx_info: To capture TX/RX mgmt frames' payload
  * @hdr: Log header
  * @version: Version number of the payload
  * @vdev_id: Vdev id
@@ -362,7 +359,7 @@ struct wlan_roam_cu_trigger_data {
 } qdf_packed;
 
 /**
- * struct wlan_roam_rssi_trigger_data - RSSI roam trigger related
+ * Struct wlan_roam_rssi_trigger_data - RSSI roam trigger related
  * parameters
  * @threshold: RSSI threshold value in dBm for LOW rssi roam trigger
  */
@@ -472,7 +469,7 @@ struct host_log_wlan_roam_scan_data {
 /**
  * struct host_log_wlan_roam_result_info - Roam result related info.
  * @hdr:                Log header
- * @version:            Payload structure version
+ * @version:            Payload strcuture version
  * @vdev_id:            Vdev Id
  * @status:             0 - Roaming is success ; 1 - Roaming failed
  * @timestamp:          Host timestamp in millisecs
@@ -514,9 +511,9 @@ struct wlan_rrm_beacon_report {
 /**
  * struct host_log_wlan_rrm_tx_rx_info - RRM frame related details
  * @hdr:     Log header
- * @version: Version of the payload structure
+ * @version: Version of the payload struture
  * @vdev_id: Vdev id
- * @origin:   Sent by host or firmware
+ * @orgin:   Sent by host or firmware
  * @is_tx:   Is Tx frame or RX frame
  * @roam_result: Roaming result
  * @timestamp: Time of the day in milliseconds
@@ -582,7 +579,7 @@ struct host_event_proto_pkt_info {
 };
 
 /*-------------------------------------------------------------------------
-   Function declarations and documentation
+   Function declarations and documenation
    ------------------------------------------------------------------------*/
 
 #ifdef __cplusplus

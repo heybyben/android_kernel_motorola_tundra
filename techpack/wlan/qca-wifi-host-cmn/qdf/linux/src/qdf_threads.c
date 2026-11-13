@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -43,7 +42,10 @@
 #include <linux/stacktrace.h>
 #include <qdf_defer.h>
 #include <qdf_module.h>
-#include <linux/cpumask.h>
+
+/* Function declarations and documenation */
+
+typedef int (*qdf_thread_os_func)(void *data);
 
 /**
  *  qdf_sleep() - sleep
@@ -144,11 +146,11 @@ qdf_export_symbol(qdf_create_thread);
 
 static uint16_t qdf_thread_id;
 
-qdf_thread_t *qdf_thread_run(qdf_thread_os_func callback, void *context)
+qdf_thread_t *qdf_thread_run(qdf_thread_func callback, void *context)
 {
 	struct task_struct *thread;
 
-	thread = kthread_create(callback, context,
+	thread = kthread_create((qdf_thread_os_func)callback, context,
 				"qdf %u", qdf_thread_id++);
 	if (IS_ERR(thread))
 		return NULL;
@@ -193,23 +195,10 @@ qdf_export_symbol(qdf_wake_up_process);
 #if ((defined(WLAN_HOST_ARCH_ARM) && !WLAN_HOST_ARCH_ARM) || \
 	LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0) || \
 	defined(BACKPORTED_EXPORT_SAVE_STACK_TRACE_TSK_ARM)) && \
-	defined(CONFIG_STACKTRACE)
+	defined(CONFIG_STACKTRACE) && !defined(CONFIG_ARCH_STACKWALK)
 #define QDF_PRINT_TRACE_COUNT 32
 
-#ifdef CONFIG_ARCH_STACKWALK
-void qdf_print_thread_trace(qdf_thread_t *thread)
-{
-	const int spaces = 4;
-	struct task_struct *task = thread;
-	unsigned long entries[QDF_PRINT_TRACE_COUNT] = {0};
-	unsigned int nr_entries = 0;
-	unsigned int max_entries = QDF_PRINT_TRACE_COUNT;
-	int skip = 0;
-
-	nr_entries = stack_trace_save_tsk(task, entries, max_entries, skip);
-	stack_trace_print(entries, nr_entries, spaces);
-}
-#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 2, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 2, 0))
 void qdf_print_thread_trace(qdf_thread_t *thread)
 {
 	const int spaces = 4;
@@ -315,71 +304,3 @@ void qdf_cpumask_copy(qdf_cpu_mask *dstp,
 }
 
 qdf_export_symbol(qdf_cpumask_copy);
-
-void qdf_cpumask_or(qdf_cpu_mask *dstp, qdf_cpu_mask *src1p,
-		    qdf_cpu_mask *src2p)
-{
-	cpumask_or(dstp, src1p, src2p);
-}
-
-qdf_export_symbol(qdf_cpumask_or);
-
-void
-qdf_thread_cpumap_print_to_pagebuf(bool list, char *new_mask_str,
-				   qdf_cpu_mask *new_mask)
-{
-	cpumap_print_to_pagebuf(list, new_mask_str, new_mask);
-}
-
-qdf_export_symbol(qdf_thread_cpumap_print_to_pagebuf);
-
-bool
-qdf_cpumask_and(qdf_cpu_mask *dstp, const qdf_cpu_mask *src1p,
-		const qdf_cpu_mask *src2p)
-{
-	return cpumask_and(dstp, src1p, src2p);
-}
-
-qdf_export_symbol(qdf_cpumask_and);
-
-bool
-qdf_cpumask_andnot(qdf_cpu_mask *dstp, const qdf_cpu_mask *src1p,
-		   const qdf_cpu_mask *src2p)
-{
-	return cpumask_andnot(dstp, src1p, src2p);
-}
-
-qdf_export_symbol(qdf_cpumask_andnot);
-
-bool
-qdf_cpumask_equal(const qdf_cpu_mask *src1p, const qdf_cpu_mask *src2p)
-{
-	return cpumask_equal(src1p, src2p);
-}
-
-qdf_export_symbol(qdf_cpumask_equal);
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 2, 0))
-void
-qdf_cpumask_complement(qdf_cpu_mask *dstp, const qdf_cpu_mask *srcp)
-{
-	cpumask_andnot(dstp, cpu_possible_mask, srcp);
-}
-#else
-void
-qdf_cpumask_complement(qdf_cpu_mask *dstp, const qdf_cpu_mask *srcp)
-{
-	cpumask_complement(dstp, srcp);
-}
-#endif
-
-qdf_export_symbol(qdf_cpumask_complement);
-
-#if defined(WALT_GET_CPU_TAKEN_SUPPORT) && IS_ENABLED(CONFIG_SCHED_WALT)
-qdf_cpu_mask qdf_walt_get_cpus_taken(void)
-{
-	return walt_get_cpus_taken();
-}
-
-qdf_export_symbol(qdf_walt_get_cpus_taken);
-#endif

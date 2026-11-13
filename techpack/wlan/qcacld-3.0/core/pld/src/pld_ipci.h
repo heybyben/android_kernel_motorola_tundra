@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -168,14 +168,6 @@ pld_ipci_qmi_send(struct device *dev, int type, void *cmd,
 	return 0;
 }
 
-static inline int
-pld_ipci_register_qmi_ind(struct device *dev, void *cb_ctx,
-			  int (*cb)(void *ctx, uint16_t type,
-				    void *event, int event_len))
-{
-	return -EINVAL;
-}
-
 static inline int pld_ipci_thermal_register(struct device *dev,
 					    unsigned long max_state,
 					    int mon_id)
@@ -193,11 +185,6 @@ static inline int pld_ipci_get_thermal_state(struct device *dev,
 					     int mon_id)
 {
 	return 0;
-}
-
-static inline bool pld_ipci_ce_cmn_cfg_supported(struct device *dev)
-{
-	return false;
 }
 
 static inline int pld_ipci_exit_power_save(struct device *dev)
@@ -223,67 +210,14 @@ static inline int pld_ipci_is_pci_ep_awake(struct device *dev)
 {
 	return 0;
 }
-
-static inline int pld_ipci_get_irq(struct device *dev, int ce_id)
-{
-	return 0;
-}
 #else
-/**
- * pld_ipci_register_driver() - Register platform device callback functions
- *
- * Return: int
- */
 int pld_ipci_register_driver(void);
-
-/**
- * pld_ipci_unregister_driver() - Unregister platform device callback functions
- *
- * Return: void
- */
 void pld_ipci_unregister_driver(void);
-
-/**
- * pld_ipci_wlan_enable() - Enable WLAN
- * @dev: device
- * @config: WLAN configuration data
- * @mode: WLAN mode
- * @host_version: host software version
- *
- * This function enables WLAN FW. It passed WLAN configuration data,
- * WLAN mode and host software version to FW.
- *
- * Return: 0 for success
- *         Non zero failure code for errors
- */
 int pld_ipci_wlan_enable(struct device *dev,
 			 struct pld_wlan_enable_cfg *config,
 			 enum pld_driver_mode mode, const char *host_version);
-
-/**
- * pld_ipci_wlan_disable() - Disable WLAN
- * @dev: device
- * @mode: WLAN mode
- *
- * This function disables WLAN FW. It passes WLAN mode to FW.
- *
- * Return: 0 for success
- *         Non zero failure code for errors
- */
 int pld_ipci_wlan_disable(struct device *dev, enum pld_driver_mode mode);
-
-/**
- * pld_ipci_get_soc_info() - Get SOC information
- * @dev: device
- * @info: buffer to SOC information
- *
- * Return SOC info to the buffer.
- *
- * Return: 0 for success
- *         Non zero failure code for errors
- */
 int pld_ipci_get_soc_info(struct device *dev, struct pld_soc_info *info);
-int pld_ipci_get_irq(struct device *dev, int ce_id);
 
 static inline int pld_ipci_power_on(struct device *dev)
 {
@@ -405,24 +339,6 @@ pld_ipci_qmi_send(struct device *dev, int type, void *cmd,
 	return icnss_qmi_send(dev, type, cmd, cmd_len, cb_ctx, cb);
 }
 
-#ifdef WLAN_CHIPSET_STATS
-static inline int
-pld_ipci_register_qmi_ind(struct device *dev, void *cb_ctx,
-			  int (*cb)(void *ctx, uint16_t type,
-				    void *event, int event_len))
-{
-	return icnss_register_driver_async_data_cb(dev, cb_ctx, cb);
-}
-#else
-static inline int
-pld_ipci_register_qmi_ind(struct device *dev, void *cb_ctx,
-			  int (*cb)(void *ctx, uint16_t type,
-				    void *event, int event_len))
-{
-	return 0;
-}
-#endif
-
 static inline int pld_ipci_thermal_register(struct device *dev,
 					    unsigned long max_state,
 					    int mon_id)
@@ -442,18 +358,6 @@ static inline int pld_ipci_get_thermal_state(struct device *dev,
 {
 	return icnss_get_curr_therm_cdev_state(dev, thermal_state, mon_id);
 }
-
-#ifdef CE_CMN_REG_CFG_QMI
-static inline bool pld_ipci_ce_cmn_cfg_supported(struct device *dev)
-{
-	return icnss_get_fw_cap(dev, ICNSS_FW_CAP_CE_CMN_CFG_SUPPORT);
-}
-#else
-static inline bool pld_ipci_ce_cmn_cfg_supported(struct device *dev)
-{
-	return false;
-}
-#endif
 
 static inline int pld_ipci_exit_power_save(struct device *dev)
 {

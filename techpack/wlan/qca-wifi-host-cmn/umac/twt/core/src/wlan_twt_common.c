@@ -23,12 +23,38 @@
 #include <wlan_twt_public_structs.h>
 #include <wlan_objmgr_peer_obj.h>
 #include <wlan_twt_tgt_if_tx_api.h>
-#include "twt/core/src/wlan_twt_cfg.h"
+#include "wlan_twt_cfg.h"
+
+QDF_STATUS
+wlan_twt_tgt_caps_get_requestor(struct wlan_objmgr_psoc *psoc, bool *val)
+{
+	struct twt_psoc_priv_obj *twt_psoc;
+
+	if (!psoc) {
+		twt_err("null psoc");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	twt_psoc = wlan_objmgr_psoc_get_comp_private_obj(psoc,
+							 WLAN_UMAC_COMP_TWT);
+	if (!twt_psoc) {
+		twt_err("null twt psoc priv obj");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	*val = twt_psoc->twt_caps.twt_requestor;
+	return QDF_STATUS_SUCCESS;
+}
 
 QDF_STATUS
 wlan_twt_tgt_caps_get_responder(struct wlan_objmgr_psoc *psoc, bool *val)
 {
 	struct twt_psoc_priv_obj *twt_psoc;
+
+	if (!psoc) {
+		twt_err("null psoc");
+		return QDF_STATUS_E_FAILURE;
+	}
 
 	twt_psoc = wlan_objmgr_psoc_get_comp_private_obj(psoc,
 							 WLAN_UMAC_COMP_TWT);
@@ -42,10 +68,81 @@ wlan_twt_tgt_caps_get_responder(struct wlan_objmgr_psoc *psoc, bool *val)
 }
 
 QDF_STATUS
+wlan_twt_tgt_caps_get_legacy_bcast_support(struct wlan_objmgr_psoc *psoc,
+					   bool *val)
+{
+	struct twt_psoc_priv_obj *twt_psoc;
+
+	if (!psoc) {
+		twt_err("null psoc");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	twt_psoc = wlan_objmgr_psoc_get_comp_private_obj(psoc,
+							 WLAN_UMAC_COMP_TWT);
+	if (!twt_psoc) {
+		twt_err("null twt psoc priv obj");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	*val = twt_psoc->twt_caps.legacy_bcast_twt_support;
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS
+wlan_twt_tgt_caps_get_bcast_req_support(struct wlan_objmgr_psoc *psoc,
+					bool *val)
+{
+	struct twt_psoc_priv_obj *twt_psoc;
+
+	if (!psoc) {
+		twt_err("null psoc");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	twt_psoc = wlan_objmgr_psoc_get_comp_private_obj(psoc,
+							 WLAN_UMAC_COMP_TWT);
+	if (!twt_psoc) {
+		twt_err("null twt psoc priv obj");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	*val = twt_psoc->twt_caps.twt_bcast_req_support;
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS
+wlan_twt_tgt_caps_get_bcast_res_support(struct wlan_objmgr_psoc *psoc,
+					bool *val)
+{
+	struct twt_psoc_priv_obj *twt_psoc;
+
+	if (!psoc) {
+		twt_err("null psoc");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	twt_psoc = wlan_objmgr_psoc_get_comp_private_obj(psoc,
+							 WLAN_UMAC_COMP_TWT);
+	if (!twt_psoc) {
+		twt_err("null twt psoc priv obj");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	*val = twt_psoc->twt_caps.twt_bcast_res_support;
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS
 wlan_twt_tgt_caps_get_nudge_enabled(struct wlan_objmgr_psoc *psoc,
 				    bool *val)
 {
 	struct twt_psoc_priv_obj *twt_psoc;
+
+	if (!psoc) {
+		twt_err("null psoc");
+		return QDF_STATUS_E_FAILURE;
+	}
 
 	twt_psoc = wlan_objmgr_psoc_get_comp_private_obj(psoc,
 							 WLAN_UMAC_COMP_TWT);
@@ -64,6 +161,11 @@ wlan_twt_tgt_caps_get_all_twt_enabled(struct wlan_objmgr_psoc *psoc,
 {
 	struct twt_psoc_priv_obj *twt_psoc;
 
+	if (!psoc) {
+		twt_err("null psoc");
+		return QDF_STATUS_E_FAILURE;
+	}
+
 	twt_psoc = wlan_objmgr_psoc_get_comp_private_obj(psoc,
 							 WLAN_UMAC_COMP_TWT);
 	if (!twt_psoc) {
@@ -80,6 +182,11 @@ wlan_twt_tgt_caps_get_stats_enabled(struct wlan_objmgr_psoc *psoc,
 					bool *val)
 {
 	struct twt_psoc_priv_obj *twt_psoc;
+
+	if (!psoc) {
+		twt_err("null psoc");
+		return QDF_STATUS_E_FAILURE;
+	}
 
 	twt_psoc = wlan_objmgr_psoc_get_comp_private_obj(psoc,
 							 WLAN_UMAC_COMP_TWT);
@@ -119,6 +226,12 @@ wlan_twt_tgt_caps_get_ack_supported(struct wlan_objmgr_psoc *psoc,
 {
 	struct twt_psoc_priv_obj *twt_psoc;
 
+	if (!psoc) {
+		twt_err("null psoc");
+		*val = false;
+		return QDF_STATUS_E_FAILURE;
+	}
+
 	twt_psoc = wlan_objmgr_psoc_get_comp_private_obj(psoc,
 							 WLAN_UMAC_COMP_TWT);
 	if (!twt_psoc) {
@@ -132,8 +245,9 @@ wlan_twt_tgt_caps_get_ack_supported(struct wlan_objmgr_psoc *psoc,
 }
 
 QDF_STATUS
-wlan_twt_tgt_caps_get_restricted_support(struct wlan_objmgr_psoc *psoc,
-					 bool *val)
+wlan_twt_requestor_disable(struct wlan_objmgr_psoc *psoc,
+			   struct twt_disable_param *req,
+			   void *context)
 {
 	struct twt_psoc_priv_obj *twt_psoc;
 
@@ -141,24 +255,6 @@ wlan_twt_tgt_caps_get_restricted_support(struct wlan_objmgr_psoc *psoc,
 		twt_err("null psoc");
 		return QDF_STATUS_E_FAILURE;
 	}
-
-	twt_psoc = wlan_objmgr_psoc_get_comp_private_obj(psoc,
-							 WLAN_UMAC_COMP_TWT);
-	if (!twt_psoc) {
-		twt_err("null twt psoc priv obj");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	*val = twt_psoc->twt_caps.restricted_twt_support;
-	return QDF_STATUS_SUCCESS;
-}
-
-QDF_STATUS
-wlan_twt_requestor_disable(struct wlan_objmgr_psoc *psoc,
-			   struct twt_disable_param *req,
-			   void *context)
-{
-	struct twt_psoc_priv_obj *twt_psoc;
 
 	twt_psoc = wlan_objmgr_psoc_get_comp_private_obj(psoc,
 							 WLAN_UMAC_COMP_TWT);
@@ -186,6 +282,11 @@ wlan_twt_responder_disable(struct wlan_objmgr_psoc *psoc,
 {
 	struct twt_psoc_priv_obj *twt_psoc;
 
+	if (!psoc) {
+		twt_err("null psoc");
+		return QDF_STATUS_E_FAILURE;
+	}
+
 	twt_psoc = wlan_objmgr_psoc_get_comp_private_obj(psoc,
 							 WLAN_UMAC_COMP_TWT);
 	if (!twt_psoc) {
@@ -212,7 +313,11 @@ wlan_twt_requestor_enable(struct wlan_objmgr_psoc *psoc,
 {
 	struct twt_psoc_priv_obj *twt_psoc;
 	bool requestor_en = false, twt_bcast_requestor = false;
-	bool rtwt_requestor = false, restricted_support = false;
+
+	if (!psoc) {
+		twt_err("null psoc");
+		return QDF_STATUS_E_FAILURE;
+	}
 
 	twt_psoc = wlan_objmgr_psoc_get_comp_private_obj(psoc,
 							 WLAN_UMAC_COMP_TWT);
@@ -239,14 +344,8 @@ wlan_twt_requestor_enable(struct wlan_objmgr_psoc *psoc,
 	else
 		req->twt_oper = TWT_OPERATION_INDIVIDUAL;
 
-	wlan_twt_cfg_get_rtwt_requestor(psoc, &rtwt_requestor);
-	wlan_twt_tgt_caps_get_restricted_support(psoc, &restricted_support);
-
-	req->r_twt_enable = QDF_MIN(restricted_support, rtwt_requestor);
-
-	twt_debug("TWT req enable: pdev_id:%d cong:%d bcast:%d rtwt:%d",
-		  req->pdev_id, req->sta_cong_timer_ms, req->b_twt_enable,
-		  req->r_twt_enable);
+	twt_debug("TWT req enable: pdev_id:%d cong:%d bcast:%d",
+		  req->pdev_id, req->sta_cong_timer_ms, req->b_twt_enable);
 	twt_debug("TWT req enable: role:%d ext:%d oper:%d",
 		  req->twt_role, req->ext_conf_present, req->twt_oper);
 
@@ -260,6 +359,11 @@ wlan_twt_responder_enable(struct wlan_objmgr_psoc *psoc,
 {
 	struct twt_psoc_priv_obj *twt_psoc;
 	bool responder_en = false, twt_bcast_responder = false;
+
+	if (!psoc) {
+		twt_err("null psoc");
+		return QDF_STATUS_E_FAILURE;
+	}
 
 	twt_psoc = wlan_objmgr_psoc_get_comp_private_obj(psoc,
 							 WLAN_UMAC_COMP_TWT);
@@ -317,9 +421,9 @@ wlan_twt_set_peer_capabilities(struct wlan_objmgr_psoc *psoc,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	twt_lock_acquire(&peer_priv->twt_peer_lock);
+	qdf_mutex_acquire(&peer_priv->twt_peer_lock);
 	peer_priv->peer_capability = peer_cap;
-	twt_lock_release(&peer_priv->twt_peer_lock);
+	qdf_mutex_release(&peer_priv->twt_peer_lock);
 
 	twt_debug("set peer cap: 0x%x", peer_cap);
 	wlan_objmgr_peer_release_ref(peer, WLAN_TWT_ID);
@@ -352,9 +456,9 @@ wlan_twt_get_peer_capabilities(struct wlan_objmgr_psoc *psoc,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	twt_lock_acquire(&peer_priv->twt_peer_lock);
+	qdf_mutex_acquire(&peer_priv->twt_peer_lock);
 	*peer_cap = peer_priv->peer_capability;
-	twt_lock_release(&peer_priv->twt_peer_lock);
+	qdf_mutex_release(&peer_priv->twt_peer_lock);
 
 	twt_debug("get peer cap: 0x%x", *peer_cap);
 	wlan_objmgr_peer_release_ref(peer, WLAN_TWT_ID);
@@ -367,6 +471,11 @@ wlan_twt_enable_event_handler(struct wlan_objmgr_psoc *psoc,
 {
 	struct twt_psoc_priv_obj *twt_psoc;
 	struct twt_en_dis_context *twt_context;
+
+	if (!psoc) {
+		twt_err("null psoc");
+		return QDF_STATUS_E_FAILURE;
+	}
 
 	twt_psoc = wlan_objmgr_psoc_get_comp_private_obj(psoc,
 							 WLAN_UMAC_COMP_TWT);
@@ -406,6 +515,11 @@ wlan_twt_disable_event_handler(struct wlan_objmgr_psoc *psoc,
 {
 	struct twt_psoc_priv_obj *twt_psoc;
 	struct twt_en_dis_context *twt_context;
+
+	if (!psoc) {
+		twt_err("null psoc");
+		return QDF_STATUS_E_FAILURE;
+	}
 
 	twt_psoc = wlan_objmgr_psoc_get_comp_private_obj(psoc,
 							 WLAN_UMAC_COMP_TWT);

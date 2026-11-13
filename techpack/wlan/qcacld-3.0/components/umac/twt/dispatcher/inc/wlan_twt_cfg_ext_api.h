@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -22,8 +22,6 @@
 #if defined(WLAN_SUPPORT_TWT) && defined(WLAN_TWT_CONV_SUPPORTED)
 #include <wlan_objmgr_psoc_obj.h>
 #include <wlan_twt_public_structs.h>
-#include <wlan_mlme_twt_public_struct.h>
-
 /**
  * wlan_twt_cfg_get_req_flag() - Get TWT requestor flag
  * @psoc: Pointer to global psoc object
@@ -43,151 +41,18 @@ wlan_twt_cfg_get_req_flag(struct wlan_objmgr_psoc *psoc, bool *val);
  */
 QDF_STATUS
 wlan_twt_cfg_get_res_flag(struct wlan_objmgr_psoc *psoc, bool *val);
-
-/**
- * wlan_twt_cfg_get_support_in_11n() - Get TWT support on HT cap
- * @psoc: Pointer to global psoc object
- * @val: pointer to output variable
- *
- * Return: QDF_STATUS_SUCCESS
- */
-QDF_STATUS
-wlan_twt_cfg_get_support_in_11n(struct wlan_objmgr_psoc *psoc,
-				bool *val);
-
-/**
- * wlan_twt_cfg_get_support_requestor() - Get TWT support of requestor
- * @psoc: Pointer to global psoc object
- * @val: pointer to output variable
- *
- * Return: QDF_STATUS_SUCCESS
- */
-QDF_STATUS
-wlan_twt_cfg_get_support_requestor(struct wlan_objmgr_psoc *psoc,
-				   bool *val);
-
-/**
- * wlan_twt_get_requestor_cfg() - Get requestor TWT configuration
- * @psoc: Pointer to psoc object
- * @val: Pointer to value
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS
-wlan_twt_get_requestor_cfg(struct wlan_objmgr_psoc *psoc, bool *val);
-
-/**
- * wlan_twt_get_responder_cfg() - Get TWT responder configuration
- * @psoc: Pointer to PSOC object
- * @val: Pointer to value
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS
-wlan_twt_get_responder_cfg(struct wlan_objmgr_psoc *psoc, bool *val);
-
-/**
- * wlan_twt_get_rtwt_support() - Get rTWT support
- * @psoc: Pointer to global psoc
- * @val: pointer to output variable
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS
-wlan_twt_get_rtwt_support(struct wlan_objmgr_psoc *psoc, bool *val);
-
-/**
- * wlan_twt_get_bcast_requestor_cfg() - Get requestor broadcast TWT
- * configuration
- * @psoc: Pointer to psoc object
- * @val: Pointer to value
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS
-wlan_twt_get_bcast_requestor_cfg(struct wlan_objmgr_psoc *psoc, bool *val);
-
-/**
- * wlan_twt_get_bcast_responder_cfg() - Get responder broadcast TWT
- * configuration
- * @psoc: Pointer to psoc object
- * @val: Pointer to value
- *
- * Return: QDF_STATUS
- */
-
-QDF_STATUS
-wlan_twt_get_bcast_responder_cfg(struct wlan_objmgr_psoc *psoc, bool *val);
-
-#ifdef FEATURE_SET
-/**
- * wlan_twt_get_feature_info() - Get TWT feature set information
- * @psoc: Pointer to global psoc object
- * @twt_feature_set: pointer to output twt feature set structure
- *
- * Return: None
- */
-void wlan_twt_get_feature_info(struct wlan_objmgr_psoc *psoc,
-			       struct wlan_twt_features *twt_feature_set);
-#endif
-
 #else
-static inline QDF_STATUS
+static inline
 wlan_twt_cfg_get_res_flag(struct wlan_objmgr_psoc *psoc, bool *val)
 {
 	return QDF_STATUS_SUCCESS;
 }
 
-static inline QDF_STATUS
+static inline
 wlan_twt_cfg_get_req_flag(struct wlan_objmgr_psoc *psoc, bool *val)
 {
 	return QDF_STATUS_SUCCESS;
 }
-
-static inline QDF_STATUS
-wlan_twt_cfg_get_support_in_11n(struct wlan_objmgr_psoc *psoc,
-				bool *val)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-static inline QDF_STATUS
-wlan_twt_cfg_get_support_requestor(struct wlan_objmgr_psoc *psoc,
-				   bool *val)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-static inline QDF_STATUS
-wlan_twt_get_requestor_cfg(struct wlan_objmgr_psoc *psoc, bool *val)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-static inline QDF_STATUS
-wlan_twt_get_responder_cfg(struct wlan_objmgr_psoc *psoc, bool *val)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-static inline QDF_STATUS
-wlan_twt_get_bcast_requestor_cfg(struct wlan_objmgr_psoc *psoc, bool *val)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-static inline QDF_STATUS
-wlan_twt_get_bcast_responder_cfg(struct wlan_objmgr_psoc *psoc, bool *val)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-#ifdef FEATURE_SET
-static inline void
-wlan_twt_get_feature_info(struct wlan_objmgr_psoc *psoc,
-			  struct wlan_twt_features *twt_feature_set)
-{
-}
 #endif
-#endif
+
 #endif

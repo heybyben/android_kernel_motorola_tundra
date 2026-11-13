@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1134,7 +1134,7 @@ ol_txrx_pdev_post_attach(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 	 */
 
 	/*
-	 * LL - initialize the target credit ourselves.
+	 * LL - initialize the target credit outselves.
 	 * HL - wait for a HTT target credit initialization
 	 * during htt_attach.
 	 */
@@ -1472,7 +1472,7 @@ ol_txrx_pdev_post_attach(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 
 	OL_RX_REORDER_TIMEOUT_INIT(pdev);
 
-	ol_txrx_dbg("Created pdev %pK", pdev);
+	ol_txrx_dbg("Created pdev %pK\n", pdev);
 
 	pdev->cfg.host_addba = ol_cfg_host_addba(pdev->ctrl_pdev);
 
@@ -1734,7 +1734,7 @@ static void ol_txrx_pdev_pre_detach(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 		 * As a side effect, this will complete the deletion of any
 		 * vdevs that are waiting for their peers to finish deletion.
 		 */
-		ol_txrx_dbg("Force delete for pdev %pK",
+		ol_txrx_dbg("Force delete for pdev %pK\n",
 			   pdev);
 		ol_txrx_peer_find_hash_erase(pdev);
 		ol_txrx_peer_free_inactive_list(pdev);
@@ -1838,14 +1838,14 @@ static QDF_STATUS ol_txrx_pdev_detach(struct cdp_soc_t *soc_hdl, uint8_t pdev_id
 	qdf_spin_lock_bh(&pdev->req_list_spinlock);
 	if (pdev->req_list_depth > 0)
 		ol_txrx_err(
-			"Warning: the txrx req list is not empty, depth=%d",
+			"Warning: the txrx req list is not empty, depth=%d\n",
 			pdev->req_list_depth
 			);
 	TAILQ_FOREACH_SAFE(req, &pdev->req_list, req_list_elem, temp_req) {
 		TAILQ_REMOVE(&pdev->req_list, req, req_list_elem);
 		pdev->req_list_depth--;
 		ol_txrx_err(
-			"%d: %pK,verbose(%d), concise(%d), up_m(0x%x), reset_m(0x%x)",
+			"%d: %pK,verbose(%d), concise(%d), up_m(0x%x), reset_m(0x%x)\n",
 			i++,
 			req,
 			req->base.print.verbose,
@@ -1936,7 +1936,6 @@ ol_txrx_vdev_attach(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	uint8_t vdev_id = vdev_info->vdev_id;
 	enum wlan_op_mode op_mode = vdev_info->op_mode;
 	enum wlan_op_subtype subtype = vdev_info->subtype;
-	enum QDF_OPMODE qdf_opmode = vdev_info->qdf_opmode;
 
 	struct ol_txrx_vdev_t *vdev;
 	QDF_STATUS qdf_status;
@@ -1959,7 +1958,6 @@ ol_txrx_vdev_attach(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	vdev->vdev_id = vdev_id;
 	vdev->opmode = op_mode;
 	vdev->subtype = subtype;
-	vdev->qdf_opmode = qdf_opmode;
 
 	vdev->delete.pending = 0;
 	vdev->safemode = 0;
@@ -2034,7 +2032,7 @@ ol_txrx_vdev_attach(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	ol_txrx_hl_tdls_flag_reset(soc_hdl, vdev_id, false);
 
 	ol_txrx_dbg(
-		   "Created vdev %pK ("QDF_MAC_ADDR_FMT")",
+		   "Created vdev %pK ("QDF_MAC_ADDR_FMT")\n",
 		   vdev,
 		   QDF_MAC_ADDR_REF(vdev->mac_addr.raw));
 
@@ -2067,10 +2065,10 @@ ol_txrx_vdev_attach(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
  *  vdev objects, so the data SW can use the OS shim vdev handle
  *  when passing rx data received by a vdev up to the OS shim.
  */
-static struct cdp_vdev *ol_txrx_vdev_register(struct cdp_soc_t *soc_hdl,
-					      uint8_t vdev_id,
-					      ol_osif_vdev_handle osif_vdev,
-					      struct ol_txrx_ops *txrx_ops)
+static QDF_STATUS ol_txrx_vdev_register(struct cdp_soc_t *soc_hdl,
+					uint8_t vdev_id,
+					ol_osif_vdev_handle osif_vdev,
+					struct ol_txrx_ops *txrx_ops)
 {
 	struct ol_txrx_soc_t *soc = cdp_soc_t_to_ol_txrx_soc_t(soc_hdl);
 	ol_txrx_vdev_handle vdev = ol_txrx_get_vdev_from_soc_vdev_id(soc,
@@ -2079,17 +2077,16 @@ static struct cdp_vdev *ol_txrx_vdev_register(struct cdp_soc_t *soc_hdl,
 	if (qdf_unlikely(!vdev) || qdf_unlikely(!txrx_ops)) {
 		qdf_print("vdev/txrx_ops is NULL!");
 		qdf_assert(0);
-		return NULL;
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	vdev->osif_dev = osif_vdev;
 	vdev->rx = txrx_ops->rx.rx;
 	vdev->stats_rx = txrx_ops->rx.stats_rx;
 	vdev->tx_comp = txrx_ops->tx.tx_comp;
-	vdev->vdev_del_notify = txrx_ops->vdev_del_notify;
 	txrx_ops->tx.tx = ol_tx_data;
 
-	return (struct cdp_vdev *)vdev;
+	return QDF_STATUS_SUCCESS;
 }
 
 /**
@@ -2194,8 +2191,6 @@ ol_txrx_vdev_detach(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	ol_txrx_vdev_handle vdev = ol_txrx_get_vdev_from_soc_vdev_id(soc,
 								     vdev_id);
 	struct ol_txrx_pdev_t *pdev;
-	ol_txrx_vdev_del_notify_cb vdev_del_notify;
-	void *vdev_del_context;
 
 	if (qdf_unlikely(!vdev))
 		return QDF_STATUS_E_FAILURE;
@@ -2207,8 +2202,6 @@ ol_txrx_vdev_detach(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	/* prevent anyone from restarting the ll_pause timer again */
 	qdf_atomic_set(&vdev->delete.detaching, 1);
 
-	vdev_del_notify = vdev->vdev_del_notify;
-	vdev_del_context = vdev->osif_dev;
 	ol_txrx_vdev_tx_queue_free(vdev);
 
 	qdf_spin_lock_bh(&vdev->ll_pause.mutex);
@@ -2252,7 +2245,7 @@ ol_txrx_vdev_detach(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	if (!TAILQ_EMPTY(&vdev->peer_list)) {
 		/* debug print - will be removed later */
 		ol_txrx_dbg(
-			   "not deleting vdev object %pK ("QDF_MAC_ADDR_FMT") until deletion finishes for all its peers",
+			   "not deleting vdev object %pK ("QDF_MAC_ADDR_FMT") until deletion finishes for all its peers\n",
 			   vdev,
 			   QDF_MAC_ADDR_REF(vdev->mac_addr.raw));
 		/* indicate that the vdev needs to be deleted */
@@ -2266,7 +2259,7 @@ ol_txrx_vdev_detach(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	qdf_event_destroy(&vdev->wait_delete_comp);
 
 	ol_txrx_dbg(
-		   "deleting vdev obj %pK ("QDF_MAC_ADDR_FMT")",
+		   "deleting vdev obj %pK ("QDF_MAC_ADDR_FMT")\n",
 		   vdev,
 		   QDF_MAC_ADDR_REF(vdev->mac_addr.raw));
 
@@ -2283,9 +2276,6 @@ ol_txrx_vdev_detach(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	 *
 	 */
 	ol_txrx_tx_desc_reset_vdev(vdev);
-
-	if (vdev_del_notify)
-		vdev_del_notify(vdev_del_context, (struct cdp_vdev *)vdev);
 
 	/*
 	 * Doesn't matter if there are outstanding tx frames -
@@ -2458,7 +2448,7 @@ ol_txrx_peer_attach(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 			(union ol_txrx_align_mac_addr_t *)peer_mac_addr) &&
 			(check_valid == 0 || temp_peer->valid)) {
 			ol_txrx_info_high(
-				"vdev_id %d ("QDF_MAC_ADDR_FMT") already exists",
+				"vdev_id %d ("QDF_MAC_ADDR_FMT") already exists.\n",
 				vdev->vdev_id,
 				QDF_MAC_ADDR_REF(peer_mac_addr));
 			if (qdf_atomic_read(&temp_peer->delete_in_progress)) {
@@ -2477,7 +2467,7 @@ ol_txrx_peer_attach(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 					(check_valid == 0 ||
 					 temp_peer->valid)) {
 			ol_txrx_info_high(
-				"vdev_id %d ("QDF_MAC_ADDR_FMT") old peer exists",
+				"vdev_id %d ("QDF_MAC_ADDR_FMT") old peer exists.\n",
 				vdev->vdev_id,
 				QDF_MAC_ADDR_REF(vdev->last_peer_mac_addr.raw));
 			if (qdf_atomic_read(&temp_peer->delete_in_progress)) {
@@ -2501,7 +2491,7 @@ ol_txrx_peer_attach(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 		rc = qdf_wait_for_event_completion(&vdev->wait_delete_comp,
 					   PEER_DELETION_TIMEOUT);
 		if (QDF_STATUS_SUCCESS != rc) {
-			ol_txrx_err("error waiting for peer_id(%d) deletion, status %d",
+			ol_txrx_err("error waiting for peer_id(%d) deletion, status %d\n",
 				    vdev->wait_on_peer_id, (int) rc);
 			/* Added for debugging only */
 			ol_txrx_dump_peer_access_list(temp_peer);
@@ -2570,7 +2560,7 @@ ol_txrx_peer_attach(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	ol_txrx_peer_find_hash_add(pdev, peer);
 
 	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_INFO_HIGH,
-		   "vdev %pK created peer %pK ref_cnt %d ("QDF_MAC_ADDR_FMT")",
+		   "vdev %pK created peer %pK ref_cnt %d ("QDF_MAC_ADDR_FMT")\n",
 		   vdev, peer, qdf_atomic_read(&peer->ref_cnt),
 		   QDF_MAC_ADDR_REF(peer->mac_addr.raw));
 	/*
@@ -2723,12 +2713,11 @@ static int ol_txrx_get_opmode(struct cdp_soc_t *soc_hdl, uint8_t vdev_id)
  * @soc_hdl: datapath soc handle
  * @vdev_id: virtual interface id
  * @peer_mac: peer mac addr
- * @slowpath: called from slow path or not
  *
  * Return: return peer state
  */
 static int ol_txrx_get_peer_state(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
-				  uint8_t *peer_mac, bool slowpath)
+				  uint8_t *peer_mac)
 {
 	struct ol_txrx_soc_t *soc = cdp_soc_t_to_ol_txrx_soc_t(soc_hdl);
 	ol_txrx_pdev_handle pdev =
@@ -2746,8 +2735,6 @@ static int ol_txrx_get_peer_state(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 
 	peer_state = peer->state;
 	ol_txrx_peer_release_ref(peer, PEER_DEBUG_ID_OL_INTERNAL);
-	if (peer->vdev->vdev_id != vdev_id)
-		return OL_TXRX_PEER_STATE_INVALID;
 
 	return peer_state;
 }
@@ -2972,7 +2959,7 @@ QDF_STATUS ol_txrx_peer_state_update(struct cdp_soc_t *soc_hdl,
 						    PEER_DEBUG_ID_OL_INTERNAL);
 	if (!peer) {
 		ol_txrx_err(
-			   "peer is null for peer_mac 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x",
+			   "peer is null for peer_mac 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x\n",
 			   peer_mac[0], peer_mac[1], peer_mac[2], peer_mac[3],
 			   peer_mac[4], peer_mac[5]);
 		return QDF_STATUS_E_INVAL;
@@ -3218,13 +3205,13 @@ int ol_txrx_peer_release_ref(ol_txrx_peer_handle peer,
 
 	vdev = peer->vdev;
 	if (!vdev) {
-		ol_txrx_err("The vdev is not present anymore");
+		ol_txrx_err("The vdev is not present anymore\n");
 		return -EINVAL;
 	}
 
 	pdev = vdev->pdev;
 	if (!pdev) {
-		ol_txrx_err("The pdev is not present anymore");
+		ol_txrx_err("The pdev is not present anymore\n");
 		err_code = 0xbad2;
 		goto ERR_STATE;
 	}
@@ -3267,7 +3254,7 @@ int ol_txrx_peer_release_ref(ol_txrx_peer_handle peer,
 
 	if (rc == 0) {
 		qdf_spin_unlock_bh(&pdev->peer_ref_mutex);
-		ol_txrx_err("The Peer is not present anymore");
+		ol_txrx_err("The Peer is not present anymore\n");
 		qdf_assert(0);
 		return -EACCES;
 	}
@@ -3339,9 +3326,6 @@ int ol_txrx_peer_release_ref(ol_txrx_peer_handle peer,
 					vdev->delete.callback;
 				void *vdev_delete_context =
 					vdev->delete.context;
-				ol_txrx_vdev_del_notify_cb vdev_del_notify =
-						vdev->vdev_del_notify;
-				void *vdev_del_context = vdev->osif_dev;
 				/*
 				 * Now that there are no references to the peer,
 				 * we can release the peer reference lock.
@@ -3364,16 +3348,10 @@ int ol_txrx_peer_release_ref(ol_txrx_peer_handle peer,
 					"deleting vdev object %pK ("QDF_MAC_ADDR_FMT") - its last peer is done",
 					vdev,
 					QDF_MAC_ADDR_REF(vdev->mac_addr.raw));
-				if (vdev_del_notify)
-					vdev_del_notify(vdev_del_context,
-							(struct cdp_vdev *)vdev);
-
 				/* all peers are gone, go ahead and delete it */
 				qdf_mem_free(vdev);
-
 				if (vdev_delete_cb)
 					vdev_delete_cb(vdev_delete_context);
-
 			} else {
 				qdf_spin_unlock_bh(&pdev->peer_ref_mutex);
 			}
@@ -3515,8 +3493,7 @@ void peer_unmap_timer_handler(void *data)
  * @soc_hdl: datapath soc handle
  * @vdev_id: virtual interface id
  * @peer_mac: peer MAC address
- * @bitmap: bitmap indicating special handling of request.
- * @peer_type: link or mld peer
+ * @bitmap - bitmap indicating special handling of request.
  * When the host's control SW disassociates a peer, it calls
  * this function to detach and delete the peer. The reference
  * stored in the control peer object to the data peer
@@ -3524,10 +3501,8 @@ void peer_unmap_timer_handler(void *data)
  *
  * Return: SUCCESS or Failure
  */
-static QDF_STATUS ol_txrx_peer_detach(struct cdp_soc_t *soc_hdl,
-				      uint8_t vdev_id, uint8_t *peer_mac,
-				      uint32_t bitmap,
-				      enum cdp_peer_type peer_type)
+static QDF_STATUS ol_txrx_peer_detach(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+				      uint8_t *peer_mac, uint32_t bitmap)
 {
 	ol_txrx_peer_handle peer;
 	struct ol_txrx_soc_t *soc = cdp_soc_t_to_ol_txrx_soc_t(soc_hdl);
@@ -3542,7 +3517,7 @@ static QDF_STATUS ol_txrx_peer_detach(struct cdp_soc_t *soc_hdl,
 	if (!peer)
 		return QDF_STATUS_E_FAILURE;
 
-	ol_txrx_info_high("peer %pK, peer->ref_cnt %d",
+	ol_txrx_info_high("%s peer %pK, peer->ref_cnt %d", __func__,
 			  peer, qdf_atomic_read(&peer->ref_cnt));
 
 	/* redirect peer's rx delivery function to point to a discard func */
@@ -3597,7 +3572,6 @@ static QDF_STATUS ol_txrx_peer_detach(struct cdp_soc_t *soc_hdl,
 	 * PEER_UNMAP message arrives to remove the other
 	 * reference, added by the PEER_MAP message.
 	 */
-	peer->state = OL_TXRX_PEER_STATE_INVALID;
 	ol_txrx_peer_release_ref(peer, PEER_DEBUG_ID_OL_PEER_ATTACH);
 
 	return QDF_STATUS_SUCCESS;
@@ -3637,8 +3611,7 @@ static void ol_txrx_peer_detach_force_delete(struct cdp_soc_t *soc_hdl,
 	/* Clear the peer_id_to_obj map entries */
 	ol_txrx_peer_remove_obj_map_entries(pdev, peer);
 	ol_txrx_peer_detach(soc_hdl, vdev_id, peer_mac,
-			    1 << CDP_PEER_DELETE_NO_SPECIAL,
-			    CDP_LINK_PEER_TYPE);
+			    1 << CDP_PEER_DELETE_NO_SPECIAL);
 }
 
 /**
@@ -3668,8 +3641,7 @@ static void ol_txrx_peer_detach_sync(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	if (!pdev->peer_unmap_sync_cb)
 		pdev->peer_unmap_sync_cb = peer_unmap_sync;
 
-	ol_txrx_peer_detach(soc_hdl, vdev_id, peer_mac, bitmap,
-			    CDP_LINK_PEER_TYPE);
+	ol_txrx_peer_detach(soc_hdl, vdev_id, peer_mac, bitmap);
 }
 
 /**
@@ -3854,7 +3826,7 @@ static QDF_STATUS ol_txrx_bus_suspend(struct cdp_soc_t *soc_hdl,
  * @soc_hdl: Datapath soc handle
  * @pdev_id: id of data path pdev handle
  *
- * Dummy function for symmetry
+ * Dummy function for symetry
  *
  * Return: QDF_STATUS_SUCCESS
  */
@@ -3891,7 +3863,7 @@ void ol_txrx_discard_tx_pending(ol_txrx_pdev_handle pdev_handle)
 	/*
 	 * First let hif do the qdf_atomic_dec_and_test(&tx_desc->ref_cnt)
 	 * then let htt do the qdf_atomic_dec_and_test(&tx_desc->ref_cnt)
-	 * which is the same with normal data send complete path
+	 * which is tha same with normal data send complete path
 	 */
 	htt_tx_pending_discard(pdev_handle->htt_pdev);
 
@@ -4184,7 +4156,7 @@ ol_txrx_fw_stats_handler(ol_txrx_pdev_handle pdev,
 	}
 	req = ol_txrx_fw_stats_desc_get_req(pdev, (uint8_t)cookie);
 	if (!req) {
-		ol_txrx_err("Request not retrieved for cookie %u",
+		ol_txrx_err("%s: Request not retrieved for cookie %u", __func__,
 			    (uint8_t)cookie);
 		return;
 	}
@@ -4199,7 +4171,7 @@ ol_txrx_fw_stats_handler(ol_txrx_pdev_handle pdev,
 
 	if (!found) {
 		ol_txrx_err(
-			"req(%pK) from firmware can't be found in the list", req);
+			"req(%pK) from firmware can't be found in the list\n", req);
 		return;
 	}
 
@@ -5197,7 +5169,7 @@ void ol_rx_data_process(struct ol_txrx_peer_t *peer,
 				  "%s: failed to enqueue rx frm to cached_bufq",
 				  __func__);
 	} else {
-#ifdef WLAN_DP_LEGACY_OL_RX_THREAD
+#ifdef QCA_CONFIG_SMP
 		/*
 		 * If the kernel is SMP, schedule rx thread to
 		 * better use multicores.
@@ -5222,9 +5194,9 @@ void ol_rx_data_process(struct ol_txrx_peer_t *peer,
 			pkt->staId = peer->local_id;
 			cds_indicate_rxpkt(sched_ctx, pkt);
 		}
-#else                           /* WLAN_DP_LEGACY_OL_RX_THREAD */
+#else                           /* QCA_CONFIG_SMP */
 		ol_rx_data_handler(pdev, rx_buf_list, peer->local_id);
-#endif /* WLAN_DP_LEGACY_OL_RX_THREAD */
+#endif /* QCA_CONFIG_SMP */
 	}
 
 	return;
@@ -5791,7 +5763,7 @@ static void ol_txrx_soc_detach(struct cdp_soc_t *soc)
  * @pdev_id: id of data path pdev handle
  * @scn: device context
  *
- * Return: none
+ * Return: noe
  */
 static void ol_txrx_pkt_log_con_service(struct cdp_soc_t *soc_hdl,
 					uint8_t pdev_id, void *scn)
@@ -5803,7 +5775,7 @@ static void ol_txrx_pkt_log_con_service(struct cdp_soc_t *soc_hdl,
  * @soc_hdl: Datapath soc handle
  * @pdev_id: id of data path pdev handle
  *
- * Return: none
+ * Return: noe
  */
 static void ol_txrx_pkt_log_exit(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 {
@@ -6161,6 +6133,171 @@ void ol_deregister_packetdump_callback(struct cdp_soc_t *soc_hdl,
 	pdev->ol_rx_packetdump_cb = NULL;
 }
 
+#ifdef WLAN_FEATURE_PEER_TXQ_FLUSH_CONF
+/**
+ * ol_map_flush_policy() - Map DP layer flush policy values to target i/f layer
+ * @policy: The DP layer flush policy value
+ *
+ * Return: Peer flush policy
+ */
+static enum peer_txq_flush_policy
+ol_map_flush_policy(enum cdp_peer_txq_flush_policy policy)
+{
+	switch (policy) {
+	case  CDP_PEER_TXQ_FLUSH_POLICY_NONE:
+		return PEER_TXQ_FLUSH_POLICY_NONE;
+	case CDP_PEER_TXQ_FLUSH_POLICY_TWT_SP_END:
+		return PEER_TXQ_FLUSH_POLICY_TWT_SP_END;
+	default:
+		return PEER_TXQ_FLUSH_POLICY_INVALID;
+	}
+}
+
+/**
+ * ol_send_peer_txq_flush_conf() - Send flush config for peers TID queues
+ * @mac: MAC addr of peer for which the tx queue flush is intended
+ * @vdev_id: VDEV identifier
+ * @tid: TID mask for identifying the tx queues to be flushed
+ * @policy: The peer tid queue flush policy
+ *
+ * Return: 0 for success or error code
+ */
+static int ol_send_peer_txq_flush_conf(uint8_t *mac, uint8_t vdev_id,
+				       uint32_t tid,
+				       enum cdp_peer_txq_flush_policy policy)
+{
+	enum peer_txq_flush_policy flush_policy;
+	struct peer_txq_flush_config_params param = {0};
+	QDF_STATUS status;
+
+	flush_policy = ol_map_flush_policy(policy);
+	if (flush_policy >= PEER_TXQ_FLUSH_POLICY_INVALID) {
+		ol_txrx_err("Invalid flush policy : %d", policy);
+		return -EINVAL;
+	}
+
+	param.vdev_id = vdev_id;
+	param.tid_mask = tid;
+	param.policy = flush_policy;
+	qdf_mem_copy(param.peer, mac, QDF_MAC_ADDR_SIZE);
+
+	status = wma_peer_txq_flush_config_send(&param);
+	return qdf_status_to_os_return(status);
+}
+
+/**
+ * ol_send_peer_txq_flush_tids() - Send flush command peers TID queues
+ * @mac: MAC addr of peer for which the tx queue flush is intended
+ * @vdev_id: VDEV identifier
+ * @tid: TID mask for identifying the tx queues to be flushed
+ *
+ * Return: 0 for success or error code
+ */
+static int ol_send_peer_txq_flush_tids(uint8_t *mac, uint8_t vdev_id,
+				       uint32_t tid)
+{
+	struct peer_flush_params param;
+	QDF_STATUS status;
+
+	param.vdev_id = vdev_id;
+	param.peer_tid_bitmap = tid;
+	qdf_mem_copy(param.peer_mac, mac, QDF_MAC_ADDR_SIZE);
+
+	status = wma_peer_flush_tids_send(mac, &param);
+	return qdf_status_to_os_return(status);
+}
+
+static int ol_txrx_peer_txq_flush_config(struct wlan_objmgr_psoc *psoc,
+				  uint8_t vdev_id, uint8_t *addr,
+				  uint8_t ac, uint32_t tid,
+				  enum cdp_peer_txq_flush_policy policy)
+{
+	static uint8_t ac_to_tid[4][2] = { {0, 3}, {1, 2}, {4, 5}, {6, 7} };
+	struct wlan_objmgr_peer *peer;
+	int i, rc;
+
+	if (!psoc || !addr) {
+		ol_txrx_err("Invalid params");
+		return -EINVAL;
+	}
+
+	if (!tid && !ac) {
+		ol_txrx_err("no ac/tid mask setting");
+		return -EINVAL;
+	}
+
+	if (tid && policy == CDP_PEER_TXQ_FLUSH_POLICY_INVALID) {
+		ol_txrx_err("Invalid flush policy");
+		return -EINVAL;
+	}
+
+	peer = wlan_objmgr_get_peer_by_mac(psoc, addr, WLAN_DP_ID);
+	if (!peer) {
+		ol_txrx_err("Peer not found in the list");
+		return -EINVAL;
+	}
+	/* If tid mask is provided and policy is immediate use legacy WMI.
+	 * If tid mask is provided and policy is other than immediate use
+	 * the new WMI command for flush config.
+	 * If tid mask is not provided and ac mask is provided, convert to tid,
+	 * use the legacy WMI cmd for flushing the queues immediately.
+	 */
+	if (tid) {
+		if (policy == CDP_PEER_TXQ_FLUSH_POLICY_IMMEDIATE) {
+			rc = ol_send_peer_txq_flush_tids(addr, vdev_id, tid);
+			wlan_objmgr_peer_release_ref(peer, WLAN_DP_ID);
+			return rc;
+		}
+		rc = ol_send_peer_txq_flush_conf(addr, vdev_id, tid, policy);
+		wlan_objmgr_peer_release_ref(peer, WLAN_DP_ID);
+		return rc;
+	}
+
+	if (ac) {
+		tid = 0;
+		for (i = 0; i < 4; ++i) {
+			if (((ac & 0x0f) >> i) & 0x01) {
+				tid |= (1 << ac_to_tid[i][0]) |
+				       (1 << ac_to_tid[i][1]);
+			}
+		}
+		rc = ol_send_peer_txq_flush_tids(addr, vdev_id, tid);
+		wlan_objmgr_peer_release_ref(peer, WLAN_DP_ID);
+		return rc;
+	}
+	 /* should not hit this line */
+	return 0;
+}
+
+/**
+ * ol_txrx_set_peer_txq_flush_config() - Set the peer txq flush configuration
+ * @soc_hdl: Opaque handle to the DP soc object
+ * @vdev_id: VDEV identifier
+ * @mac: MAC address of the peer
+ * @ac: access category mask
+ * @tid: TID mask
+ * @policy: Flush policy
+ *
+ * Return: 0 on success, errno on failure
+ */
+static int
+ol_txrx_set_peer_txq_flush_config(struct cdp_soc_t *soc_hdl,
+				  uint8_t vdev_id, uint8_t *mac,
+				  uint8_t ac, uint32_t tid,
+				  enum cdp_peer_txq_flush_policy policy)
+{
+	tp_wma_handle wma_handle = cds_get_context(QDF_MODULE_ID_WMA);
+
+	if (!soc_hdl) {
+		dp_err("soc is null");
+		return -EINVAL;
+	}
+
+	return ol_txrx_peer_txq_flush_config(wma_handle->psoc, vdev_id,
+					     mac, ac, tid, policy);
+}
+#endif
+
 static struct cdp_cmn_ops ol_ops_cmn = {
 	.txrx_soc_attach_target = ol_txrx_soc_attach_target,
 	.txrx_vdev_attach = ol_txrx_vdev_attach,
@@ -6229,6 +6366,9 @@ static struct cdp_misc_ops ol_ops_misc = {
 #ifdef WLAN_SUPPORT_TXRX_HL_BUNDLE
 	.vdev_set_bundle_require_flag = ol_tx_vdev_set_bundle_require,
 	.pdev_reset_bundle_require_flag = ol_tx_pdev_reset_bundle_require,
+#endif
+#ifdef WLAN_FEATURE_PEER_TXQ_FLUSH_CONF
+	.set_peer_txq_flush_config = ol_txrx_set_peer_txq_flush_config,
 #endif
 };
 
@@ -6460,7 +6600,7 @@ ol_txrx_soc_handle ol_txrx_soc_attach(void *scn_handle,
 bool ol_txrx_get_new_htt_msg_format(struct ol_txrx_pdev_t *pdev)
 {
 	if (!pdev) {
-		qdf_print("%s: pdev is NULL", __func__);
+		qdf_print("%s: pdev is NULL\n", __func__);
 		return false;
 	}
 	return pdev->new_htt_msg_format;
@@ -6473,7 +6613,7 @@ void ol_txrx_set_new_htt_msg_format(uint8_t val)
 
 	pdev = ol_txrx_get_pdev_from_pdev_id(soc, OL_TXRX_PDEV_ID);
 	if (!pdev) {
-		qdf_print("%s: pdev is NULL", __func__);
+		qdf_print("%s: pdev is NULL\n", __func__);
 		return;
 	}
 	pdev->new_htt_msg_format = val;
@@ -6489,7 +6629,7 @@ bool ol_txrx_get_peer_unmap_conf_support(void)
 
 	pdev = ol_txrx_get_pdev_from_pdev_id(soc, OL_TXRX_PDEV_ID);
 	if (!pdev) {
-		qdf_print("%s: pdev is NULL", __func__);
+		qdf_print("%s: pdev is NULL\n", __func__);
 		return false;
 	}
 	return pdev->enable_peer_unmap_conf_support;
@@ -6505,7 +6645,7 @@ void ol_txrx_set_peer_unmap_conf_support(bool val)
 
 	pdev = ol_txrx_get_pdev_from_pdev_id(soc, OL_TXRX_PDEV_ID);
 	if (!pdev) {
-		qdf_print("%s: pdev is NULL", __func__);
+		qdf_print("%s: pdev is NULL\n", __func__);
 		return;
 	}
 	pdev->enable_peer_unmap_conf_support = val;
@@ -6522,7 +6662,7 @@ bool ol_txrx_get_tx_compl_tsf64(void)
 
 	pdev = ol_txrx_get_pdev_from_pdev_id(soc, OL_TXRX_PDEV_ID);
 	if (!pdev) {
-		qdf_print("%s: pdev is NULL", __func__);
+		qdf_print("%s: pdev is NULL\n", __func__);
 		return false;
 	}
 	return pdev->enable_tx_compl_tsf64;

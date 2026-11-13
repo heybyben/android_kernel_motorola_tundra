@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -81,8 +81,8 @@ wmi_unified_coap_add_keepalive_pattern_cmd(wmi_unified_t wmi_handle,
 }
 
 /**
- * wmi_unified_coap_del_keepalive_pattern_cmd() - Delete pattern for CoAP
- *                                                offload periodic transmitting
+ * wmi_unified_coap_del_pattern_cmd() - Delete pattern for CoAP offload
+ * periodic transmitting
  * @wmi_handle: wmi handle
  * @vdev_id: vdev id
  * @pattern_id: pattern id
@@ -102,7 +102,7 @@ wmi_unified_coap_del_keepalive_pattern_cmd(wmi_unified_t wmi_handle,
 }
 
 /**
- * wmi_unified_coap_cache_get() - Get cached CoAP messages
+ * wmi_unified_coap_del_pattern_cmd() - Get cached CoAP messages
  * @wmi_handle: wmi handle
  * @vdev_id: vdev id
  * @pattern_id: pattern id

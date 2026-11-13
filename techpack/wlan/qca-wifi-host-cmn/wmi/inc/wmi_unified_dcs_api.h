@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -30,7 +29,7 @@
 
 /**
  * wmi_extract_dcs_interference_type() - extract dcs interference type
- * @wmi_hdl: wmi handle
+ * @wmi_handle: wmi handle
  * @evt_buf: pointer to event buffer
  * @param: Pointer to hold dcs interference param
  *
@@ -45,7 +44,7 @@ QDF_STATUS wmi_extract_dcs_interference_type(
 
 /**
  * wmi_extract_dcs_im_tgt_stats() - extract dcs im target stats
- * @wmi_hdl: wmi handle
+ * @wmi_handle: wmi handle
  * @evt_buf: pointer to event buffer
  * @wlan_stat: Pointer to hold wlan stats
  *
@@ -58,9 +57,9 @@ QDF_STATUS wmi_extract_dcs_im_tgt_stats(
 	void *evt_buf,
 	struct wlan_host_dcs_im_tgt_stats *wlan_stat);
 
-/**
+/*
  * wmi_extract_dcs_awgn_info() - extract DCS AWGN interference info from event
- * @wmi_hdl: WMI handle
+ * @wmi_handle: WMI handle
  * @evt_buf: Pointer to event buffer
  * @awgn_info: Pointer to hold AWGN interference info
  *

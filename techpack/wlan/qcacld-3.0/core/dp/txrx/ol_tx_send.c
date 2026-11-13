@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -55,7 +55,6 @@
 #include <pktlog_ac_fmt.h>
 #include <cdp_txrx_handle.h>
 #include <wlan_pkt_capture_ucfg_api.h>
-#include <wlan_dp_txrx.h>
 #ifdef TX_CREDIT_RECLAIM_SUPPORT
 
 #define OL_TX_CREDIT_RECLAIM(pdev)					\
@@ -211,9 +210,7 @@ ol_tx_send(struct ol_txrx_pdev_t *pdev,
 				QDF_TRACE_DEFAULT_PDEV_ID,
 				qdf_nbuf_data_addr(msdu),
 				sizeof(qdf_nbuf_data(msdu)), tx_desc->id,
-				vdev_id, 0,
-				tx_desc->vdev->qdf_opmode
-				));
+				vdev_id, 0));
 	failed = htt_tx_send_std(pdev->htt_pdev, msdu, id);
 	if (qdf_unlikely(failed)) {
 		ol_tx_target_credit_incr_int(pdev, msdu_credit_consumed);
@@ -347,9 +344,7 @@ ol_tx_download_done_hl_free(void *txrx_pdev,
 				 QDF_TRACE_DEFAULT_PDEV_ID,
 				 qdf_nbuf_data_addr(msdu),
 				 sizeof(qdf_nbuf_data(msdu)), tx_desc->id,
-				 dp_status, 0,
-				 tx_desc->vdev->qdf_opmode
-				 ));
+				 dp_status, 0));
 
 	is_frame_freed = ol_tx_download_done_base(pdev, status, msdu, msdu_id);
 
@@ -437,7 +432,7 @@ int ol_tx_deduct_one_credit(struct ol_txrx_pdev_t *pdev)
 				   _lcl_freelist, _tx_desc_last)	\
 	do {								\
 		qdf_atomic_init(&(_tx_desc)->ref_cnt);			\
-		/* restore original hdr offset */			\
+		/* restore orginal hdr offset */			\
 		OL_TX_RESTORE_HDR((_tx_desc), (_netbuf));		\
 		qdf_nbuf_unmap((_pdev)->osdev, (_netbuf), QDF_DMA_TO_DEVICE); \
 		qdf_nbuf_free((_netbuf));				\
@@ -453,7 +448,7 @@ int ol_tx_deduct_one_credit(struct ol_txrx_pdev_t *pdev)
 #define ol_tx_msdu_complete_single(_pdev, _tx_desc, _netbuf,\
 				   _lcl_freelist, _tx_desc_last)	\
 	do {								\
-		/* restore original hdr offset */			\
+		/* restore orginal hdr offset */			\
 		OL_TX_RESTORE_HDR((_tx_desc), (_netbuf));		\
 		qdf_nbuf_unmap((_pdev)->osdev, (_netbuf), QDF_DMA_TO_DEVICE); \
 		qdf_nbuf_free((_netbuf));				\
@@ -952,7 +947,7 @@ static void ol_tx_update_connectivity_stats(struct ol_tx_desc_t *tx_desc,
 	stats_rx = tx_desc->vdev->stats_rx;
 	ol_tx_flow_pool_unlock(tx_desc);
 
-	pkt_type_bitmap = wlan_dp_intf_get_pkt_type_bitmap_value(tx_desc->vdev);
+	pkt_type_bitmap = cds_get_connectivity_stats_pkt_bitmap(osif_dev);
 
 	if (pkt_type_bitmap) {
 		if (status != htt_tx_status_download_fail)
@@ -1085,7 +1080,7 @@ ol_tx_completion_handler(ol_txrx_pdev_handle pdev,
 			(u_int64_t)txtstamp64_list[i].tx_tsf64_high << 32 |
 			txtstamp64_list[i].tx_tsf64_low;
 
-			ol_tx_timestamp(pdev, status,  netbuf, tx_tsf64);
+			ol_tx_timestamp(pdev, status, netbuf, tx_tsf64);
 		} else if (txtstamp_list)
 			ol_tx_timestamp(pdev, status, netbuf,
 					(u_int64_t)txtstamp_list->timestamp[i]
@@ -1120,9 +1115,8 @@ ol_tx_completion_handler(ol_txrx_pdev_handle pdev,
 			QDF_TRACE_DEFAULT_PDEV_ID,
 			qdf_nbuf_data_addr(netbuf),
 			sizeof(qdf_nbuf_data(netbuf)), tx_desc->id, status,
-			dp_status,
-			tx_desc->vdev->qdf_opmode));
-
+			dp_status));
+		htc_pm_runtime_put(pdev->htt_pdev->htc_pdev);
 		/*
 		 * If credits are reported through credit_update_ind then do not
 		 * update group credits on tx_complete_ind.

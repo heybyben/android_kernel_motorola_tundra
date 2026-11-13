@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -112,7 +112,7 @@ static void lim_update_pbc_session_entry(struct mac_context *mac,
 		(uint32_t) (qdf_mc_timer_get_system_ticks() /
 			    QDF_TICKS_PER_SECOND);
 
-	pe_debug("Receive WPS probe request curTime: %d", curTime);
+	pe_debug("Receive WPS probe reques curTime: %d", curTime);
 	QDF_TRACE_HEX_DUMP(QDF_MODULE_ID_PE, QDF_TRACE_LEVEL_DEBUG,
 			   addr, QDF_MAC_ADDR_SIZE);
 	QDF_TRACE_HEX_DUMP(QDF_MODULE_ID_PE, QDF_TRACE_LEVEL_DEBUG,
@@ -226,7 +226,7 @@ static bool lim_check11b_rates(uint8_t rate)
 #ifdef CONFIG_BAND_6GHZ
 /**
  * lim_need_broadcast_probe_rsp: check whether need broadcast probe rsp
- * @session: a pointer to session entry
+ * @session: a ponter to session entry
  * @probe_req_da: probe request dst addr
  *
  * Return: bool
@@ -252,7 +252,7 @@ static bool lim_need_broadcast_probe_rsp(struct pe_session *session,
  * lim_process_probe_req_frame: to process probe req frame
  * @mac_ctx: Pointer to Global MAC structure
  * @rx_pkt_info: A pointer to Buffer descriptor + associated PDUs
- * @session: a pointer to session entry
+ * @session: a ponter to session entry
  *
  * This function is called by limProcessMessageQueue() upon
  * Probe Request frame reception. This function processes received
@@ -283,12 +283,12 @@ lim_process_probe_req_frame(struct mac_context *mac_ctx, uint8_t *rx_pkt_info,
 	tSirMacAddr dst_mac;
 
 	mac_hdr = WMA_GET_RX_MAC_HEADER(rx_pkt_info);
-	if (LIM_IS_AP_ROLE(session) &&
-	    session->curr_op_freq == WMA_GET_RX_FREQ(rx_pkt_info)) {
+	if (LIM_IS_AP_ROLE(session)) {
 		frame_len = WMA_GET_RX_PAYLOAD_LEN(rx_pkt_info);
 
-		pe_debug("Received Probe Request: %d bytes from "QDF_MAC_ADDR_FMT,
-			 frame_len, QDF_MAC_ADDR_REF(mac_hdr->sa));
+		pe_debug("Received Probe Request: %d bytes from",
+			frame_len);
+			lim_print_mac_addr(mac_ctx, mac_hdr->sa, LOGD);
 		/* Get pointer to Probe Request frame body */
 		body_ptr = WMA_GET_RX_MPDU_DATA(rx_pkt_info);
 
@@ -342,8 +342,9 @@ lim_process_probe_req_frame(struct mac_context *mac_ctx, uint8_t *rx_pkt_info,
 			}
 
 			if ((rate_11b > 0) && (other_rates == 0)) {
-				pe_debug("Received a probe req frame with only 11b rates, SA: "QDF_MAC_ADDR_FMT,
-					 QDF_MAC_ADDR_REF(mac_hdr->sa));
+				pe_debug("Received a probe req frame with only 11b rates, SA is: ");
+					lim_print_mac_addr(mac_ctx,
+						mac_hdr->sa, LOGD);
 					goto free_and_exit;
 			}
 		}
@@ -373,7 +374,7 @@ lim_process_probe_req_frame(struct mac_context *mac_ctx, uint8_t *rx_pkt_info,
 			}
 		}
 		ssid.length = session->ssId.length;
-		/* Copy the SSID from session entry to local variable */
+		/* Copy the SSID from sessio entry to local variable */
 		qdf_mem_copy(ssid.ssId, session->ssId.ssId,
 				session->ssId.length);
 
@@ -413,8 +414,9 @@ lim_process_probe_req_frame(struct mac_context *mac_ctx, uint8_t *rx_pkt_info,
 					goto free_and_exit;
 				}
 			} else {
-				pe_debug("Ignore ProbeReq frm with unmatch SSID received from SA: "QDF_MAC_ADDR_FMT,
-					 QDF_MAC_ADDR_REF(mac_hdr->sa));
+				pe_debug("Ignore ProbeReq frm with unmatch SSID received from");
+					lim_print_mac_addr(mac_ctx, mac_hdr->sa,
+							   LOGD);
 			}
 		} else {
 			/*
@@ -437,12 +439,12 @@ lim_process_probe_req_frame(struct mac_context *mac_ctx, uint8_t *rx_pkt_info,
 			goto free_and_exit;
 		}
 multipleSSIDcheck:
-		pe_debug("Ignore ProbeReq frm with unmatch SSID rcved from SA: "QDF_MAC_ADDR_FMT,
-			 QDF_MAC_ADDR_REF(mac_hdr->sa));
+		pe_debug("Ignore ProbeReq frm with unmatch SSID rcved from");
+			lim_print_mac_addr(mac_ctx, mac_hdr->sa, LOGD);
 	} else {
 		/* Ignore received Probe Request frame */
-		pe_debug("Ignoring Probe Request frame received from SA: "QDF_MAC_ADDR_FMT,
-			 QDF_MAC_ADDR_REF(mac_hdr->sa));
+		pe_debug("Ignoring Probe Request frame received from");
+		lim_print_mac_addr(mac_ctx, mac_hdr->sa, LOGD);
 	}
 
 free_and_exit:
@@ -484,8 +486,9 @@ lim_indicate_probe_req_to_hdd(struct mac_context *mac, uint8_t *pBd,
 	lim_send_sme_mgmt_frame_ind(mac, pHdr->fc.subType,
 				    (uint8_t *) pHdr,
 				    (frameLen + sizeof(tSirMacMgmtHdr)),
-				    pe_session->vdev_id,
+				    pe_session->smeSessionId,
 				    WMA_GET_RX_FREQ(pBd),
+				    pe_session,
 				    WMA_GET_RX_RSSI_NORMALIZED(pBd),
 				    RXMGMT_FLAG_NONE);
 } /*** end lim_indicate_probe_req_to_hdd() ***/

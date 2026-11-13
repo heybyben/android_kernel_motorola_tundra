@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -32,7 +31,7 @@
 #include <lim_session.h>
 #include <lim_session_utils.h>
 #include <lim_admit_control.h>
-#include <wlan_scan_api.h>
+#include <wlan_scan_ucfg_api.h>
 #include "wma.h"
 #include "wlan_crypto_global_api.h"
 
@@ -102,8 +101,10 @@ void lim_ft_cleanup_pre_auth_info(struct mac_context *mac,
 		if (pReAssocSessionEntry->valid &&
 		    pReAssocSessionEntry->limSmeState ==
 		    eLIM_SME_WT_REASSOC_STATE) {
-			pe_debug("Deleting Preauth session(%d)",
-				 pReAssocSessionEntry->peSessionId);
+			QDF_TRACE(QDF_MODULE_ID_PE,
+				  QDF_TRACE_LEVEL_DEBUG,
+				  FL("Deleting Preauth session(%d)"),
+				  pReAssocSessionEntry->peSessionId);
 			pe_delete_session(mac, pReAssocSessionEntry);
 		}
 	}
@@ -255,13 +256,6 @@ void lim_perform_ft_pre_auth(struct mac_context *mac, QDF_STATUS status,
 		pe_err("pe_session is not in STA mode");
 		return;
 	}
-	if (cm_is_auth_type_sae(pe_session->vdev)) {
-		struct qdf_mac_addr *pre_auth_bssid = (struct qdf_mac_addr *)
-			pe_session->ftPEContext.pFTPreAuthReq->preAuthbssId;
-
-		lim_trigger_auth_req_sae(mac, pe_session, pre_auth_bssid);
-		return;
-	}
 	pe_debug("Entered wait auth2 state for FT (old session %pK)",
 			pe_session);
 	if (pe_session->is11Rconnection) {
@@ -324,14 +318,13 @@ QDF_STATUS lim_ft_setup_auth_session(struct mac_context *mac,
 	struct pe_session *ft_session = NULL;
 	uint8_t sessionId = 0;
 	struct sSirFTPreAuthReq *req;
-	QDF_STATUS status;
 
 	ft_session =
 		pe_find_session_by_bssid(mac, pe_session->limReAssocbssId,
 					 &sessionId);
 	if (!ft_session) {
-		pe_err("No session found for bssid: "QDF_MAC_ADDR_FMT,
-			QDF_MAC_ADDR_REF(pe_session->limReAssocbssId));
+		pe_err("No session found for bssid");
+		lim_print_mac_addr(mac, pe_session->limReAssocbssId, LOGE);
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -343,13 +336,9 @@ QDF_STATUS lim_ft_setup_auth_session(struct mac_context *mac,
 
 	req = pe_session->ftPEContext.pFTPreAuthReq;
 	if (req && req->pbssDescription) {
-		status = lim_fill_ft_session(mac,
-					     req->pbssDescription, ft_session,
-					     pe_session, WLAN_PHYMODE_AUTO);
-		if (QDF_IS_STATUS_ERROR(status))
-			pe_err("Failed to fill ft session for vdev id %d",
-			       ft_session->vdev_id);
-
+		lim_fill_ft_session(mac,
+				    req->pbssDescription, ft_session,
+				    pe_session, WLAN_PHYMODE_AUTO);
 		lim_ft_prepare_add_bss_req(mac, ft_session,
 					   req->pbssDescription);
 	}
@@ -483,12 +472,13 @@ void lim_handle_ft_pre_auth_rsp(struct mac_context *mac, QDF_STATUS status,
 		else
 			ft_session->vdev_nss = mac->vdev_type_nss_5g.sta;
 
+		pe_debug("created session (%pK) with id = %d",
+			ft_session, ft_session->peSessionId);
+
 		/* Update the ReAssoc BSSID of the current session */
 		sir_copy_mac_addr(pe_session->limReAssocbssId,
 				  pbssDescription->bssId);
-		pe_debug("created session (%pK) with id = %d BSSID = "QDF_MAC_ADDR_FMT,
-			 ft_session, ft_session->peSessionId,
-			 QDF_MAC_ADDR_REF(pe_session->limReAssocbssId));
+		lim_print_mac_addr(mac, pe_session->limReAssocbssId, LOGD);
 	}
 send_rsp:
 	if ((pe_session->curr_op_freq !=
@@ -694,15 +684,16 @@ QDF_STATUS lim_send_preauth_scan_offload(struct mac_context *mac_ctx,
 {
 	struct scan_start_request *req;
 	struct wlan_objmgr_vdev *vdev;
-	uint8_t vdev_id;
+	uint8_t session_id;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 
 	if (!session_entry) {
-		pe_err("Session entry is NULL");
+		QDF_TRACE(QDF_MODULE_ID_PE, QDF_TRACE_LEVEL_ERROR,
+			  FL("Session entry is NULL"));
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	vdev_id = session_entry->smeSessionId;
+	session_id = session_entry->smeSessionId;
 
 	req = qdf_mem_malloc(sizeof(*req));
 	if (!req)
@@ -711,29 +702,31 @@ QDF_STATUS lim_send_preauth_scan_offload(struct mac_context *mac_ctx,
 	qdf_mem_zero(req, sizeof(*req));
 
 	vdev = wlan_objmgr_get_vdev_by_id_from_pdev(mac_ctx->pdev,
-						    vdev_id,
+						    session_id,
 						    WLAN_LEGACY_MAC_ID);
 	if (!vdev) {
-		pe_err("vdev_id %d: vdev is NULL", vdev_id);
+		QDF_TRACE(QDF_MODULE_ID_PE, QDF_TRACE_LEVEL_ERROR,
+			  FL("vdev object is NULL"));
 		qdf_mem_free(req);
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	wlan_scan_init_default_params(vdev, req);
+	ucfg_scan_init_default_params(vdev, req);
 
 	qdf_mem_copy(req->scan_req.bssid_list,
 		     (uint8_t *)ft_preauth_req->currbssId,
 		     QDF_MAC_ADDR_SIZE);
 
-	req->scan_req.scan_id = wlan_scan_get_scan_id(mac_ctx->psoc);
+	req->scan_req.scan_id = ucfg_scan_get_scan_id(mac_ctx->psoc);
 	if (!req->scan_req.scan_id) {
 		wlan_objmgr_vdev_release_ref(vdev, WLAN_LEGACY_MAC_ID);
 		qdf_mem_free(req);
-		pe_err("Invalid scan ID");
+		QDF_TRACE(QDF_MODULE_ID_PE, QDF_TRACE_LEVEL_ERROR,
+			  FL("Invalid scan ID"));
 		return QDF_STATUS_E_FAILURE;
 	}
 	ft_preauth_req->scan_id = req->scan_req.scan_id;
-	req->scan_req.vdev_id = vdev_id;
+	req->scan_req.vdev_id = session_id;
 	req->scan_req.scan_req_id = mac_ctx->lim.req_id | PREAUTH_REQUESTOR_ID;
 	req->scan_req.scan_priority = SCAN_PRIORITY_VERY_HIGH;
 	req->scan_req.scan_f_passive = true;
@@ -742,13 +735,14 @@ QDF_STATUS lim_send_preauth_scan_offload(struct mac_context *mac_ctx,
 	req->scan_req.chan_list.chan[0].freq =
 			ft_preauth_req->pre_auth_channel_freq;
 
-	req->scan_req.dwell_time_active = LIM_FT_PREAUTH_ACTIVE_SCAN_TIME;
-	req->scan_req.dwell_time_passive = LIM_FT_PREAUTH_PASSIVE_SCAN_TIME;
+	req->scan_req.dwell_time_active = LIM_FT_PREAUTH_SCAN_TIME;
+	req->scan_req.dwell_time_passive = LIM_FT_PREAUTH_SCAN_TIME;
 
-	status = wlan_scan_start(req);
-	if (QDF_IS_STATUS_ERROR(status))
+	status = ucfg_scan_start(req);
+	if (status != QDF_STATUS_SUCCESS)
 		/* Don't free req here, ucfg_scan_start will do free */
-		pe_info("Issue scan req failed");
+		QDF_TRACE(QDF_MODULE_ID_PE, QDF_TRACE_LEVEL_INFO_HIGH,
+			  FL("Issue scan req failed"));
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_LEGACY_MAC_ID);
 	return status;
 }

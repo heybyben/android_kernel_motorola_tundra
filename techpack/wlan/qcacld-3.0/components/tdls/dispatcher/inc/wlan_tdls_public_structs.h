@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -20,7 +19,7 @@
 /**
  * DOC: wlan_tdls_public_structs.h
  *
- * TDLS public structure definitions
+ * TDLS public structure definations
  */
 
 #ifndef _WLAN_TDLS_STRUCTS_H_
@@ -45,32 +44,13 @@
 #define WLAN_MAX_SUPP_OPER_CLASSES                   32
 #define WLAN_MAC_MAX_SUPP_RATES                      32
 #define WLAN_CHANNEL_14                              14
-
-/* Enable TDLS off-channel switch */
 #define ENABLE_CHANSWITCH                            1
-
-/*
- * Passive(peer requested) responder mode off-channel switch.
- * If peer initiates off channel request, that will be honored in
- * this mode
- */
 #define DISABLE_CHANSWITCH                           2
-
-/*
- * Disable TDLS off-channel operation completely.
- * Peer initiated requests will also be discarded.
- */
-#define DISABLE_ACTIVE_CHANSWITCH                    3
-
 #define WLAN_TDLS_PREFERRED_OFF_CHANNEL_NUM_MIN      1
 #define WLAN_TDLS_PREFERRED_OFF_CHANNEL_NUM_MAX      165
 #define WLAN_TDLS_PREFERRED_OFF_CHANNEL_NUM_DEF      36
-#define WLAN_TDLS_PREFERRED_OFF_CHANNEL_FRQ_DEF     5180
-#define WLAN_TDLS_MAX_CONCURRENT_VDEV_SUPPORTED      3
 
 #define AC_PRIORITY_NUM                 4
-
-#define WLAN_TDLS_STA_KICKOUT_THRESHOLD 3
 
 /* Default tdls serialize timeout is set to 4 (peer delete) + 1 secs */
 #ifdef FEATURE_RUNTIME_PM
@@ -242,8 +222,6 @@ enum tdls_feature_mode {
  * @TDLS_CMD_SET_OFFCHANMODE: tdls offchannel mode
  * @TDLS_CMD_SET_SECOFFCHANOFFSET: tdls secondary offchannel offset
  * @TDLS_DELETE_ALL_PEERS_INDICATION: tdls delete all peers indication
- * @TDLS_CMD_START_BSS: SAP start indication to tdls module
- * @TDLS_CMD_SET_LINK_UNFORCE: tdls to unforce link for MLO case
  */
 enum tdls_command_type {
 	TDLS_CMD_TX_ACTION = 1,
@@ -269,9 +247,7 @@ enum tdls_command_type {
 	TDLS_CMD_SET_OFFCHANNEL,
 	TDLS_CMD_SET_OFFCHANMODE,
 	TDLS_CMD_SET_SECOFFCHANOFFSET,
-	TDLS_DELETE_ALL_PEERS_INDICATION,
-	TDLS_CMD_START_BSS,
-	TDLS_CMD_SET_LINK_UNFORCE
+	TDLS_DELETE_ALL_PEERS_INDICATION
 };
 
 /**
@@ -281,7 +257,7 @@ enum tdls_command_type {
  * @TDLS_EVENT_RX_MGMT: rx discovery response frame
  * @TDLS_EVENT_ADD_PEER: add peer or update peer
  * @TDLS_EVENT_DEL_PEER: delete peer
- * @TDLS_EVENT_DISCOVERY_REQ: discovery request
+ * @TDLS_EVENT_DISCOVERY_REQ: dicovery request
  * @TDLS_EVENT_TEARDOWN_REQ: teardown request
  * @TDLS_EVENT_SETUP_REQ: setup request
  * @TDLS_EVENT_TEARDOWN_LINKS_DONE: teardown completion event
@@ -304,13 +280,12 @@ enum tdls_event_type {
 
 /**
  * enum tdls_state_t - tdls state
- * @QCA_WIFI_HAL_TDLS_S_DISABLED: TDLS is not enabled, or is disabled now
- * @QCA_WIFI_HAL_TDLS_S_ENABLED: TDLS is enabled, but not yet tried
- * @QCA_WIFI_HAL_TDLS_S_ESTABLISHED: Direct link is established
- * @QCA_WIFI_HAL_TDLS_S_ESTABLISHED_OFF_CHANNEL: Direct link established using
- *                                               MCC
- * @QCA_WIFI_HAL_TDLS_S_DROPPED: Direct link was established, but is now dropped
- * @QCA_WIFI_HAL_TDLS_S_FAILED: Direct link failed
+ * @QCA_WIFI_HAL_TDLS_DISABLED: TDLS is not enabled, or is disabled now
+ * @QCA_WIFI_HAL_TDLS_ENABLED: TDLS is enabled, but not yet tried
+ * @QCA_WIFI_HAL_TDLS_ESTABLISHED: Direct link is established
+ * @QCA_WIFI_HAL_TDLS_ESTABLISHED_OFF_CHANNEL: Direct link established using MCC
+ * @QCA_WIFI_HAL_TDLS_DROPPED: Direct link was established, but is now dropped
+ * @QCA_WIFI_HAL_TDLS_FAILED: Direct link failed
  */
 enum tdls_state_t {
 	QCA_WIFI_HAL_TDLS_S_DISABLED = 1,
@@ -365,7 +340,7 @@ enum tdls_event_msg_type {
  * handle this
  * @TDLS_EXIT_BT_BUSY: BT exited busy mode, TDLS connection tracker needs to
  * handle this
- * @TDLS_SCAN_STARTED: TDLS module received a scan start event, TDLS connection
+ * @DLS_SCAN_STARTED: TDLS module received a scan start event, TDLS connection
  * tracker needs to handle this
  * @TDLS_SCAN_COMPLETED: TDLS module received a scan complete event, TDLS
  * connection tracker needs to handle this
@@ -407,7 +382,6 @@ enum tdls_disable_sources {
  * @vdev: vdev object
  * @reason: used with teardown indication
  * @peer_mac: MAC address of the TDLS peer
- * @status: operation status
  */
 struct tdls_osif_indication {
 	struct wlan_objmgr_vdev *vdev;
@@ -493,7 +467,6 @@ enum tdls_feature_bit {
  * @tdls_uapsd_ptr_timeout: tdls peer response timeout
  * @tdls_feature_flags: tdls feature flags
  * @tdls_pre_off_chan_num: tdls off channel number
- * @tdls_pre_off_chan_freq_6g: tdls pref off channel freq for 6g band
  * @tdls_pre_off_chan_bw: tdls off channel bandwidth
  * @tdls_peer_kickout_threshold: sta kickout threshold for tdls peer
  * @tdls_discovery_wake_timeout: tdls discovery wake timeout
@@ -509,7 +482,6 @@ enum tdls_feature_bit {
  * @tdls_scan_enable: tdls scan enable
  * @tdls_sleep_sta_enable: tdls sleep sta enable
  * @tdls_support_enable: tdls support enable
- * @tdls_link_id: mlo link id
  */
 struct tdls_user_config {
 	uint32_t tdls_tx_states_period;
@@ -527,7 +499,6 @@ struct tdls_user_config {
 	uint32_t tdls_uapsd_ptr_timeout;
 	uint32_t tdls_feature_flags;
 	uint32_t tdls_pre_off_chan_num;
-	uint32_t tdls_pre_off_chan_freq_6g;
 	uint32_t tdls_pre_off_chan_bw;
 	uint32_t tdls_peer_kickout_threshold;
 	uint32_t tdls_discovery_wake_timeout;
@@ -543,7 +514,6 @@ struct tdls_user_config {
 	bool tdls_scan_enable;
 	bool tdls_sleep_sta_enable;
 	bool tdls_support_enable;
-	int tdls_link_id;
 };
 
 /**
@@ -601,11 +571,11 @@ struct tdls_rx_mgmt_frame {
 	uint32_t vdev_id;
 	uint32_t frm_type;
 	uint32_t rx_rssi;
-	QDF_FLEX_ARRAY(uint8_t, buf);
+	uint8_t buf[1];
 };
 
 /**
- * typedef tdls_rx_callback() - Callback for rx mgmt frame
+ * tdls_rx_callback() - Callback for rx mgmt frame
  * @user_data: user data associated to this rx mgmt frame.
  * @rx_frame: RX mgmt frame
  *
@@ -617,8 +587,8 @@ typedef void (*tdls_rx_callback)(void *user_data,
 	struct tdls_rx_mgmt_frame *rx_frame);
 
 /**
- * typedef tdls_wmm_check() - Callback for wmm info
- * @vdev_id: ID of the vdev to check
+ * tdls_wmm_check() - Callback for wmm info
+ * @psoc: psoc object
  *
  * This callback will be used to check wmm information
  *
@@ -662,8 +632,7 @@ typedef QDF_STATUS
 typedef void (*tdls_offchan_parms_callback)(struct wlan_objmgr_vdev *vdev);
 
 /**
- * typedef tdls_vdev_init_cb() - Callback for initializing the tdls private
- *                               structure
+ * tdls_vdev_init_cb() - Callback for initializing the tdls private structure
  * @vdev: vdev object
  *
  * This callback will be used to create the vdev private object and store
@@ -672,10 +641,8 @@ typedef void (*tdls_offchan_parms_callback)(struct wlan_objmgr_vdev *vdev);
  * Return: QDF_STATUS
  */
 typedef QDF_STATUS (*tdls_vdev_init_cb)(struct wlan_objmgr_vdev *vdev);
-
 /**
- * typedef tdls_vdev_deinit_cb() - Callback for deinitializing the tdls
- *                                 private structure
+ * tdls_vdev_deinit_cb() - Callback for deinitializing the tdls private struct
  * @vdev: vdev object
  *
  * This callback will be used to destroy the vdev private object.
@@ -683,18 +650,6 @@ typedef QDF_STATUS (*tdls_vdev_init_cb)(struct wlan_objmgr_vdev *vdev);
  * Return: None
  */
 typedef void (*tdls_vdev_deinit_cb)(struct wlan_objmgr_vdev *vdev);
-
-/**
- * struct tdls_osif_cb - Callbacks for updating osif params.
- * @tdls_osif_conn_update: Update osif params when TDLS peer is connected
- * @tdls_osif_disconn_update: Update osif params when TDLS peer is disconnected
- *
- * These callbacks will be used for updating osif params.
- */
-struct tdls_osif_cb {
-	void (*tdls_osif_conn_update)(struct wlan_objmgr_vdev *vdev);
-	void (*tdls_osif_disconn_update)(struct wlan_objmgr_vdev *vdev);
-};
 
 /**
  * struct tdls_start_params - tdls start params
@@ -705,10 +660,6 @@ struct tdls_osif_cb {
  * @tdls_update_peer_state: pass WMA_UPDATE_TDLS_PEER_STATE value
  * @tdls_del_all_peers: pass eWNI_SME_DEL_ALL_TDLS_PEERS
  * @tdls_update_dp_vdev_flags: pass CDP_UPDATE_TDLS_FLAGS
- * @tdls_rx_cb: TDLS RX callback
- * @tdls_rx_cb_data: TDLS RX callback context
- * @tdls_wmm_cb: TDLS WMM check callback
- * @tdls_wmm_cb_data: TDLS WMM check callback context
  * @tdls_event_cb: tdls event callback
  * @tdls_evt_cb_data: tdls event data
  * @tdls_peer_context: userdata for register/deregister TDLS peer
@@ -716,7 +667,6 @@ struct tdls_osif_cb {
  * @tdls_dp_vdev_update: update vdev flags in datapath
  * @tdls_osif_init_cb: callback to initialize the tdls priv
  * @tdls_osif_deinit_cb: callback to deinitialize the tdls priv
- * @tdls_osif_update_cb: callback to update osif params
  */
 struct tdls_start_params {
 	struct tdls_user_config config;
@@ -737,7 +687,6 @@ struct tdls_start_params {
 	tdls_dp_vdev_update_flags_callback tdls_dp_vdev_update;
 	tdls_vdev_init_cb tdls_osif_init_cb;
 	tdls_vdev_deinit_cb tdls_osif_deinit_cb;
-	struct tdls_osif_cb tdls_osif_update_cb;
 };
 
 /**
@@ -785,7 +734,7 @@ struct tdls_del_peer_request {
 };
 
 /**
- * struct vhtmcsinfo - VHT MCS information
+ * struct vhgmcsinfo - VHT MCS information
  * @rx_mcs_map: RX MCS map 2 bits for each stream, total 8 streams
  * @rx_highest: Indicates highest long GI VHT PPDU data rate
  *      STA can receive. Rate expressed in units of 1 Mbps.
@@ -809,7 +758,7 @@ struct vhtmcsinfo {
  *
  * This structure is the "VHT capabilities element" as
  * described in 802.11ac D3.0 8.4.2.160
- * @vht_capinfo: VHT capability info
+ * @vht_cap_info: VHT capability info
  * @supp_mcs: VHT MCS supported rates
  */
 struct vhtcap {
@@ -817,7 +766,6 @@ struct vhtcap {
 	struct vhtmcsinfo supp_mcs;
 };
 
-#ifdef WLAN_FEATURE_11AX
 /**
  * struct hecap - HE capabilities
  *
@@ -825,8 +773,8 @@ struct vhtcap {
  * described in 802.11ax D4.0 section 9.4.2.232.3
  * @mac_cap_info: MAC capability info
  * @phycap_info: Phy Capability info
- * @he_cap_mcs_info: HE capabilities MCS information
  */
+#ifdef WLAN_FEATURE_11AX
 struct hecap {
 	uint8_t mac_cap_info[6];
 	uint8_t phycap_info[11];
@@ -849,28 +797,6 @@ struct hecap_6ghz {
 };
 #endif
 
-#ifdef WLAN_FEATURE_11BE
-/**
- * struct ehtcapfixed - EHT capabilities fixed data
- * @mac_cap_info: MAC capabilities
- * @phy_cap_info: PHY capabilities
- */
-struct ehtcapfixed {
-	uint8_t mac_cap_info[2];
-	uint8_t phy_cap_info[9];
-};
-
-/**
- * struct ehtcap - EHT capabilities
- * @eht_cap_fixed: fixed parts, see &ehtcapfixed
- * @optional: optional parts
- */
-struct ehtcap {
-	struct ehtcapfixed eht_cap_fixed;
-	uint8_t optional[];
-} qdf_packed;
-#endif
-
 struct tdls_update_peer_params {
 	uint8_t peer_addr[QDF_MAC_ADDR_SIZE];
 	uint32_t peer_type;
@@ -888,15 +814,10 @@ struct tdls_update_peer_params {
 	struct hecap he_cap;
 	struct hecap_6ghz he_6ghz_cap;
 #endif
-#ifdef WLAN_FEATURE_11BE
-	uint8_t ehtcap_present;
-	uint8_t eht_cap_len;
-	struct ehtcap eht_cap;
-#endif
 	uint8_t uapsd_queues;
 	uint8_t max_sp;
 	uint8_t supported_channels_len;
-	qdf_freq_t supported_chan_freq[WLAN_MAC_MAX_SUPP_CHANNELS];
+	uint8_t supported_channels[WLAN_MAC_MAX_SUPP_CHANNELS];
 	uint8_t supported_oper_classes_len;
 	uint8_t supported_oper_classes[WLAN_MAX_SUPP_OPER_CLASSES];
 	bool is_qos_wmm_sta;
@@ -923,7 +844,6 @@ struct tdls_oper_request {
  * @vdev: vdev object
  * @peer_addr: MAC address of the TDLS peer
  * @chan: channel
- * @ch_freq: ch_freq
  * @max_latency: maximum latency
  * @op_class: operation class
  * @min_bandwidth: minimal bandwidth
@@ -933,7 +853,6 @@ struct tdls_oper_config_force_peer_request {
 	struct wlan_objmgr_vdev *vdev;
 	uint8_t peer_addr[QDF_MAC_ADDR_SIZE];
 	uint32_t chan;
-	qdf_freq_t ch_freq;
 	uint32_t max_latency;
 	uint32_t op_class;
 	uint32_t min_bandwidth;
@@ -982,14 +901,14 @@ struct tdls_info {
 
 /**
  * struct tdls_ch_params - channel parameters
- * @ch_freq: Channel frequency
+ * @chan_id: ID of the channel
  * @pwr: power level
  * @dfs_set: is dfs supported or not
  * @half_rate: is the channel operating at 10MHz
  * @quarter_rate: is the channel operating at 5MHz
  */
 struct tdls_ch_params {
-	qdf_freq_t ch_freq;
+	uint8_t chan_id;
 	uint8_t pwr;
 	bool dfs_set;
 	bool half_rate;
@@ -997,7 +916,7 @@ struct tdls_ch_params {
 };
 
 /**
- * struct tdls_peer_params - TDLS peer capabilities parameters
+ * struct tdls_peer_params - TDLS peer capablities parameters
  * @is_peer_responder: is peer responder or not
  * @peer_uapsd_queue: peer uapsd queue
  * @peer_max_sp: peer max SP value
@@ -1036,7 +955,6 @@ struct tdls_peer_params {
  * struct tdls_peer_update_state - TDLS peer state parameters
  * @vdev_id: vdev id
  * @peer_macaddr: peer mac address
- * @peer_state: peer state
  * @peer_cap: peer capabality
  * @resp_reqd: response needed
  */
@@ -1052,14 +970,11 @@ struct tdls_peer_update_state {
  * struct tdls_channel_switch_params - channel switch parameter structure
  * @vdev_id: vdev ID
  * @peer_mac_addr: Peer mac address
- * @tdls_off_ch_bw_offset: Target off-channel bandwidth offset
+ * @tdls_off_ch_bw_offset: Target off-channel bandwitdh offset
  * @tdls_off_ch: Target Off Channel
- * @tdls_sw_mode: Switch mode
  * @oper_class: Operating class for target channel
  * @is_responder: Responder or initiator
  * @tdls_off_chan_freq: Target Off Channel frequency
- * @num_off_channels: Number of channels allowed for off channel operation
- * @allowed_off_channels: Channel list allowed for off channels
  */
 struct tdls_channel_switch_params {
 	uint32_t    vdev_id;
@@ -1070,8 +985,6 @@ struct tdls_channel_switch_params {
 	uint8_t     oper_class;
 	uint8_t     is_responder;
 	uint32_t    tdls_off_chan_freq;
-	uint16_t    num_off_channels;
-	struct tdls_ch_params allowed_off_channels[WLAN_MAC_WMI_MAX_SUPP_CHANNELS];
 };
 
 /**
@@ -1125,11 +1038,11 @@ struct tdls_event_notify {
 };
 
 /**
- * struct tdls_send_mgmt - tdls send management frame
+ * struct tdls_event_notify - tdls event notify
  * @peer_mac: peer's mac address
  * @frame_type: Type of TDLS mgmt frame to be sent
  * @dialog: dialog token used in the frame.
- * @status_code: status to be included in the frame
+ * @status_code: status to be incuded in the frame
  * @responder: Tdls request type
  * @peer_capability: peer cpabilities
  * @len: length of additional Ies
@@ -1178,28 +1091,24 @@ struct tdls_get_all_peers {
 };
 
 /**
- * struct tdls_action_frame_request - tdls send mgmt request
+ * struct tdls_send_action_frame_request - tdls send mgmt request
  * @vdev: vdev object
  * @chk_frame: This struct used to validate mgmt frame
  * @session_id: session id
- * @link_id: link id
  * @vdev_id: vdev id
  * @cmd_buf: cmd buffer
  * @len: length of the frame
  * @use_default_ac: access category
- * @link_active: whether link active command send successfully
  * @tdls_mgmt: tdls management
  */
 struct tdls_action_frame_request {
 	struct wlan_objmgr_vdev *vdev;
 	struct tdls_validate_action_req chk_frame;
 	uint8_t session_id;
-	uint8_t link_id;
 	uint8_t vdev_id;
 	const uint8_t *cmd_buf;
 	uint8_t len;
 	bool use_default_ac;
-	bool link_active;
 	/* Variable length, do not add anything after this */
 	struct tdls_send_mgmt tdls_mgmt;
 };
@@ -1222,7 +1131,6 @@ struct tdls_set_responder_req {
  * @tdls_prohibited: peer mac addr
  * @tdls_chan_swit_prohibited: peer type
  * @lfr_roam: is trigger due to lfr
- * @user_disconnect: should userspace be notified of disconnect
  * @session_id: session id
  */
 struct tdls_sta_notify_params {
@@ -1291,7 +1199,7 @@ struct tdls_set_offchannel {
 };
 
 /**
- * struct tdls_set_offchanmode - TDLS set offchannel mode
+ * struct tdls_set_offchan_mode - TDLS set offchannel mode
  * @vdev: vdev object
  * @offchan_mode: Updated tdls offchannel mode value.
  * @callback: callback to release vdev ref.
@@ -1303,7 +1211,7 @@ struct tdls_set_offchanmode {
 };
 
 /**
- * struct tdls_set_secoffchanneloffset - TDLS set secondary offchannel offset
+ * struct tdls_set_offchan_offset - TDLS set offchannel mode
  * @vdev: vdev object
  * @offchan_offset: Offchan offset value.
  * @callback: callback to release vdev ref.
@@ -1381,19 +1289,18 @@ struct tdls_del_sta_rsp {
 	struct wlan_objmgr_psoc *psoc;
 };
 
-/**
+/*
  * struct tdls_send_mgmt_request - tdls management request
  * @message_type: type of pe message
  * @length: length of the frame.
  * @session_id: session id
  * @req_type: type of action frame
  * @dialog: dialog token used in the frame.
- * @status_code: status to be included in the frame.
+ * @status_code: status to be incuded in the frame.
  * @responder: tdls request type
  * @peer_capability: peer capability information
  * @bssid: bssid
  * @peer_mac: mac address of the peer
- * @ac: Access Category to use
  * @add_ie: additional ie's to be included
  */
 struct tdls_send_mgmt_request {
@@ -1409,7 +1316,7 @@ struct tdls_send_mgmt_request {
 	struct qdf_mac_addr peer_mac;
 	enum wifi_traffic_ac ac;
 	/* Variable length. Dont add any field after this. */
-	QDF_FLEX_ARRAY(uint8_t, add_ie);
+	uint8_t add_ie[1];
 };
 
 /**
@@ -1431,13 +1338,8 @@ struct tdls_send_mgmt_request {
  * @vht_cap: vht capability
  * @he_cap_len: he capability length
  * @he_cap: he capability
- * @he_6ghz_cap: HE 6 GHz capability
- * @ehtcap_present: eht capability present
- * @eht_cap_len: eht capability length
- * @eht_cap: eht capability
  * @uapsd_queues: uapsd queue as sSirMacQosInfoStation
  * @max_sp: maximum service period
- * @is_pmf: is PMF active
  */
 struct tdls_add_sta_req {
 	uint16_t message_type;
@@ -1459,11 +1361,6 @@ struct tdls_add_sta_req {
 	uint8_t he_cap_len;
 	struct hecap he_cap;
 	struct hecap_6ghz he_6ghz_cap;
-#endif
-#ifdef WLAN_FEATURE_11BE
-	uint8_t ehtcap_present;
-	uint8_t eht_cap_len;
-	struct ehtcap eht_cap;
 #endif
 	uint8_t uapsd_queues;
 	uint8_t max_sp;
@@ -1496,19 +1393,4 @@ struct tdls_link_teardown {
 	struct wlan_objmgr_psoc *psoc;
 };
 
-#ifdef FEATURE_SET
-/**
- * struct wlan_tdls_features - TDLS feature set struct
- * @enable_tdls: enable/disable tdls
- * @enable_tdls_offchannel: enable/disable tdls offchannel
- * @max_tdls_peers: Max tdls Peers
- * @enable_tdls_capability_enhance: enable tdls capability enhance
- */
-struct wlan_tdls_features {
-	bool enable_tdls;
-	bool enable_tdls_offchannel;
-	uint8_t max_tdls_peers;
-	bool enable_tdls_capability_enhance;
-};
-#endif
 #endif

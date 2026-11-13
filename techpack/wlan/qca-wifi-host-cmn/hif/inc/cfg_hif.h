@@ -1,6 +1,6 @@
-/*
+/**
  * Copyright (c) 2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -35,7 +35,7 @@
 #define WLAN_CFG_CE_STATUS_RING_BATCH_COUNT_THRESH_DEFAULT 1
 
 #ifdef WLAN_CE_INTERRUPT_THRESHOLD_CONFIG
-/*
+/**
  * <ini>
  * ce_status_ring_timer_thresh - ce status srng timer threshold
  * @Min: 0
@@ -60,9 +60,7 @@
 		     CFG_VALUE_OR_DEFAULT, \
 		     "CE Status ring timer threshold")
 
-#define CFG_RING_TIMER_THRESHOLD CFG(CFG_CE_STATUS_RING_TIMER_THRESHOLD)
-
-/*
+/**
  * <ini>
  * ce_status_ring_batch_count_thresh - ce status srng batch count threshold
  * @Min: 0
@@ -87,65 +85,10 @@
 		     CFG_VALUE_OR_DEFAULT, \
 		     "CE Status ring batch count threshold")
 
-#define CFG_BATCH_COUNT_THRESHOLD CFG(CFG_CE_STATUS_RING_BATCH_COUNT_THRESHOLD)
-
-#else
-#define CFG_RING_TIMER_THRESHOLD
-#define CFG_BATCH_COUNT_THRESHOLD
-#endif /* WLAN_CE_INTERRUPT_THRESHOLD_CONFIG */
-
-/*
- * <ini>
- * gDisableWakeIrq - Disable wake IRQ or not
- * @Min: 0
- * @Max: 1
- * @Default: 0
- *
- * This ini controls driver to disable wake IRQ or not.
- * Disable wake IRQ for one MSI mode.
- * If you want to support wake IRQ. Please allocate at least
- * 2 MSI vector. The first is for wake IRQ while the others
- * share the second vector.
- *
- * Related: None.
- *
- * Supported Feature: wake IRQ
- *
- * Usage: Internal/External
- *
- * </ini>
- */
-#define CFG_DISABLE_WAKE_IRQ CFG_INI_BOOL( \
-	"gDisableWakeIrq", \
-	0, \
-	"Disable wake IRQ")
-
-/*
- * <ini>
- * irq_affine_audio_use_case - IRQ affinity for audio use case supported
- * @Min: 0
- * @Max: 1
- * @Default: 0
- *
- * This ini controls driver to enable IRQ affinity for Pro audio use case.
- *
- * Related: None.
- *
- * Supported Feature: IRQ Affinity
- *
- * Usage: External
- *
- * </ini>
- */
-#define CFG_IRQ_AFFINE_AUDIO_USE_CASE CFG_INI_BOOL( \
-	"irq_affine_audio_use_case", \
-	0, \
-	"Enable IRQ affinity for audio use case")
-
 #define CFG_HIF \
-	CFG_RING_TIMER_THRESHOLD \
-	CFG_BATCH_COUNT_THRESHOLD \
-	CFG(CFG_DISABLE_WAKE_IRQ) \
-	CFG(CFG_IRQ_AFFINE_AUDIO_USE_CASE)
-
+	CFG(CFG_CE_STATUS_RING_TIMER_THRESHOLD) \
+	CFG(CFG_CE_STATUS_RING_BATCH_COUNT_THRESHOLD)
+#else
+#define CFG_HIF
+#endif /* WLAN_CE_INTERRUPT_THRESHOLD_CONFIG */
 #endif /* _CFG_HIF_H_ */

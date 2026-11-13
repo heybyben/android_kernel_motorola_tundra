@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -63,7 +62,7 @@ static QDF_STATUS cm_get_valid_preauth_candidate(struct cm_roam_req *cm_req)
 
 	if (new_candidate) {
 		if (!cur_node) {
-			mlme_debug(CM_PREFIX_FMT "All candidates tried",
+			mlme_debug(CM_PREFIX_FMT "All canidate tried",
 				   CM_PREFIX_REF(vdev_id, cm_req->cm_id));
 			return QDF_STATUS_E_FAILURE;
 		}

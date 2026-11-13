@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -57,13 +57,11 @@ pkt_capture_mgmt_status_map(uint8_t status)
  * pkt_capture_mgmtpkt_cb() - callback to process management packets
  * for pkt capture mode
  * @context: vdev handler
- * @ppdev: unused param
  * @nbuf_list: netbuf list
  * @vdev_id: vdev id for which packet is captured
  * @tid:  tid number
  * @ch_freq: channel frequency
  * @pkt_format: Frame format
- * @bssid:
  * @tx_retry_cnt: tx retry count
  *
  * Return: none
@@ -622,12 +620,9 @@ pkt_capture_is_beacon_forward_enable(struct wlan_objmgr_vdev *vdev,
 #endif
 
 /**
- * pkt_capture_mgmt_rx_data_cb() -  process management rx packets
- * @psoc: psoc object
- * @peer: Peer object
- * @wbuf: netbuf
+ * process_pktcapture_mgmt_rx_data_cb() -  process management rx packets
  * @rx_params: mgmt rx event params
- * @frm_type: frame type
+ * @wbuf: netbuf
  *
  * Return: none
  */
@@ -741,6 +736,7 @@ pkt_capture_mgmt_rx_data_cb(struct wlan_objmgr_psoc *psoc,
 
 	/* Convert rate from Mbps to 500 Kbps */
 	txrx_status.rate = txrx_status.rate * 2;
+	txrx_status.add_rtap_ext = true;
 
 	wh = (struct ieee80211_frame *)qdf_nbuf_data(nbuf);
 	wh->i_fc[1] &= ~IEEE80211_FC1_WEP;

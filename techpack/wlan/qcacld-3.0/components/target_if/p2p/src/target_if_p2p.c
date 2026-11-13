@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -25,7 +25,6 @@
 #include <wlan_p2p_public_struct.h>
 #include "target_if.h"
 #include "target_if_p2p.h"
-#include "target_if_p2p_mcc_quota.h"
 #include "init_deinit_lmac.h"
 
 static inline struct wlan_lmac_if_p2p_rx_ops *
@@ -49,8 +48,8 @@ target_if_p2p_lo_register_tx_ops(struct wlan_lmac_if_p2p_tx_ops *p2p_tx_ops)
 /**
  * target_p2p_lo_event_handler() - WMI callback for lo stop event
  * @scn:       pointer to scn
- * @data:      event buffer
- * @datalen:   buffer length
+ * @event_buf: event buffer
+ * @len:       buffer length
  *
  * This function gets called from WMI when triggered wmi event
  * wmi_p2p_lo_stop_event_id.
@@ -203,8 +202,8 @@ target_if_p2p_lo_register_tx_ops(struct wlan_lmac_if_p2p_tx_ops *p2p_tx_ops)
 /**
  * target_p2p_noa_event_handler() - WMI callback for noa event
  * @scn:       pointer to scn
- * @data:      event buffer
- * @datalen:   buffer length
+ * @event_buf: event buffer
+ * @len:       buffer length
  *
  * This function gets called from WMI when triggered WMI event
  * wmi_p2p_noa_event_id.
@@ -370,7 +369,7 @@ QDF_STATUS target_if_p2p_set_noa(struct wlan_objmgr_psoc *psoc,
 	target_if_debug("psoc:%pK, vdev_id:%d disable_noa:%d",
 				psoc, vdev_id, disable_noa);
 	param.vdev_id = vdev_id;
-	param.param_id = wmi_vdev_param_disable_noa_p2p_go;
+	param.param_id = WMI_VDEV_PARAM_DISABLE_NOA_P2P_GO;
 	param.param_value = (uint32_t)disable_noa;
 
 	return wmi_unified_vdev_set_param_send(wmi_handle, &param);
@@ -445,7 +444,7 @@ static QDF_STATUS target_if_p2p_register_macaddr_rx_filter_evt_handler(
 }
 
 static QDF_STATUS target_if_p2p_set_mac_addr_rx_filter_cmd(
-	struct wlan_objmgr_psoc *psoc, struct set_rx_mac_filter *param)
+	struct wlan_objmgr_psoc *psoc, struct p2p_set_mac_filter *param)
 {
 	wmi_unified_t wmi_handle = lmac_get_wmi_unified_hdl(psoc);
 
@@ -454,7 +453,7 @@ static QDF_STATUS target_if_p2p_set_mac_addr_rx_filter_cmd(
 		return QDF_STATUS_E_INVAL;
 	}
 
-	return wmi_unified_set_mac_addr_rx_filter(wmi_handle, param);
+	return wmi_send_set_mac_addr_rx_filter_cmd(wmi_handle, param);
 }
 
 void target_if_p2p_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
@@ -477,8 +476,6 @@ void target_if_p2p_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 		target_if_p2p_register_macaddr_rx_filter_evt_handler;
 	p2p_tx_ops->set_mac_addr_rx_filter_cmd =
 		target_if_p2p_set_mac_addr_rx_filter_cmd;
-	target_if_mcc_quota_register_tx_ops(tx_ops);
-
 	/* register P2P listen offload callbacks */
 	target_if_p2p_lo_register_tx_ops(p2p_tx_ops);
 }

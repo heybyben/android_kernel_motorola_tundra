@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2011-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -81,7 +80,7 @@ struct txrx_pdev_cfg_t {
 	u32 max_vdev;
 	u32 max_nbuf_frags;
 	u32 throttle_period_ms;
-	u8 dutycycle_level[THROTTLE_LEVEL_MAX];
+	u8 dutycycle_level[4];
 	enum wlan_frm_fmt frame_type;
 	u8 rx_fwd_disabled;
 	u8 is_packet_log_enabled;
@@ -113,7 +112,7 @@ struct txrx_pdev_cfg_t {
 	bool tso_enable;
 	bool lro_enable;
 	bool sg_enable;
-	uint32_t enable_data_stall_detection;
+	bool enable_data_stall_detection;
 	bool enable_flow_steering;
 	bool disable_intra_bss_fwd;
 	/* IPA Micro controller data path offload TX buffer size */

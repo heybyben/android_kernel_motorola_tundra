@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -28,15 +28,13 @@
 #define _DFS_PROCESS_RADAR_FOUND_IND_H_
 #include "dfs_partial_offload_radar.h"
 
-#define BW_INVALID    0
-#define BW_10        10
-#define BW_20        20
-#define BW_40        40
-#define BW_80        80
-#define BW_160      160
-#define BW_320      320
+#define BW_20   20
+#define BW_40   40
+#define BW_80   80
+#define BW_160 160
+#define BW_320 320
 /**
- * dfs_flush_additional_pulses() - Reset dfs radar detection related
+ * dfs_false_radarfound_reset_vars () - Reset dfs radar detection related
  * variables and queues after processing radar and disabling phyerror reception.
  *
  * @dfs: Pointer to wlan_dfs structure.
@@ -117,8 +115,6 @@ dfs_flush_additional_pulses(struct wlan_dfs *dfs)
 #define NUM_CHANNELS_160MHZ  8
 /* Number of 20MHz sub-channels in 320 MHz segment */
 #define NUM_CHANNELS_320MHZ 16
-/* Number of 20MHz sub-channels in 240 MHz (320-80) segment */
-#define NUM_CHANNELS_240MHZ 12
 
 #ifdef WLAN_FEATURE_11BE
 #define MAX_20MHZ_SUBCHANS NUM_CHANNELS_320MHZ
@@ -183,58 +179,6 @@ struct freqs_offsets {
  */
 void dfs_process_radar_found_indication(struct wlan_dfs *dfs,
 		struct radar_found_info *radar_found);
-
-#if defined(QCA_DFS_BW_PUNCTURE)
-/**
- * dfs_generate_radar_bitmap() - Generate radar bitmap for DFS channel
- * @dfs: Pointer to wlan_dfs structure.
- * @radar_freq_list: Channel list affected by radar.
- * @num_radar_channels: Number of channels affected by radar.
- *
- * Return: Bitmap of radar punctured channels.
- */
-uint16_t dfs_generate_radar_bitmap(struct wlan_dfs *dfs,
-				   uint16_t *radar_freq_list,
-				   uint8_t num_radar_channels);
-#else
-static inline
-uint16_t dfs_generate_radar_bitmap(struct wlan_dfs *dfs,
-				   uint16_t *radar_freq_list,
-				   uint8_t num_radar_channels)
-{
-	return 0;
-}
-#endif
-
-/**
- * dfs_handle_radar_puncturing() - Check if the puncture bitmap is valid
- *                                 and initialize puncture SM for the
- *                                 punctured channels.
- * @dfs:                      Pointer to wlan_dfs structure.
- * @dfs_radar_bitmap:         Puncture bitmap.
- * @freq_list:                Channel list affected by radar.
- * @num_channels:             Number of channels affected by radar.
- * @is_ignore_radar_puncture: Bool to check if radar should be ignored.
- *
- * Return: Nothing.
- */
-#if defined(QCA_DFS_BW_PUNCTURE) && !defined(CONFIG_REG_CLIENT)
-void
-dfs_handle_radar_puncturing(struct wlan_dfs *dfs,
-			    uint16_t *dfs_radar_bitmap,
-			    uint16_t *freq_list,
-			    uint8_t num_channels,
-			    bool *is_ignore_radar_puncture);
-#else
-static inline
-void dfs_handle_radar_puncturing(struct wlan_dfs *dfs,
-				 uint16_t *dfs_radar_bitmap,
-				 uint16_t *freq_list,
-				 uint8_t num_channels,
-				 bool *is_ignore_radar_puncture)
-{
-}
-#endif /* QCA_DFS_BW_PUNCTURE */
 
 /**
  * dfs_process_radar_ind() - Process radar indication event
@@ -371,7 +315,7 @@ dfs_get_bonding_channel_without_seg_info_for_freq(struct dfs_channel *chan,
 /**
  * dfs_set_nol_subchannel_marking() - Set or unset NOL subchannel marking.
  * @dfs: Pointer to wlan_dfs structure.
- * @nol_subchannel_marking: Configure NOL subchannel marking.
+ * @nol_subchannel_marking - Configure NOL subchannel marking.
  *
  * Return: Status of the configuration.
  */
@@ -382,7 +326,7 @@ dfs_set_nol_subchannel_marking(struct wlan_dfs *dfs,
 /**
  * dfs_get_nol_subchannel_marking() - Get the value of NOL subchannel marking.
  * @dfs: Pointer to wlan_dfs structure.
- * @nol_subchannel_marking: Read and store the value of NOL subchannel marking
+ * @nol_subchannel_marking - Read and store the value of NOL subchannel marking
  * config.
  *
  * Return: Status of the read.

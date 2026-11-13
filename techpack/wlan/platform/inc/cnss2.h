@@ -134,8 +134,7 @@ struct cnss_wlan_driver {
 	int  (*suspend_noirq)(struct pci_dev *pdev);
 	int  (*resume_noirq)(struct pci_dev *pdev);
 	void (*modem_status)(struct pci_dev *pdev, int state);
-	void (*update_status)(struct pci_dev *pdev,
-			      enum cnss_driver_status status);
+	void (*update_status)(struct pci_dev *pdev, uint32_t status);
 	int  (*update_event)(struct pci_dev *pdev,
 			     struct cnss_uevent_data *uevent);
 	struct cnss_wlan_runtime_ops *runtime_ops;
@@ -215,7 +214,6 @@ enum cnss_recovery_reason {
 	CNSS_REASON_LINK_DOWN,
 	CNSS_REASON_RDDM,
 	CNSS_REASON_TIMEOUT,
-	CNSS_REASON_FW_ASSERTION_FAIL,
 };
 
 enum cnss_fw_caps {
@@ -344,4 +342,8 @@ extern int cnss_register_driver_async_data_cb(struct device *dev, void *cb_ctx,
 					      int (*cb)(void *ctx,
 					      uint16_t type, void *event,
 					      int event_len));
+extern void cnss_get_cpumask_for_wlan_rx_interrupts(struct device *dev,
+						    unsigned int *cpumask);
+extern void cnss_get_cpumask_for_wlan_tx_comp_interrupts(struct device *dev,
+							 unsigned int *cpumask);
 #endif /* _NET_CNSS2_H */

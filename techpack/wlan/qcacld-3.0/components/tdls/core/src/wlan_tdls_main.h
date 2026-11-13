@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -109,9 +108,9 @@ struct tdls_conn_info {
 
 /**
  * enum tdls_nss_transition_state - TDLS NSS transition states
- * @TDLS_NSS_TRANSITION_S_UNKNOWN: default state
- * @TDLS_NSS_TRANSITION_S_2x2_to_1x1: transition from 2x2 to 1x1 stream
- * @TDLS_NSS_TRANSITION_S_1x1_to_2x2: transition from 1x1 to 2x2 stream
+ * @TDLS_NSS_TRANSITION_UNKNOWN: default state
+ * @TDLS_NSS_TRANSITION_2x2_to_1x1: transition from 2x2 to 1x1 stream
+ * @TDLS_NSS_TRANSITION_1x1_to_2x2: transition from 1x1 to 2x2 stream
  */
 enum tdls_nss_transition_state {
 	TDLS_NSS_TRANSITION_S_UNKNOWN = 0,
@@ -134,23 +133,22 @@ struct tdls_conn_tracker_mac_table {
 };
 
 /**
- * struct tdls_set_state_info - vdev id state info
+ * struct tdls_set_state_db - to record set tdls state command, we need to
+ * set correct tdls state to firmware:
+ * 1. enable tdls in firmware before tdls connection;
+ * 2. disable tdls if concurrency happen, before disable tdls, all active peer
+ * should be deleted in firmware.
+ *
+ * @set_state_cnt: tdls set state count
  * @vdev_id: vdev id of last set state command
  */
 struct tdls_set_state_info {
+	uint8_t set_state_cnt;
 	uint8_t vdev_id;
 };
 
 /**
- * struct tdls_callbacks - vdev id state info
- * @delete_all_tdls_peers: Callback to lim to delete TDLS peers
- */
-struct tdls_callbacks {
-	QDF_STATUS (*delete_all_tdls_peers) (struct wlan_objmgr_vdev *vdev);
-};
-
-/**
- * struct tdls_soc_priv_obj - tdls soc private context
+ * struct tdls_psoc_priv_ctx - tdls context
  * @soc: objmgr psoc
  * @tdls_current_mode: current tdls mode
  * @tdls_last_mode: last tdls mode
@@ -168,18 +166,14 @@ struct tdls_callbacks {
  * @tdls_external_peer_count: external tdls peer count
  * @tdls_nss_switch_in_progress: tdls antenna switch in progress
  * @tdls_nss_teardown_complete: tdls tear down complete
+ * @tdls_disable_in_progress: tdls is disable in progress
  * @tdls_nss_transition_mode: tdls nss transition mode
  * @tdls_teardown_peers_cnt: tdls tear down peer count
  * @set_state_info: set tdls state info
- * @tdls_rx_cb: TDLS RX callback
- * @tdls_rx_cb_data: TDLS RX callback context
- * @tdls_wmm_cb: TDLS WMM check callback
- * @tdls_wmm_cb_data: TDLS WMM check callback context
  * @tdls_event_cb: tdls event callback
  * @tdls_evt_cb_data: tdls event user data
  * @tdls_peer_context: userdata for register/deregister TDLS peer
  * @tdls_reg_peer: register tdls peer with datapath
- * @tdls_dp_vdev_update: notify datapath of vdev updates
  * @tx_q_ack: queue for tx frames waiting for ack
  * @tdls_con_cap: tdls concurrency support
  * @tdls_send_mgmt_req: store eWNI_SME_TDLS_SEND_MGMT_REQ value
@@ -187,7 +181,7 @@ struct tdls_callbacks {
  * @tdls_del_sta_req: store eWNI_SME_TDLS_DEL_STA_REQ value
  * @tdls_update_peer_state: store WMA_UPDATE_TDLS_PEER_STATE value
  * @tdls_del_all_peers:store eWNI_SME_DEL_ALL_TDLS_PEERS
- * @tdls_update_dp_vdev_flags: store CDP_UPDATE_TDLS_FLAGS
+ * @tdls_update_dp_vdev_flags store CDP_UPDATE_TDLS_FLAGS
  * @tdls_idle_peer_data: provide information about idle peer
  * @tdls_ct_spinlock: connection tracker spin lock
  * @is_prevent_suspend: prevent suspend or not
@@ -195,18 +189,9 @@ struct tdls_callbacks {
  * based on this flag.
  * @wake_lock: wake lock
  * @runtime_lock: runtime lock
- * @fw_tdls_mlo_capable: is fw tdls mlo capable
  * @tdls_osif_init_cb: Callback to initialize the tdls private
  * @tdls_osif_deinit_cb: Callback to deinitialize the tdls private
- * @tdls_osif_update_cb: Callback for updating osif params
- * @fw_tdls_11ax_capability: bool for tdls 11ax fw capability
- * @fw_tdls_6g_capability: bool for tdls 6g fw capability
- * @bss_sta_power: bss sta power
- * @bss_sta_power_type: bss sta power type
- * @timer_cnt: used for mlo tdls to monitor discovery response
- * @fw_tdls_wideband_capability: bool for tdls wideband fw capability
- * @is_user_tdls_enable: bool to check whether TDLS enable through userspace
- * @tdls_cb: TDLS callbacks to other modules
+ * @fw_tdls_11ax_capablity: bool for tdls 11ax fw capability
  */
 struct tdls_soc_priv_obj {
 	struct wlan_objmgr_psoc *soc;
@@ -225,6 +210,7 @@ struct tdls_soc_priv_obj {
 	uint8_t tdls_external_peer_count;
 	bool tdls_nss_switch_in_progress;
 	bool tdls_nss_teardown_complete;
+	bool tdls_disable_in_progress;
 	enum tdls_nss_transition_state tdls_nss_transition_mode;
 	int32_t tdls_teardown_peers_cnt;
 	struct tdls_set_state_info set_state_info;
@@ -252,22 +238,11 @@ struct tdls_soc_priv_obj {
 	qdf_wake_lock_t wake_lock;
 	qdf_runtime_lock_t runtime_lock;
 #endif
-#ifdef WLAN_FEATURE_11BE_MLO
-	bool fw_tdls_mlo_capable;
-#endif
 	tdls_vdev_init_cb tdls_osif_init_cb;
 	tdls_vdev_deinit_cb tdls_osif_deinit_cb;
-	struct tdls_osif_cb tdls_osif_update_cb;
 #ifdef WLAN_FEATURE_11AX
 	bool fw_tdls_11ax_capability;
-	bool fw_tdls_6g_capability;
-	uint8_t bss_sta_power;
-	uint8_t bss_sta_power_type;
 #endif
-	qdf_atomic_t timer_cnt;
-	bool fw_tdls_wideband_capability;
-	bool is_user_tdls_enable;
-	struct tdls_callbacks tdls_cb;
 };
 
 /**
@@ -275,17 +250,14 @@ struct tdls_soc_priv_obj {
  * @vdev: vdev objmgr object
  * @peer_list: tdls peer list on this vdev
  * @peer_update_timer: connection tracker timer
- * @peer_discovery_timer: peer discovery timer
+ * @peer_dicovery_timer: peer discovery timer
  * @threshold_config: threshold config
  * @discovery_peer_cnt: discovery peer count
  * @discovery_sent_cnt: discovery sent count
  * @curr_candidate: current candidate
  * @ct_peer_table: linear mac address table for counting the packets
  * @valid_mac_entries: number of valid mac entry in @ct_peer_mac_table
- * @rx_mgmt: the pointer of rx mgmt info
- * @link_score: select tdls vdev per the score
  * @magic: magic
- * @session_id: vdev ID
  * @tx_queue: tx frame queue
  * @tdls_teardown_comp: tdls teardown completion
  */
@@ -301,8 +273,6 @@ struct tdls_vdev_priv_obj {
 	struct tdls_conn_tracker_mac_table
 			ct_peer_table[WLAN_TDLS_CT_TABLE_SIZE];
 	uint8_t valid_mac_entries;
-	struct tdls_rx_mgmt_frame *rx_mgmt;
-	uint32_t link_score;
 	uint32_t magic;
 	uint8_t session_id;
 	qdf_list_t tx_queue;
@@ -326,7 +296,7 @@ struct tdls_peer_mlme_info {
  * @tdls_support: tdls support
  * @link_status: tdls link status
  * @is_responder: is responder
- * @discovery_processed: discovery processed
+ * @discovery_processed: dicovery processed
  * @discovery_attempt: discovery attempt
  * @tx_pkt: tx packet
  * @rx_pkt: rx packet
@@ -335,22 +305,18 @@ struct tdls_peer_mlme_info {
  * @buf_sta_capable: is buffer sta
  * @off_channel_capable: is offchannel supported flag
  * @supported_channels_len: supported channels length
- * @supported_chan_freq: supported channel frequency
+ * @supported_channels: supported channels
  * @supported_oper_classes_len: supported operation classes length
  * @supported_oper_classes: supported operation classes
  * @is_forced_peer: is forced peer
  * @op_class_for_pref_off_chan: op class for preferred off channel
- * @pref_off_chan_freq: preferred off channel frequency
- * @pref_off_chan_width: preferred off channel width
+ * @pref_off_chan_num: preferred off channel number
  * @peer_idle_timer: time to check idle traffic in tdls peers
  * @is_peer_idle_timer_initialised: Flag to check idle timer init
  * @spatial_streams: Number of TX/RX spatial streams for TDLS
- * @sta_kickout_count: Number of times STA kickout event received for this
- * peer
  * @reason: reason
  * @state_change_notification: state change notification
  * @qos: QOS capability of TDLS link
- * @tdls_info: MLME info
  */
 struct tdls_peer {
 	qdf_list_node_t node;
@@ -370,17 +336,15 @@ struct tdls_peer {
 	uint8_t buf_sta_capable;
 	uint8_t off_channel_capable;
 	uint8_t supported_channels_len;
-	qdf_freq_t supported_chan_freq[WLAN_MAC_MAX_SUPP_CHANNELS];
+	uint8_t supported_channels[WLAN_MAC_MAX_SUPP_CHANNELS];
 	uint8_t supported_oper_classes_len;
 	uint8_t supported_oper_classes[WLAN_MAX_SUPP_OPER_CLASSES];
 	bool is_forced_peer;
 	uint8_t op_class_for_pref_off_chan;
-	qdf_freq_t pref_off_chan_freq;
-	uint8_t pref_off_chan_width;
+	uint8_t pref_off_chan_num;
 	qdf_mc_timer_t peer_idle_timer;
 	bool is_peer_idle_timer_initialised;
 	uint8_t spatial_streams;
-	uint8_t sta_kickout_count;
 	enum tdls_link_state_reason reason;
 	tdls_state_change_callback state_change_notification;
 	uint8_t qos;
@@ -486,8 +450,6 @@ wlan_vdev_get_tdls_vdev_obj(struct wlan_objmgr_vdev *vdev)
  * @mac: mac address of tdls peer
  * @link_state: tdls link state
  * @link_reason: reason
- *
- * Return: None
  */
 void tdls_set_link_status(struct tdls_vdev_priv_obj *vdev,
 			  const uint8_t *mac,
@@ -562,7 +524,7 @@ void tdls_timer_restart(struct wlan_objmgr_vdev *vdev,
 				 uint32_t expiration_time);
 
 /**
- * tdls_timers_stop() - stop all the tdls timers running
+ * wlan_hdd_tdls_timers_stop() - stop all the tdls timers running
  * @tdls_vdev: TDLS vdev
  *
  * Return: none
@@ -582,26 +544,15 @@ QDF_STATUS tdls_get_vdev_objects(struct wlan_objmgr_vdev *vdev,
 				   struct tdls_soc_priv_obj **tdls_soc_obj);
 
 /**
- * tdls_set_ct_mode() - Set the tdls connection tracker mode
- * @psoc: objmgr psoc object
- * @vdev: Pointer to vdev object
+ * cds_set_tdls_ct_mode() - Set the tdls connection tracker mode
+ * @hdd_ctx: hdd context
  *
  * This routine is called to set the tdls connection tracker operation status
  *
  * Return: NONE
  */
-void tdls_set_ct_mode(struct wlan_objmgr_psoc *psoc,
-		      struct wlan_objmgr_vdev *vdev);
+void tdls_set_ct_mode(struct wlan_objmgr_psoc *psoc);
 
-/**
- * tdls_set_user_tdls_enable()- Set the tdls enable from userspace
- * @vdev: Pointer to vdev object
- * @is_user_tdls_enable: true if tdls is enable from userspace
- *
- * return: NONE
- */
-void tdls_set_user_tdls_enable(struct wlan_objmgr_vdev *vdev,
-			       bool is_user_tdls_enable);
 /**
  * tdls_set_operation_mode() - set tdls operating mode
  * @tdls_set_mode: tdls mode set params
@@ -622,34 +573,6 @@ QDF_STATUS tdls_set_operation_mode(struct tdls_set_mode_params *tdls_set_mode);
  * Return: QDF_STATUS
  */
 QDF_STATUS tdls_notify_sta_connect(struct tdls_sta_notify_params *notify);
-
-/**
- * tdls_process_enable_for_vdev() - Enable TDLS in firmware and activate the
- * connection tracker
- * @vdev: Pointer to vdev object
- *
- * Return: void
- */
-void tdls_process_enable_for_vdev(struct wlan_objmgr_vdev *vdev);
-
-#ifdef WLAN_FEATURE_11BE_MLO
-/**
- * tdls_process_enable_disable_for_ml_vdev() - Enable TDLS in firmware & active
- * connection tracker for all the ML vdevs belonging to same MLD as the
- * given vdev
- * @vdev: Pointer to vdev object
- * @is_enable: Flag to indicate if operation is enable TDLS or disable TDLS
- *
- * Return: None
- */
-void tdls_process_enable_disable_for_ml_vdev(struct wlan_objmgr_vdev *vdev,
-					     bool is_enable);
-#else
-static inline
-void tdls_process_enable_disable_for_ml_vdev(struct wlan_objmgr_vdev *vdev,
-					     bool is_enable)
-{}
-#endif
 
 /**
  * tdls_notify_sta_disconnect() - Update tdls state for every
@@ -701,7 +624,6 @@ void tdls_notify_decrement_session(struct wlan_objmgr_psoc *psoc);
 /**
  * tdls_send_update_to_fw - update tdls status info
  * @tdls_vdev_obj: tdls vdev private object.
- * @tdls_soc_obj: TDLS soc private object
  * @tdls_prohibited: indicates whether tdls is prohibited.
  * @tdls_chan_swit_prohibited: indicates whether tdls channel switch
  *                             is prohibited.
@@ -716,7 +638,7 @@ void tdls_notify_decrement_session(struct wlan_objmgr_psoc *psoc);
  * bits set in Ext Cap IE in received Assoc/Re-assoc response
  * from AP.
  *
- * Return: void
+ * Return: None.
  */
 void tdls_send_update_to_fw(struct tdls_vdev_priv_obj *tdls_vdev_obj,
 			    struct tdls_soc_priv_obj *tdls_soc_obj,
@@ -734,40 +656,6 @@ void tdls_send_update_to_fw(struct tdls_vdev_priv_obj *tdls_vdev_obj,
  * Return: None
  */
 void tdls_notify_increment_session(struct wlan_objmgr_psoc *psoc);
-
-/**
- * tdls_get_6g_pwr_for_power_type() - get power for a 6g freq for particular
- *                                    power type
- * @vdev: vdev object
- * @freq: 6g freq
- * @pwr_typ: power type
- *
- * Function that gets power for a 6g freq for particular power type
- *
- * Return: true or false
- */
-uint32_t tdls_get_6g_pwr_for_power_type(struct wlan_objmgr_vdev *vdev,
-					qdf_freq_t freq,
-					enum supported_6g_pwr_types pwr_typ);
-
-/**
- * tdls_is_6g_freq_allowed() - check is tdls 6ghz allowed or not
- * @pdev: pdev object
- * @freq: 6g freq
- *
- * Function determines the whether TDLS on 6ghz is allowed in the system
- *
- * Return: true or false
- */
-bool tdls_is_6g_freq_allowed(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq);
-
-/**
- * tdls_check_is_user_tdls_enable() - Check is tdls enabled or not
- * @tdls_soc_obj: TDLS soc object
- *
- * Return: true or false
- */
-bool tdls_check_is_user_tdls_enable(struct tdls_soc_priv_obj *tdls_soc_obj);
 
 /**
  * tdls_check_is_tdls_allowed() - check is tdls allowed or not
@@ -810,29 +698,6 @@ tdls_process_policy_mgr_notification(struct wlan_objmgr_psoc *psoc);
  */
 QDF_STATUS
 tdls_process_decrement_active_session(struct wlan_objmgr_psoc *psoc);
-
-/**
- * wlan_tdls_get_mlo_vdev() - get mlo vdev for tdls
- * @vdev: vdev object
- * @index: index of vdev in mlo list
- * @dbg_id: debug id
- *
- * Return: vdev pointer
- */
-struct wlan_objmgr_vdev *wlan_tdls_get_mlo_vdev(struct wlan_objmgr_vdev *vdev,
-						uint8_t index,
-						wlan_objmgr_ref_dbgid dbg_id);
-
-/**
- * wlan_tdls_release_mlo_vdev() - release mlo vdev for tdls
- * @vdev: vdev object
- * @dbg_id: debug id
- *
- * Return: void
- */
-void wlan_tdls_release_mlo_vdev(struct wlan_objmgr_vdev *vdev,
-				wlan_objmgr_ref_dbgid dbg_id);
-
 /**
  * tdls_scan_complete_event_handler() - scan complete event handler for tdls
  * @vdev: vdev object
@@ -846,23 +711,15 @@ void tdls_scan_complete_event_handler(struct wlan_objmgr_vdev *vdev,
 			void *arg);
 
 /**
- * tdls_set_link_unforce() - set link unforce
- * @vdev: vdev object
- *
- * Return: void
- */
-void tdls_set_link_unforce(struct wlan_objmgr_vdev *vdev);
-
-/**
  * tdls_scan_callback() - callback for TDLS scan operation
- * @tdls_soc: tdls soc pvt object
+ * @soc: tdls soc pvt object
  *
  * Return: QDF_STATUS
  */
 QDF_STATUS tdls_scan_callback(struct tdls_soc_priv_obj *tdls_soc);
 
 /**
- * tdls_scan_done_callback() - callback for tdls scan done event
+ * wlan_hdd_tdls_scan_done_callback() - callback for tdls scan done event
  * @tdls_soc: tdls soc object
  *
  * Return: Void
@@ -873,33 +730,44 @@ void tdls_scan_done_callback(struct tdls_soc_priv_obj *tdls_soc);
  * tdls_scan_serialization_comp_info_cb() - callback for scan start
  * @vdev: VDEV on which the scan command is being processed
  * @comp_info: serialize rules info
- * @cmd: the serialization command
  *
- * Return: Void
+ * Return: negative = caller should stop and return error code immediately
+ *         1 = caller can continue to scan
  */
 void tdls_scan_serialization_comp_info_cb(struct wlan_objmgr_vdev *vdev,
 		union wlan_serialization_rules_info *comp_info,
 		struct wlan_serialization_command *cmd);
+
 /**
- * tdls_check_and_indicate_delete_all_peers() - Check if delete all peers is
- * allowed for the vdev based on current concurrency.
+ * tdls_set_offchan_mode() - update tdls status info
+ * @psoc: soc object
+ * @param: channel switch params
+ *
+ * send message to WMI to set TDLS off channel in f/w
+ *
+ * Return: QDF_STATUS.
+ */
+QDF_STATUS tdls_set_offchan_mode(struct wlan_objmgr_psoc *psoc,
+				     struct tdls_channel_switch_params *param);
+
+/**
+ * tdls_delete_all_peers_indication() - update tdls status info
  * @psoc: soc object
  * @vdev_id: vdev id
  *
- * Notify tdls component to cleanup all peers based on current concurrency
- * combination.
+ * Notify tdls component to cleanup all peers
  *
- * Return: QDF_STATUS
+ * Return: QDF_STATUS.
  */
-QDF_STATUS
-tdls_check_and_indicate_delete_all_peers(struct wlan_objmgr_psoc *psoc,
-					 uint8_t vdev_id);
+
+QDF_STATUS tdls_delete_all_peers_indication(struct wlan_objmgr_psoc *psoc,
+					    uint8_t vdev_id);
 
 /**
  * tdls_get_opclass_from_bandwidth() - Return opclass for corresponding BW and
  * channel.
- * @vdev: Pointer to vdev
- * @freq: Channel frequency.
+ * @soc_obj: tdls soc object.
+ * @channel: Channel number.
  * @bw_offset: Bandwidth offset.
  * @reg_bw_offset: enum offset_t type bandwidth
  *
@@ -907,39 +775,7 @@ tdls_check_and_indicate_delete_all_peers(struct wlan_objmgr_psoc *psoc,
  *
  * Return: opclass
  */
-uint8_t tdls_get_opclass_from_bandwidth(struct wlan_objmgr_vdev *vdev,
-					qdf_freq_t freq, uint8_t bw_offset,
+uint8_t tdls_get_opclass_from_bandwidth(struct tdls_soc_priv_obj *soc_obj,
+					uint8_t channel, uint8_t bw_offset,
 					uint8_t *reg_bw_offset);
-
-#ifdef WLAN_FEATURE_TDLS_CONCURRENCIES
-/**
- * tdls_handle_start_bss() - Handle start BSS event to act on concurrent
- * session offchannel mode
- * @psoc: Pointer to PSOC object
- *
- * Return: None
- */
-QDF_STATUS tdls_handle_start_bss(struct wlan_objmgr_psoc *psoc);
-
-/**
- * tdls_is_concurrency_allowed() - Is TDLS allowed with the current concurrency
- * @psoc: Pointer to PSOC
- *
- * Return: True or False
- */
-bool tdls_is_concurrency_allowed(struct wlan_objmgr_psoc *psoc);
-#else
-static inline
-QDF_STATUS tdls_handle_start_bss(struct wlan_objmgr_psoc *psoc)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-static inline bool
-tdls_is_concurrency_allowed(struct wlan_objmgr_psoc *psoc)
-{
-	return false;
-}
-
-#endif /* WLAN_FEATURE_TDLS_CONCURRENCIES */
 #endif

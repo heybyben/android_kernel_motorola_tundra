@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -155,20 +154,6 @@ wmi_unified_vdev_config_ratemask_cmd_send(struct wmi_unified *wmi_handle,
 	return QDF_STATUS_E_FAILURE;
 }
 
-QDF_STATUS
-wmi_unified_peer_filter_set_tx_cmd_send(struct wmi_unified *wmi_handle,
-					uint8_t macaddr[],
-					struct set_tx_peer_filter *param)
-{
-	struct wmi_ops *ops = wmi_handle->ops;
-
-	if (ops->send_peer_filter_set_tx_cmd)
-		return ops->send_peer_filter_set_tx_cmd(wmi_handle, macaddr,
-							param);
-
-	return QDF_STATUS_E_FAILURE;
-}
-
 QDF_STATUS wmi_unified_vdev_set_neighbour_rx_cmd_send(
 				struct wmi_unified *wmi_handle,
 				uint8_t macaddr[QDF_MAC_ADDR_SIZE],
@@ -178,25 +163,6 @@ QDF_STATUS wmi_unified_vdev_set_neighbour_rx_cmd_send(
 		return wmi_handle->ops->send_vdev_set_neighbour_rx_cmd(
 							wmi_handle,
 							macaddr, param);
-
-	return QDF_STATUS_E_FAILURE;
-}
-
-qdf_export_symbol(wmi_unified_vdev_set_neighbour_rx_cmd_send);
-
-QDF_STATUS
-wmi_send_peer_vlan_config(struct wmi_unified *wmi_handle,
-			  uint8_t *macaddr,
-			  struct peer_vlan_config_param param)
-{
-	char peer_mac[QDF_MAC_ADDR_SIZE];
-
-	qdf_mem_copy(peer_mac, macaddr, QDF_MAC_ADDR_SIZE);
-
-	if (wmi_handle->ops->send_peer_vlan_config_cmd)
-		return wmi_handle->ops->send_peer_vlan_config_cmd(wmi_handle,
-								  peer_mac,
-								  &param);
 
 	return QDF_STATUS_E_FAILURE;
 }
@@ -222,16 +188,3 @@ QDF_STATUS wmi_unified_multisoc_tbtt_sync_cmd(wmi_unified_t wmi_handle,
 
 	return QDF_STATUS_E_FAILURE;
 }
-
-#ifdef WLAN_FEATURE_SR
-QDF_STATUS
-wmi_unified_vdev_param_sr_prohibit_send(wmi_unified_t wmi_hdl,
-					struct sr_prohibit_param *srp_param)
-{
-	if (wmi_hdl->ops->vdev_param_sr_prohibit_send)
-		return wmi_hdl->ops->vdev_param_sr_prohibit_send(wmi_hdl,
-								 srp_param);
-
-	return QDF_STATUS_E_FAILURE;
-}
-#endif

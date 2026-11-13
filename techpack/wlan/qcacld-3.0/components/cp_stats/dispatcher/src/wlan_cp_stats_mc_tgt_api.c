@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -34,7 +34,6 @@
 #include "../../core/src/wlan_cp_stats_defs.h"
 #include "../../core/src/wlan_cp_stats_obj_mgr_handler.h"
 #include "son_api.h"
-#include "wlan_policy_mgr_api.h"
 
 static bool tgt_mc_cp_stats_is_last_event(struct stats_event *ev,
 					  enum stats_req_type stats_type)
@@ -116,15 +115,15 @@ static void tgt_mc_cp_stats_extract_tx_power(struct wlan_objmgr_psoc *psoc,
 					struct stats_event *ev,
 					bool is_station_stats)
 {
-	int32_t max_pwr = 0;
+	int32_t max_pwr;
 	uint8_t pdev_id;
-	uint8_t mac_id = 0;
 	QDF_STATUS status;
 	struct wlan_objmgr_pdev *pdev;
 	struct request_info last_req = {0};
 	struct wlan_objmgr_vdev *vdev = NULL;
 	struct pdev_mc_cp_stats *pdev_mc_stats;
 	struct pdev_cp_stats *pdev_cp_stats_priv;
+	bool pending = false;
 
 	if (!ev->pdev_stats)
 		return;
@@ -166,20 +165,25 @@ static void tgt_mc_cp_stats_extract_tx_power(struct wlan_objmgr_psoc *psoc,
 		goto end;
 	}
 
-	mac_id = policy_mgr_mode_get_macid_by_vdev_id(psoc, last_req.vdev_id);
-
 	wlan_cp_stats_pdev_obj_lock(pdev_cp_stats_priv);
 	pdev_mc_stats = pdev_cp_stats_priv->pdev_stats;
 	if (!is_station_stats &&
 	    pdev_mc_stats->max_pwr != ev->pdev_stats[pdev_id].max_pwr)
 		wlan_son_deliver_tx_power(vdev,
 					  ev->pdev_stats[pdev_id].max_pwr);
-	if (mac_id == ev->mac_seq_num)
-		max_pwr = pdev_mc_stats->max_pwr =
-			ev->pdev_stats[pdev_id].max_pwr;
-
+	max_pwr = pdev_mc_stats->max_pwr = ev->pdev_stats[pdev_id].max_pwr;
 	wlan_cp_stats_pdev_obj_unlock(pdev_cp_stats_priv);
+	if (is_station_stats)
+		goto end;
 
+	if (tgt_mc_cp_stats_is_last_event(ev, TYPE_CONNECTION_TX_POWER)) {
+		ucfg_mc_cp_stats_reset_pending_req(psoc,
+						   TYPE_CONNECTION_TX_POWER,
+						   &last_req,
+						   &pending);
+		if (last_req.u.get_tx_power_cb && pending)
+			last_req.u.get_tx_power_cb(max_pwr, last_req.cookie);
+	}
 end:
 	if (vdev)
 		wlan_objmgr_vdev_release_ref(vdev, WLAN_CP_STATS_ID);
@@ -301,7 +305,8 @@ tgt_mc_cp_stats_prepare_raw_peer_rssi(struct wlan_objmgr_psoc *psoc,
 	}
 
 end:
-	get_peer_rssi_cb(&ev, last_req->cookie);
+	if (ev.peer_stats)
+		get_peer_rssi_cb(&ev, last_req->cookie);
 
 	ucfg_mc_cp_stats_free_stats_resources(&ev);
 
@@ -672,8 +677,8 @@ tgt_mc_infra_cp_stats_extract_twt_stats(struct wlan_objmgr_psoc *psoc,
 					struct infra_cp_stats_event *ev)
 {
 	QDF_STATUS status;
-	get_infra_cp_stats_cb resp_cb = NULL;
-	void *context = NULL;
+	get_infra_cp_stats_cb resp_cb;
+	void *context;
 
 	status = wlan_cp_stats_infra_cp_get_context(psoc, &resp_cb, &context);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -705,10 +710,8 @@ tgt_mc_cp_stats_extract_congestion_stats(struct wlan_objmgr_psoc *psoc,
 	uint8_t i, index;
 	struct request_info last_req = {0};
 	struct medium_assess_data data[WLAN_UMAC_MAX_RP_PID] = { {0} };
-	bool is_last_event = tgt_mc_cp_stats_is_last_event(ev,
-					TYPE_CONGESTION_STATS);
 
-	if (!(ev->num_pdev_stats || ev->num_pdev_extd_stats)) {
+	if (!ev->num_pdev_stats) {
 		cp_stats_err("no congestion sta for pdev");
 		return;
 	}
@@ -728,26 +731,14 @@ tgt_mc_cp_stats_extract_congestion_stats(struct wlan_objmgr_psoc *psoc,
 			cp_stats_err("part1 pdev id error");
 			continue;
 		}
-		data[index].part1_valid = true;
+		data[index].part1_valid = 1;
 		data[index].cycle_count = ev->pdev_stats[i].cycle_count;
 		data[index].rx_clear_count = ev->pdev_stats[i].rx_clear_count;
 		data[index].tx_frame_count = ev->pdev_stats[i].tx_frame_count;
 	}
 
-	for (i = 0; (i < ev->num_pdev_extd_stats) && (i < WLAN_UMAC_MAX_RP_PID);
-	     i++){
-		index = ev->pdev_extd_stats[i].pdev_id;
-		if (index >= WLAN_UMAC_MAX_RP_PID) {
-			cp_stats_err("part2 pdev id error");
-			continue;
-		}
-		data[index].part2_valid = true;
-		data[index].my_rx_count = ev->pdev_extd_stats[i].my_rx_count;
-	}
-
 	if (last_req.u.congestion_notif_cb)
-		last_req.u.congestion_notif_cb(last_req.vdev_id, data,
-						is_last_event);
+		last_req.u.congestion_notif_cb(last_req.vdev_id, data);
 
 }
 #else
@@ -755,31 +746,6 @@ static void
 tgt_mc_cp_stats_extract_congestion_stats(struct wlan_objmgr_psoc *psoc,
 					 struct stats_event *ev)
 {
-}
-#endif
-
-#ifdef WLAN_FEATURE_11BE_MLO
-static void
-update_ml_vdev_id_from_stats_event(struct request_info *req,
-				   uint8_t *vdev_id)
-{
-	if (!req->ml_vdev_info.ml_vdev_count) {
-		*vdev_id = req->vdev_id;
-		return;
-	}
-
-	if (*vdev_id == WLAN_UMAC_VDEV_ID_MAX ||
-	    *vdev_id >= WLAN_MAX_VDEVS) {
-		cp_stats_err("Invalid vdev[%u] sent by firmware", *vdev_id);
-		*vdev_id = WLAN_UMAC_VDEV_ID_MAX;
-	}
-}
-#else
-static inline void
-update_ml_vdev_id_from_stats_event(struct request_info *req,
-				   uint8_t *vdev_id)
-{
-	*vdev_id = req->vdev_id;
 }
 #endif
 
@@ -862,7 +828,7 @@ static void tgt_mc_cp_stats_extract_vdev_summary_stats(
 					struct wlan_objmgr_psoc *psoc,
 					struct stats_event *ev)
 {
-	uint8_t i, vdev_id = WLAN_INVALID_VDEV_ID;
+	uint8_t i;
 	QDF_STATUS status;
 	struct wlan_objmgr_peer *peer = NULL;
 	struct request_info last_req = {0};
@@ -884,21 +850,16 @@ static void tgt_mc_cp_stats_extract_vdev_summary_stats(
 	}
 
 	for (i = 0; i < ev->num_summary_stats; i++) {
-		vdev_id = ev->vdev_summary_stats[i].vdev_id;
-		update_ml_vdev_id_from_stats_event(&last_req, &vdev_id);
-		if (ev->vdev_summary_stats[i].vdev_id == vdev_id)
+		if (ev->vdev_summary_stats[i].vdev_id == last_req.vdev_id)
 			break;
 	}
 
 	if (i == ev->num_summary_stats) {
-		cp_stats_debug("vdev_id %d not found", vdev_id);
+		cp_stats_debug("vdev_id %d not found", last_req.vdev_id);
 		return;
 	}
 
-	if (vdev_id == WLAN_INVALID_VDEV_ID)
-		return;
-
-	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, vdev_id,
+	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, last_req.vdev_id,
 						    WLAN_CP_STATS_ID);
 	if (!vdev) {
 		cp_stats_err("vdev is null");
@@ -948,7 +909,7 @@ static void tgt_mc_cp_stats_extract_vdev_chain_rssi_stats(
 					struct wlan_objmgr_psoc *psoc,
 					struct stats_event *ev)
 {
-	uint8_t i, j, vdev_id;
+	uint8_t i, j;
 	QDF_STATUS status;
 	struct request_info last_req = {0};
 	struct wlan_objmgr_vdev *vdev;
@@ -967,295 +928,14 @@ static void tgt_mc_cp_stats_extract_vdev_chain_rssi_stats(
 	}
 
 	for (i = 0; i < ev->num_chain_rssi_stats; i++) {
-		vdev_id = ev->vdev_chain_rssi[i].vdev_id;
-		update_ml_vdev_id_from_stats_event(&last_req, &vdev_id);
-		if (ev->vdev_chain_rssi[i].vdev_id != vdev_id)
-			continue;
-
-		vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, vdev_id,
-							    WLAN_CP_STATS_ID);
-		if (!vdev) {
-			cp_stats_err("vdev is null");
-			return;
-		}
-
-		vdev_cp_stats_priv = wlan_cp_stats_get_vdev_stats_obj(vdev);
-		if (!vdev_cp_stats_priv) {
-			cp_stats_err("vdev cp stats object is null");
-			wlan_objmgr_vdev_release_ref(vdev, WLAN_CP_STATS_ID);
-			return;
-		}
-
-		wlan_cp_stats_vdev_obj_lock(vdev_cp_stats_priv);
-		vdev_mc_stats = vdev_cp_stats_priv->vdev_stats;
-		for (j = 0; j < MAX_NUM_CHAINS; j++) {
-			vdev_mc_stats->chain_rssi[j] =
-					ev->vdev_chain_rssi[i].chain_rssi[j];
-		}
-		wlan_cp_stats_vdev_obj_unlock(vdev_cp_stats_priv);
-
-		wlan_objmgr_vdev_release_ref(vdev, WLAN_CP_STATS_ID);
+		if (ev->vdev_chain_rssi[i].vdev_id == last_req.vdev_id)
+			break;
 	}
-}
 
-static void
-tgt_mc_cp_stats_extract_vdev_extd_stats(struct wlan_objmgr_psoc *psoc,
-					struct stats_event *ev)
-{
-	uint8_t i, vdev_id;
-	QDF_STATUS status;
-	struct request_info last_req = {0};
-	struct wlan_objmgr_vdev *vdev;
-	struct vdev_mc_cp_stats *vdev_mc_stats;
-	struct vdev_cp_stats *vdev_cp_stats_priv;
-
-	if (!ev->vdev_extd_stats)
-		return;
-
-	status = ucfg_mc_cp_stats_get_pending_req(psoc, TYPE_STATION_STATS,
-						  &last_req);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		cp_stats_err("ucfg_mc_cp_stats_get_pending_req failed");
+	if (i == ev->num_chain_rssi_stats) {
+		cp_stats_debug("vdev_id %d not found", last_req.vdev_id);
 		return;
 	}
-
-	for (i = 0; i < ev->num_vdev_extd_stats; i++) {
-		vdev_id = ev->vdev_extd_stats[i].vdev_id;
-
-		vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, vdev_id,
-							    WLAN_CP_STATS_ID);
-		if (!vdev) {
-			cp_stats_err("vdev is null");
-			return;
-		}
-
-		vdev_cp_stats_priv = wlan_cp_stats_get_vdev_stats_obj(vdev);
-		if (!vdev_cp_stats_priv) {
-			cp_stats_err("vdev cp stats object is null");
-			wlan_objmgr_vdev_release_ref(vdev, WLAN_CP_STATS_ID);
-			return;
-		}
-
-		wlan_cp_stats_vdev_obj_lock(vdev_cp_stats_priv);
-		vdev_mc_stats = vdev_cp_stats_priv->vdev_stats;
-		qdf_mem_copy(&vdev_mc_stats->vdev_extd_stats,
-			     &ev->vdev_extd_stats[i],
-			     sizeof(vdev_mc_stats->vdev_extd_stats));
-
-		wlan_cp_stats_vdev_obj_unlock(vdev_cp_stats_priv);
-		wlan_objmgr_vdev_release_ref(vdev, WLAN_CP_STATS_ID);
-	}
-}
-
-static QDF_STATUS
-tgt_send_vdev_mc_cp_stats(struct wlan_objmgr_psoc *psoc,
-			  struct stats_event *ev,
-			  struct request_info *last_req)
-{
-	struct wlan_objmgr_vdev *vdev;
-	struct vdev_mc_cp_stats *vdev_mc_stats;
-	struct vdev_cp_stats *vdev_cp_stats_priv;
-
-	if (!ev || !last_req)
-		return QDF_STATUS_E_NULL_VALUE;
-
-	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, last_req->vdev_id,
-						    WLAN_CP_STATS_ID);
-	if (!vdev) {
-		cp_stats_err("vdev object is null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	vdev_cp_stats_priv = wlan_cp_stats_get_vdev_stats_obj(vdev);
-	if (!vdev_cp_stats_priv) {
-		cp_stats_err("vdev cp stats object is null");
-		wlan_objmgr_vdev_release_ref(vdev, WLAN_CP_STATS_ID);
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	wlan_cp_stats_vdev_obj_lock(vdev_cp_stats_priv);
-	vdev_mc_stats = vdev_cp_stats_priv->vdev_stats;
-	ev->vdev_summary_stats[0].vdev_id = last_req->vdev_id;
-	ev->vdev_summary_stats[0].stats = vdev_mc_stats->vdev_summary_stats;
-	ev->vdev_chain_rssi[0].vdev_id = last_req->vdev_id;
-	qdf_mem_copy(ev->vdev_chain_rssi[0].chain_rssi,
-		     vdev_mc_stats->chain_rssi,
-		     sizeof(vdev_mc_stats->chain_rssi));
-	ev->tx_rate_flags = vdev_mc_stats->tx_rate_flags;
-
-	ev->bcn_protect_stats = vdev_mc_stats->pmf_bcn_stats;
-
-	qdf_mem_copy(&ev->vdev_extd_stats[0],
-		     &vdev_mc_stats->vdev_extd_stats,
-		     sizeof(vdev_mc_stats->vdev_extd_stats));
-
-	wlan_cp_stats_vdev_obj_unlock(vdev_cp_stats_priv);
-	wlan_objmgr_vdev_release_ref(vdev, WLAN_CP_STATS_ID);
-
-	return QDF_STATUS_SUCCESS;
-}
-
-static QDF_STATUS
-tgt_send_peer_mc_cp_stats(struct wlan_objmgr_psoc *psoc,
-			  struct stats_event *ev,
-			  struct request_info *last_req)
-{
-	struct wlan_objmgr_peer *peer;
-	struct peer_mc_cp_stats *peer_mc_stats;
-	struct peer_cp_stats *peer_cp_stats_priv;
-
-	if (!ev || !last_req)
-		return QDF_STATUS_E_NULL_VALUE;
-
-	peer = wlan_objmgr_get_peer(psoc, last_req->pdev_id,
-				    last_req->peer_mac_addr, WLAN_CP_STATS_ID);
-	if (!peer) {
-		cp_stats_debug("peer object is null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	peer_cp_stats_priv = wlan_cp_stats_get_peer_stats_obj(peer);
-	if (!peer_cp_stats_priv) {
-		cp_stats_err("peer cp stats object is null");
-		wlan_objmgr_peer_release_ref(peer, WLAN_CP_STATS_ID);
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	wlan_cp_stats_peer_obj_lock(peer_cp_stats_priv);
-	peer_mc_stats = peer_cp_stats_priv->peer_stats;
-	/*
-	 * The linkspeed returned by fw is in kbps so convert
-	 * it in units of 100kbps which is expected by UMAC
-	 */
-	ev->tx_rate = peer_mc_stats->tx_rate / 100;
-	ev->rx_rate = peer_mc_stats->rx_rate / 100;
-
-	if (peer_mc_stats->adv_stats) {
-		ev->num_peer_adv_stats = 1;
-		qdf_mem_copy(ev->peer_adv_stats,
-			     peer_mc_stats->adv_stats,
-			     sizeof(*peer_mc_stats->adv_stats));
-	}
-
-	wlan_cp_stats_peer_obj_unlock(peer_cp_stats_priv);
-	wlan_objmgr_peer_release_ref(peer, WLAN_CP_STATS_ID);
-
-	return QDF_STATUS_SUCCESS;
-}
-
-static QDF_STATUS
-tgt_send_pdev_mc_cp_stats(struct wlan_objmgr_psoc *psoc,
-			  struct stats_event *ev,
-			  struct request_info *last_req)
-{
-	struct wlan_objmgr_pdev *pdev;
-	struct wlan_objmgr_vdev *vdev = NULL;
-	struct pdev_mc_cp_stats *pdev_mc_stats;
-	struct pdev_cp_stats *pdev_cp_stats_priv;
-	int pdev_id;
-
-	if (!ev || !last_req)
-		return QDF_STATUS_E_NULL_VALUE;
-
-	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, last_req->vdev_id,
-						    WLAN_CP_STATS_ID);
-	if (!vdev) {
-		cp_stats_err("vdev is null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	pdev = wlan_vdev_get_pdev(vdev);
-	if (!pdev) {
-		cp_stats_err("pdev is null");
-		goto end;
-	}
-
-	pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
-	if (pdev_id != last_req->pdev_id) {
-		cp_stats_err("pdev_id: %d invalid", pdev_id);
-		goto end;
-	}
-
-	pdev_cp_stats_priv = wlan_cp_stats_get_pdev_stats_obj(pdev);
-	if (!pdev_cp_stats_priv) {
-		cp_stats_err("pdev_cp_stats_priv is null");
-		goto end;
-	}
-
-	wlan_cp_stats_pdev_obj_lock(pdev_cp_stats_priv);
-	pdev_mc_stats = pdev_cp_stats_priv->pdev_stats;
-	qdf_mem_copy(ev->pdev_stats,
-		     pdev_mc_stats,
-		     sizeof(*pdev_mc_stats));
-	wlan_cp_stats_pdev_obj_unlock(pdev_cp_stats_priv);
-	wlan_objmgr_vdev_release_ref(vdev, WLAN_CP_STATS_ID);
-
-	return QDF_STATUS_SUCCESS;
-
-end:
-	wlan_objmgr_vdev_release_ref(vdev, WLAN_CP_STATS_ID);
-	return QDF_STATUS_E_NULL_VALUE;
-}
-
-static QDF_STATUS
-tgt_mc_cp_stats_get_tx_power(struct wlan_objmgr_vdev *vdev, int *dbm)
-{
-	struct wlan_objmgr_pdev *pdev;
-	struct pdev_mc_cp_stats *pdev_mc_stats;
-	struct pdev_cp_stats *pdev_cp_stats_priv;
-	struct vdev_mc_cp_stats *vdev_mc_stats;
-	struct vdev_cp_stats *vdev_cp_stat;
-	uint32_t vdev_power = 0;
-
-	vdev_cp_stat = wlan_cp_stats_get_vdev_stats_obj(vdev);
-	if (vdev_cp_stat) {
-		wlan_cp_stats_vdev_obj_lock(vdev_cp_stat);
-		vdev_mc_stats = vdev_cp_stat->vdev_stats;
-		vdev_power = vdev_mc_stats->vdev_extd_stats.vdev_tx_power;
-		wlan_cp_stats_vdev_obj_unlock(vdev_cp_stat);
-		if (vdev_power) {
-			*dbm = vdev_power;
-			return QDF_STATUS_SUCCESS;
-		}
-	}
-
-	pdev = wlan_vdev_get_pdev(vdev);
-	pdev_cp_stats_priv = wlan_cp_stats_get_pdev_stats_obj(pdev);
-	if (!pdev_cp_stats_priv) {
-		cp_stats_err("pdev cp stats object is null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	wlan_cp_stats_pdev_obj_lock(pdev_cp_stats_priv);
-	pdev_mc_stats = pdev_cp_stats_priv->pdev_stats;
-	*dbm = pdev_mc_stats->max_pwr;
-	wlan_cp_stats_pdev_obj_unlock(pdev_cp_stats_priv);
-
-	return QDF_STATUS_SUCCESS;
-}
-
-static void
-tgt_mc_cp_stats_extract_vdev_and_extd_stats(struct wlan_objmgr_psoc *psoc,
-					    struct stats_event *ev)
-{
-	QDF_STATUS status;
-	struct request_info last_req = {0};
-	bool pending = false;
-	int32_t max_pwr = 0;
-	struct wlan_objmgr_vdev *vdev = NULL;
-
-	status = ucfg_mc_cp_stats_get_pending_req(psoc,
-						  TYPE_CONNECTION_TX_POWER,
-						  &last_req);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		cp_stats_err("ucfg_mc_cp_stats_get_pending_req failed");
-		return;
-	}
-
-	if (ev->pdev_stats)
-		tgt_mc_cp_stats_extract_tx_power(psoc, ev, false);
-	else if (ev->vdev_extd_stats)
-		tgt_mc_cp_stats_extract_vdev_extd_stats(psoc, ev);
 
 	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, last_req.vdev_id,
 						    WLAN_CP_STATS_ID);
@@ -1263,28 +943,38 @@ tgt_mc_cp_stats_extract_vdev_and_extd_stats(struct wlan_objmgr_psoc *psoc,
 		cp_stats_err("vdev is null");
 		return;
 	}
-	tgt_mc_cp_stats_get_tx_power(vdev, &max_pwr);
 
-	wlan_objmgr_vdev_release_ref(vdev, WLAN_CP_STATS_ID);
-
-	if (tgt_mc_cp_stats_is_last_event(ev, TYPE_CONNECTION_TX_POWER)) {
-		ucfg_mc_cp_stats_reset_pending_req(psoc,
-						   TYPE_CONNECTION_TX_POWER,
-						   &last_req,
-						   &pending);
-		if (last_req.u.get_tx_power_cb && pending)
-			last_req.u.get_tx_power_cb(max_pwr, last_req.cookie);
+	vdev_cp_stats_priv = wlan_cp_stats_get_vdev_stats_obj(vdev);
+	if (!vdev_cp_stats_priv) {
+		cp_stats_err("vdev cp stats object is null");
+		goto end;
 	}
+
+	wlan_cp_stats_vdev_obj_lock(vdev_cp_stats_priv);
+	vdev_mc_stats = vdev_cp_stats_priv->vdev_stats;
+	for (j = 0; j < MAX_NUM_CHAINS; j++) {
+		vdev_mc_stats->chain_rssi[j] =
+					ev->vdev_chain_rssi[i].chain_rssi[j];
+	}
+	wlan_cp_stats_vdev_obj_unlock(vdev_cp_stats_priv);
+
+end:
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_CP_STATS_ID);
 }
 
 static void
-tgt_mc_cp_stats_send_raw_station_stats(struct wlan_objmgr_psoc *psoc,
-				       struct request_info *last_req)
+tgt_mc_cp_stats_prepare_n_send_raw_station_stats(struct wlan_objmgr_psoc *psoc,
+						 struct request_info *last_req)
 {
 	/* station_stats to be given to userspace thread */
 	struct stats_event info = {0};
+	struct wlan_objmgr_vdev *vdev;
+	struct wlan_objmgr_peer *peer;
+	struct peer_mc_cp_stats *peer_mc_stats;
+	struct vdev_mc_cp_stats *vdev_mc_stats;
+	struct peer_cp_stats *peer_cp_stats_priv;
+	struct vdev_cp_stats *vdev_cp_stats_priv;
 	void (*get_station_stats_cb)(struct stats_event *info, void *cookie);
-	QDF_STATUS status;
 
 	get_station_stats_cb = last_req->u.get_station_stats_cb;
 	if (!get_station_stats_cb) {
@@ -1292,83 +982,88 @@ tgt_mc_cp_stats_send_raw_station_stats(struct wlan_objmgr_psoc *psoc,
 		return;
 	}
 
-	info.num_summary_stats = 1;
-	info.num_chain_rssi_stats = 1;
-	info.num_vdev_extd_stats = 1;
-	info.vdev_summary_stats = qdf_mem_malloc(
-					sizeof(*info.vdev_summary_stats));
-	info.vdev_chain_rssi = qdf_mem_malloc(sizeof(*info.vdev_chain_rssi));
+	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, last_req->vdev_id,
+						    WLAN_CP_STATS_ID);
+	if (!vdev) {
+		cp_stats_err("vdev object is null");
+		return;
+	}
 
-	info.vdev_extd_stats = qdf_mem_malloc(sizeof(*info.vdev_extd_stats));
-
-	if (!info.vdev_summary_stats || !info.vdev_chain_rssi ||
-	    !info.vdev_extd_stats)
-		goto end;
-
-	status = tgt_send_vdev_mc_cp_stats(psoc, &info, last_req);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		cp_stats_err("tgt_send_vdev_mc_cp_stats failed");
+	peer = wlan_objmgr_get_peer(psoc, last_req->pdev_id,
+				    last_req->peer_mac_addr, WLAN_CP_STATS_ID);
+	if (!peer) {
+		cp_stats_debug("peer object is null");
 		goto end;
 	}
+
+	vdev_cp_stats_priv = wlan_cp_stats_get_vdev_stats_obj(vdev);
+	if (!vdev_cp_stats_priv) {
+		cp_stats_err("vdev cp stats object is null");
+		goto end;
+	}
+
+	peer_cp_stats_priv = wlan_cp_stats_get_peer_stats_obj(peer);
+	if (!peer_cp_stats_priv) {
+		cp_stats_err("peer cp stats object is null");
+		goto end;
+	}
+
+	info.num_summary_stats = 1;
+	info.vdev_summary_stats = qdf_mem_malloc(
+					sizeof(*info.vdev_summary_stats));
+	if (!info.vdev_summary_stats)
+		goto end;
+
+	info.num_chain_rssi_stats = 1;
+	info.vdev_chain_rssi = qdf_mem_malloc(sizeof(*info.vdev_chain_rssi));;
+	if (!info.vdev_chain_rssi)
+		goto end;
+
+	wlan_cp_stats_vdev_obj_lock(vdev_cp_stats_priv);
+	vdev_mc_stats = vdev_cp_stats_priv->vdev_stats;
+	info.vdev_summary_stats[0].vdev_id = last_req->vdev_id;
+	info.vdev_summary_stats[0].stats = vdev_mc_stats->vdev_summary_stats;
+	info.vdev_chain_rssi[0].vdev_id = last_req->vdev_id;
+	qdf_mem_copy(info.vdev_chain_rssi[0].chain_rssi,
+		     vdev_mc_stats->chain_rssi,
+		     sizeof(vdev_mc_stats->chain_rssi));
+	info.tx_rate_flags = vdev_mc_stats->tx_rate_flags;
+
+	info.bcn_protect_stats = vdev_mc_stats->pmf_bcn_stats;
+	wlan_cp_stats_vdev_obj_unlock(vdev_cp_stats_priv);
 
 	info.peer_adv_stats = qdf_mem_malloc(sizeof(*info.peer_adv_stats));
 	if (!info.peer_adv_stats)
 		goto end;
 
-	status = tgt_send_peer_mc_cp_stats(psoc, &info, last_req);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		cp_stats_err("tgt_send_peer_mc_cp_stats failed");
-		goto end;
+	wlan_cp_stats_peer_obj_lock(peer_cp_stats_priv);
+	peer_mc_stats = peer_cp_stats_priv->peer_stats;
+	/*
+	 * The linkspeed returned by fw is in kbps so convert
+	 * it in units of 100kbps which is expected by UMAC
+	 */
+	info.tx_rate = peer_mc_stats->tx_rate / 100;
+	info.rx_rate = peer_mc_stats->rx_rate / 100;
+
+	if (peer_mc_stats->adv_stats) {
+		info.num_peer_adv_stats = 1;
+		qdf_mem_copy(info.peer_adv_stats,
+			     peer_mc_stats->adv_stats,
+			     sizeof(*peer_mc_stats->adv_stats));
 	}
 
-	info.num_pdev_stats = 1;
-	info.pdev_stats = qdf_mem_malloc(sizeof(*info.pdev_stats));
-	if (!info.pdev_stats)
-		goto end;
+	wlan_cp_stats_peer_obj_unlock(peer_cp_stats_priv);
 
-	status = tgt_send_pdev_mc_cp_stats(psoc, &info, last_req);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		cp_stats_err("tgt_send_pdev_mc_cp_stats failed");
-		goto end;
-	}
 end:
 	get_station_stats_cb(&info, last_req->cookie);
 
 	ucfg_mc_cp_stats_free_stats_resources(&info);
-}
 
-#ifdef WLAN_FEATURE_11BE_MLO
-static void
-tgt_mc_cp_stats_prepare_n_send_raw_station_stats(struct wlan_objmgr_psoc *psoc,
-						 struct request_info *last_req)
-{
-	uint8_t i;
+	if (peer)
+		wlan_objmgr_peer_release_ref(peer, WLAN_CP_STATS_ID);
 
-	if (!last_req->ml_vdev_info.ml_vdev_count) {
-		cp_stats_nofl_debug("Invoking get_station_cb for vdev_id[%d]",
-				    last_req->vdev_id);
-		tgt_mc_cp_stats_send_raw_station_stats(psoc, last_req);
-		return;
-	}
-
-	for (i = 0; i < last_req->ml_vdev_info.ml_vdev_count; i++) {
-		last_req->vdev_id = last_req->ml_vdev_info.ml_vdev_id[i];
-		qdf_mem_copy(last_req->peer_mac_addr,
-			     &(last_req->ml_peer_mac_addr[i][0]),
-			     QDF_MAC_ADDR_SIZE);
-		cp_stats_nofl_debug("Invoking get_station_cb for ml vdev_id[%d]",
-				    last_req->vdev_id);
-		tgt_mc_cp_stats_send_raw_station_stats(psoc, last_req);
-	}
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_CP_STATS_ID);
 }
-#else
-static void
-tgt_mc_cp_stats_prepare_n_send_raw_station_stats(struct wlan_objmgr_psoc *psoc,
-						 struct request_info *last_req)
-{
-	tgt_mc_cp_stats_send_raw_station_stats(psoc, last_req);
-}
-#endif
 
 static void tgt_mc_cp_stats_extract_station_stats(
 				struct wlan_objmgr_psoc *psoc,
@@ -1391,7 +1086,6 @@ static void tgt_mc_cp_stats_extract_station_stats(
 	tgt_mc_cp_stats_extract_vdev_summary_stats(psoc, ev);
 	tgt_mc_cp_stats_extract_vdev_chain_rssi_stats(psoc, ev);
 	tgt_mc_cp_stats_extract_pmf_bcn_stats(psoc, ev);
-	tgt_mc_cp_stats_extract_vdev_extd_stats(psoc, ev);
 
 	/*
 	 * PEER stats are the last stats sent for get_station statistics.
@@ -1435,7 +1129,7 @@ QDF_STATUS tgt_mc_cp_stats_process_stats_event(struct wlan_objmgr_psoc *psoc,
 					       struct stats_event *ev)
 {
 	if (ucfg_mc_cp_stats_is_req_pending(psoc, TYPE_CONNECTION_TX_POWER))
-		tgt_mc_cp_stats_extract_vdev_and_extd_stats(psoc, ev);
+		tgt_mc_cp_stats_extract_tx_power(psoc, ev, false);
 
 	if (ucfg_mc_cp_stats_is_req_pending(psoc, TYPE_PEER_STATS))
 		tgt_mc_cp_stats_extract_peer_stats(psoc, ev, false);
@@ -1545,20 +1239,3 @@ QDF_STATUS tgt_send_mc_cp_stats_req(struct wlan_objmgr_psoc *psoc,
 
 	return status;
 }
-
-QDF_STATUS tgt_set_pdev_stats_update_period(struct wlan_objmgr_psoc *psoc,
-					    uint8_t pdev_id, uint32_t val)
-{
-	struct wlan_lmac_if_cp_stats_tx_ops *tx_ops;
-	QDF_STATUS status;
-
-	tx_ops = target_if_cp_stats_get_tx_ops(psoc);
-	if (!tx_ops || !tx_ops->set_pdev_stats_update_period) {
-		cp_stats_err("could not get tx_ops");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-	status = tx_ops->set_pdev_stats_update_period(psoc, pdev_id, val);
-
-	return status;
-}
-

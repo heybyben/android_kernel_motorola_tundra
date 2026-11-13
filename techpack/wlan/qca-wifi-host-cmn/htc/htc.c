@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -47,7 +47,8 @@ ATH_DEBUG_INSTANTIATE_MODULE_VAR(htc,
 
 #endif
 
-#if defined(WMI_MULTI_MAC_SVC)
+#if (defined(WMI_MULTI_MAC_SVC) || defined(QCA_WIFI_QCA8074) || \
+	defined(QCA_WIFI_QCA6018) || defined(QCA_WIFI_QCA9574))
 static const uint32_t svc_id[] = {WMI_CONTROL_SVC, WMI_CONTROL_SVC_WMAC1,
 						WMI_CONTROL_SVC_WMAC2};
 #else
@@ -145,42 +146,6 @@ void htc_ce_tasklet_debug_dump(HTC_HANDLE htc_handle)
 	hif_display_stats(target->hif_dev);
 }
 
-#ifdef FEATURE_RUNTIME_PM
-/**
- * htc_dec_return_wmi_runtime_cnt: Decrement htc wmi runtime count
- * @target: HTC target
- *
- * Return: value of runtime count after decrement
- */
-static inline
-int32_t htc_dec_return_wmi_runtime_cnt(HTC_TARGET *target)
-{
-	return qdf_atomic_dec_return(&target->htc_wmi_runtime_cnt);
-}
-
-/**
- * htc_init_wmi_runtime_cnt: Initialize htc wmi runtime count
- * @target: HTC target
- *
- * Return: None
- */
-static inline
-void htc_init_wmi_runtime_cnt(HTC_TARGET *target)
-{
-	qdf_atomic_init(&target->htc_wmi_runtime_cnt);
-}
-#else
-static inline
-int32_t htc_dec_return_wmi_runtime_cnt(HTC_TARGET *target)
-{
-	return -1;
-}
-
-static inline
-void htc_init_wmi_runtime_cnt(HTC_TARGET *target)
-{
-}
-#endif
 /* cleanup the HTC instance */
 static void htc_cleanup(HTC_TARGET *target)
 {
@@ -190,11 +155,11 @@ static void htc_cleanup(HTC_TARGET *target)
 	HTC_PACKET_QUEUE *pkt_queue;
 	qdf_nbuf_t netbuf;
 
-	while (htc_dec_return_htt_runtime_cnt((void *)target) >= 0)
-		hif_rtpm_put(HIF_RTPM_PUT_ASYNC, HIF_RTPM_ID_HTT);
-
-	while (htc_dec_return_wmi_runtime_cnt((void *)target) >= 0)
-		hif_rtpm_put(HIF_RTPM_PUT_ASYNC, HIF_RTPM_ID_WMI);
+	while (htc_dec_return_runtime_cnt((void *)target) >= 0) {
+		hif_pm_runtime_put(target->hif_dev, RTPM_ID_HTC);
+		hif_pm_runtime_update_stats(target->hif_dev, RTPM_ID_HTC,
+					    HIF_PM_HTC_STATS_PUT_HTC_CLEANUP);
+	}
 
 	if (target->hif_dev) {
 		hif_detach_htc(target->hif_dev);
@@ -256,8 +221,7 @@ static void htc_cleanup(HTC_TARGET *target)
 
 #ifdef FEATURE_RUNTIME_PM
 /**
- * htc_runtime_pm_init(): runtime pm related initialization
- * @target: HTC target
+ * htc_runtime_pm_init(): runtime pm related intialization
  *
  * need to initialize a work item.
  */
@@ -317,30 +281,30 @@ static void htc_runtime_pm_deinit(HTC_TARGET *target)
 	qdf_destroy_work(0, &target->queue_kicker);
 }
 
-int32_t htc_dec_return_htt_runtime_cnt(HTC_HANDLE htc)
+int32_t htc_dec_return_runtime_cnt(HTC_HANDLE htc)
 {
 	HTC_TARGET *target = GET_HTC_TARGET_FROM_HANDLE(htc);
 
-	return qdf_atomic_dec_return(&target->htc_htt_runtime_cnt);
+	return qdf_atomic_dec_return(&target->htc_runtime_cnt);
 }
 
 /**
- * htc_init_htt_runtime_cnt: Initialize htc htt runtime count
- * @target: HTC target
+ * htc_init_runtime_cnt: Initialize htc runtime count
+ * @htc: HTC handle
  *
  * Return: None
  */
 static inline
-void htc_init_htt_runtime_cnt(HTC_TARGET *target)
+void htc_init_runtime_cnt(HTC_TARGET *target)
 {
-	qdf_atomic_init(&target->htc_htt_runtime_cnt);
+	qdf_atomic_init(&target->htc_runtime_cnt);
 }
 #else
 static inline void htc_runtime_pm_init(HTC_TARGET *target) { }
 static inline void htc_runtime_pm_deinit(HTC_TARGET *target) { }
 
 static inline
-void htc_init_htt_runtime_cnt(HTC_TARGET *target)
+void htc_init_runtime_cnt(HTC_TARGET *target)
 {
 }
 #endif
@@ -519,17 +483,13 @@ HTC_HANDLE htc_create(void *ol_sc, struct htc_init_info *pInfo,
 	} while (false);
 
 	htc_recv_init(target);
-	htc_init_htt_runtime_cnt(target);
-	htc_init_wmi_runtime_cnt(target);
+	htc_init_runtime_cnt(target);
 
 	HTC_TRACE("-htc_create: (0x%pK)", target);
 
 	htc_hang_event_notifier_register(target);
 
 	htc_init_link_vote_ids();
-
-	hif_rtpm_register(HIF_RTPM_ID_WMI, NULL);
-	hif_rtpm_register(HIF_RTPM_ID_HTT, NULL);
 
 	return (HTC_HANDLE) target;
 }
@@ -540,15 +500,10 @@ void htc_destroy(HTC_HANDLE HTCHandle)
 
 	AR_DEBUG_PRINTF(ATH_DEBUG_TRC,
 			("+htc_destroy ..  Destroying :0x%pK\n", target));
-
 	htc_hang_event_notifier_unregister();
-
-	if (target) {
-		hif_stop(htc_get_hif_device(HTCHandle));
+	hif_stop(htc_get_hif_device(HTCHandle));
+	if (target)
 		htc_cleanup(target);
-		hif_rtpm_deregister(HIF_RTPM_ID_HTT);
-		hif_rtpm_deregister(HIF_RTPM_ID_WMI);
-	}
 	AR_DEBUG_PRINTF(ATH_DEBUG_TRC, ("-htc_destroy\n"));
 	htc_credit_history_deinit();
 }
@@ -635,7 +590,7 @@ A_STATUS htc_setup_target_buffer_assignments(HTC_TARGET *target)
 
 	status = A_OK;
 	/*
-	 * Allocate all credits/HTC buffers to WMI.
+	 * Allocate all credists/HTC buffers to WMI.
 	 * no buffers are used/required for data. data always
 	 * remains on host.
 	 */
@@ -1170,7 +1125,7 @@ void *htc_get_targetdef(HTC_HANDLE htc_handle)
 /**
  * htc_ipa_get_ce_resource() - get uc resource on lower layer
  * @htc_handle: htc context
- * @ce_sr: copyengine source ring base physical address
+ * @ce_sr_base_paddr: copyengine source ring base physical address
  * @ce_sr_ring_size: copyengine source ring size
  * @ce_reg_paddr: copyengine register physical address
  *
@@ -1264,19 +1219,26 @@ bool htc_can_suspend_link(HTC_HANDLE htc_handle)
 #ifdef FEATURE_RUNTIME_PM
 int htc_pm_runtime_get(HTC_HANDLE htc_handle)
 {
-	return hif_rtpm_get(HIF_RTPM_GET_ASYNC, HIF_RTPM_ID_HTT);
+	HTC_TARGET *target = GET_HTC_TARGET_FROM_HANDLE(htc_handle);
+
+	return hif_pm_runtime_get(target->hif_dev,
+				  RTPM_ID_HTC, false);
 }
 
 int htc_pm_runtime_put(HTC_HANDLE htc_handle)
 {
-	return hif_rtpm_put(HIF_RTPM_PUT_ASYNC, HIF_RTPM_ID_HTT);
+	HTC_TARGET *target = GET_HTC_TARGET_FROM_HANDLE(htc_handle);
+
+	hif_pm_runtime_update_stats(target->hif_dev, RTPM_ID_HTC,
+				    HIF_PM_HTC_STATS_PUT_HTT_RESPONSE);
+	return hif_pm_runtime_put(target->hif_dev, RTPM_ID_HTC);
 }
 #endif
 
 /**
  * htc_set_wmi_endpoint_count: Set number of WMI endpoint
  * @htc_handle: HTC handle
- * @wmi_ep_count: WMI endpoint count
+ * @wmi_ep_count: WMI enpoint count
  *
  * return: None
  */
@@ -1291,7 +1253,7 @@ void htc_set_wmi_endpoint_count(HTC_HANDLE htc_handle, uint8_t wmi_ep_count)
  * htc_get_wmi_endpoint_count: Get number of WMI endpoint
  * @htc_handle: HTC handle
  *
- * return: WMI endpoint count
+ * return: WMI enpoint count
  */
 uint8_t htc_get_wmi_endpoint_count(HTC_HANDLE htc_handle)
 {

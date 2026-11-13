@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -148,8 +147,9 @@ void lim_handle_del_bss_in_re_assoc_context(struct mac_context *mac,
 				&pe_session->dph.dphHashTable);
 		if (!sta) {
 			/* Could not add hash table entry */
-			pe_err("could not add hash entry at DPH for BSSID: "QDF_MAC_ADDR_FMT,
-			       QDF_MAC_ADDR_REF(pe_session->limReAssocbssId));
+			pe_err("could not add hash entry at DPH for");
+			lim_print_mac_addr(mac,
+				pe_session->limReAssocbssId, LOGE);
 			mlmReassocCnf.resultCode =
 				eSIR_SME_RESOURCES_UNAVAILABLE;
 			mlmReassocCnf.protStatusCode = eSIR_SME_SUCCESS;
@@ -415,7 +415,9 @@ QDF_STATUS lim_add_ft_sta_self(struct mac_context *mac_ctx, uint16_t assoc_id,
 	msg_q.bodyptr = add_sta_params;
 	msg_q.bodyval = 0;
 
-	pe_debug("Sending WMA_ADD_STA_REQ (aid %d)", add_sta_params->assocId);
+	QDF_TRACE(QDF_MODULE_ID_PE, QDF_TRACE_LEVEL_DEBUG,
+			"Sending WMA_ADD_STA_REQ (aid %d)",
+			 add_sta_params->assocId);
 	MTRACE(mac_trace_msg_tx(mac_ctx, session_entry->peSessionId,
 			 msg_q.type));
 
@@ -466,6 +468,8 @@ lim_restore_pre_reassoc_state(struct mac_context *mac,
 
 	/* 'Change' timer for future activations */
 	lim_deactivate_and_change_timer(mac, eLIM_REASSOC_FAIL_TIMER);
+
+	lim_send_switch_chnl_params(mac, pe_session);
 
 	/* @ToDo:Need to Integrate the STOP the Dataxfer to AP from 11H code */
 

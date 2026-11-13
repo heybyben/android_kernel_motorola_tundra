@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -105,7 +105,6 @@ enum mgmt_frm_subtype {
  * @AUTH_WPA2_PSK: WPA2 PSK based auth
  * @AUTH_WAPI_CERT: WAPI CERT based auth
  * @AUTH_WAPI_PSK: WAPI PSK based auth
- * @AUTH_MAX: max enumeration
  */
 enum mgmt_auth_type {
 	AUTH_OPEN = 0x00,
@@ -130,7 +129,6 @@ enum mgmt_auth_type {
  * @ENC_MODE_AES_GCMP: AES with GCMP encryption
  * @ENC_MODE_AES_GCMP_256: AES with 256 bit GCMP encryption
  * @ENC_MODE_SMS4: WAPI based SMS4 encryption
- * @ENC_MODE_MAX: max enumeration
  */
 enum mgmt_encrypt_type {
 	ENC_MODE_OPEN = 0x00,
@@ -155,7 +153,6 @@ enum mgmt_encrypt_type {
  * @BW_5MHZ: 5 MHz of channel bonding
  * @BW_10MHZ: 10 MHz of channel bonding
  * @BW_320MHZ: 320 MHz of channel bonding
- * @BW_MAX: max enumeration
  */
 enum mgmt_ch_width {
 	BW_20MHZ = 0x00,
@@ -186,7 +183,6 @@ enum mgmt_ch_width {
  * @DOT11_MODE_11AX_ONLY: 802.11-AX only mode
  * @DOT11_MODE_11BE: 802.11-BE mode
  * @DOT11_MODE_11BE_ONLY: 802.11-BE only mode
- * @DOT11_MODE_MAX: max enumeration
  */
 enum mgmt_dot11_mode {
 	DOT11_MODE_ABG = 0x00,
@@ -224,7 +220,6 @@ enum mgmt_dot11_mode {
  * @WDS_PERSONA: WDS mode
  * @BTAMP_PERSONA: BT amp mode
  * @AHDEMO_PERSONA: AH demo mode
- * @MAX_PERSONA: max enumeration
  */
 enum mgmt_bss_type {
 	STA_PERSONA = 0x00,
@@ -253,12 +248,11 @@ enum mgmt_bss_type {
  * @WLAN_STATUS_RESET_FAIL: Reset Fail
  * @WLAN_STATUS_RESET_SUCCESS: Reset Success
  * @WLAN_STATUS_DEVICE_REMOVED: Device Removed
- * @WLAN_STATUS_DEVICE_INSERTED: Device Inserted
+ * @WLAN_STATUS_DEVICE_INSERTED: Devide Inserted
  * @WLAN_STATUS_DRIVER_UNLOADED: Driver Unloaded
  * @WLAN_STATUS_DRIVER_LOADED: Driver Loaded
  * @WLAN_STATUS_BUS_EXCEPTION: bus/link exception
  * @WLAN_STATUS_DEVICE_TEMPERATURE_HIGH: chip temperature high
- * @WLAN_STATUS_MAX: max enumeration
  */
 enum wlan_bringup_status {
 	WLAN_STATUS_DISABLED = 0,
@@ -336,7 +330,8 @@ typedef struct {
 } host_event_wlan_qos_payload_type;
 
 /**
- * struct host_event_wlan_connection_stats - to capture connection details
+ * host_event_wlan_connection_stats: to capture connection details
+ *
  * @rssi: RSSI signal strength of connected AP, units in dbM
  * @ssid_len: length of SSID
  * @ssid: SSID of AP where STA is connected
@@ -391,8 +386,8 @@ typedef struct {
 } host_event_wlan_pe_payload_type;
 
 /**
- * struct host_event_wlan_mgmt_payload_type - To capture TX/RX mgmt frame
- *                                            payload
+ * host_event_wlan_mgmt_payload_type: To capture TX/RX mgmt frames' payload
+ *
  * @mgmt_type: type of frames, value: enum wifi_frm_type
  * @mgmt_subtype: subtype of mgmt frame, value: enum mgmt_frm_subtype
  * @operating_channel: operating channel of AP
@@ -496,8 +491,7 @@ typedef struct {
   Event ID: EVENT_WLAN_POWERSAVE_WOW_STATS
   ------------------------------------------------------------------------*/
 /**
- * struct host_event_wlan_powersave_wow_stats - Structure holding wow stats
- *                                              information
+ * host_event_wlan_powersave_wow_stats - Structure holding wow stats information
  * @wow_ucast_wake_up_count: wow unicast packet wakeup count
  * @wow_bcast_wake_up_count: wow broadcast packet wakeup count
  * @wow_ipv4_mcast_wake_up_count: wow ipv4 multicast packet wakeup count
@@ -518,10 +512,6 @@ typedef struct {
  * @wow_icmpv4_count: wow icmpv4 packet count
  * @wow_icmpv6_count: wow icmpv6 packet count
  * @wow_oem_response_wake_up_count: wow  oem response packet wakeup count
- * @Reserved_1: reserved for future use
- * @Reserved_2: reserved for future use
- * @Reserved_3: reserved for future use
- * @Reserved_4: reserved for future use
  *
  * This structure contains the wow stats information related to diag event
  */
@@ -569,7 +559,7 @@ typedef struct {
  * struct host_event_wlan_eapol - Structure holding the eapol information
  * @event_sub_type:	0-Transmitted, 1-Received
  * @eapol_packet_type:	0 - EAP Start, 1 - EAPOL Start, 2 - EAPOL Logoff
- *			3 - EAPOL Key, 4 - EAPOL Encapsulated Alert
+			3 - EAPOL Key, 4 - EAPOL Encapsulated Alert
  * @eapol_key_info:	This field from the driver is in big endian format.
  *			So, the masks .0x8013. can be used to extract the
  *			message type. After masking, the values corresponding
@@ -705,7 +695,7 @@ struct host_event_wlan_log_complete {
 /**
  * struct host_event_wlan_kickout - Holds diag event details
  * @reasoncode: Indicates the reasoncode of event
- * @peer_mac: Indicates the peer macaddr
+ * @peer_macaddr: Indicates the peer macaddr
  * @vdev_id: Indicate unique id for identifying the VDEV
  *
  * This structure holds the diag event related information
@@ -721,10 +711,10 @@ struct host_event_wlan_kickout {
   Event ID: EVENT_WLAN_SOFTAP_DATASTALL/EVENT_WLAN_STA_DATASTALL
   ------------------------------------------------------------------------*/
 /**
- * struct host_event_wlan_datastall - Holds diag event details
+ * struct host_event_wlan_softap_datastall - Holds diag event details
  * @reason: Indicates the reason of event
  *
- * This structure holds the host diag event related information
+ *This structure holds the host diag event related information
  */
 
 struct host_event_wlan_datastall {
@@ -738,7 +728,7 @@ struct host_event_wlan_datastall {
  * struct host_event_wlan_ssr_reinit - Holds diag event details
  * @status: Indicates the status of event
  *
- * This structure holds the host diag event related information
+ *This structure holds the host diag event related information
  */
 
 struct host_event_wlan_ssr_reinit {
@@ -752,7 +742,7 @@ struct host_event_wlan_ssr_reinit {
  * struct host_event_wlan_ssr_shutdown - Holds diag event details
  * @status: Indicates the status of event
  *
- * This structure holds the host diag event related information
+ *This structure holds the host diag event related information
  */
 
 struct host_event_wlan_ssr_shutdown {
@@ -761,7 +751,7 @@ struct host_event_wlan_ssr_shutdown {
 
 
 /*-------------------------------------------------------------------------
-   Function declarations and documentation
+   Function declarations and documenation
    ------------------------------------------------------------------------*/
 /**
  * enum host_sta_kickout_events - Enum containing sta kickout subtype
@@ -786,7 +776,7 @@ enum host_sta_kickout_events {
 };
 
 /*-------------------------------------------------------------------------
-   Function declarations and documentation
+   Function declarations and documenation
    ------------------------------------------------------------------------*/
 /**
  * enum host_datastall_events - Enum containing datastall subtype
@@ -819,7 +809,7 @@ enum host_datastall_events {
 };
 
 /*-------------------------------------------------------------------------
-  Function declarations and documentation
+  Function declarations and documenation
   ------------------------------------------------------------------------*/
 /**
  * enum host_ssr_events - Enum containing ssr subtype
@@ -914,7 +904,7 @@ struct host_event_tdls_tx_rx_mgmt {
 };
 
 /*-------------------------------------------------------------------------
-   Function declarations and documentation
+   Function declarations and documenation
    ------------------------------------------------------------------------*/
 /**
  * enum wifi_connectivity_events - Enum containing EAPOL sub type
@@ -957,11 +947,9 @@ enum wifi_connectivity_events {
  * @WIFI_POWER_EVENT_WAKELOCK_DRIVER_IDLE_SHUTDOWN: Wakelock for Idle Shutdown
  * @WIFI_POWER_EVENT_WAKELOCK_TDLS: Wakelock for TDLS
  * @WIFI_POWER_EVENT_WAKELOCK_CFR: Wakelock for CFR
- * @WIFI_POWER_EVENT_WAKELOCK_SAP_D3_WOW: Wakelock for SAP D3 WOW max clients
+ * @WIFI_POWER_EVENT_WAKELOCK_SAP_D3_WOW: Wakelock for SAP D3 WOW max clinets
  * @WIFI_POWER_EVENT_WAKELOCK_GO_D3_WOW: Wakelock for GO D3 WOW max clients
  * @WIFI_POWER_EVENT_WAKELOCK_RTPM_TPUT_POLICY: Wakelock for RTPM Tput policy
- * @WIFI_POWER_EVENT_WAKELOCK_DYN_MAC_ADDR_UPDATE: Dynamic mac addr update
- * @WIFI_POWER_EVENT_WAKELOCK_OPT_WIFI_DP: OPT_WIFI_DP feature enabled
  *
  * Indicates the reason for which the wakelock was taken/released
  */
@@ -996,8 +984,6 @@ enum wake_lock_reason {
 	WIFI_POWER_EVENT_WAKELOCK_SAP_D3_WOW,
 	WIFI_POWER_EVENT_WAKELOCK_GO_D3_WOW,
 	WIFI_POWER_EVENT_WAKELOCK_RTPM_TPUT_POLICY,
-	WIFI_POWER_EVENT_WAKELOCK_DYN_MAC_ADDR_UPDATE,
-	WIFI_POWER_EVENT_WAKELOCK_OPT_WIFI_DP,
 };
 
 /* The length of interface name should >= IFNAMSIZ */

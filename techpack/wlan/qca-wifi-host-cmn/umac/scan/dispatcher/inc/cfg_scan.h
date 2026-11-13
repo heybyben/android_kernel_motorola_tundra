@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -44,7 +44,6 @@
  *  channels and doesn't set the flag FLAG_SCAN_ONLY_IF_RNR_FOUND for any 6g
  *  (PSC/non-PSC) channels. Rest of the scans will be done only on RNR (PSC and
  *  non-PSC channels).
- * @SCAN_MODE_6G_MAX: Max enumeration
  */
 enum scan_mode_6ghz {
 	SCAN_MODE_6G_NO_CHANNEL,
@@ -303,7 +302,8 @@ enum scan_mode_6ghz {
 
 /*
  * <ini>
- * gPassiveMaxChannelTime - Set max channel time for passive scan
+ * gPassiveMaxChannelTime/RoamScan_PassiveCH_DwellTime - Set max channel time
+ * for passive scan
  * @Min: 0
  * @Max: 10000
  * @Default: 110
@@ -318,7 +318,7 @@ enum scan_mode_6ghz {
  * </ini>
  */
 #define CFG_PASSIVE_MAX_CHANNEL_TIME CFG_INI_UINT(\
-		"gPassiveMaxChannelTime",\
+		"gPassiveMaxChannelTime RoamScan_PassiveCH_DwellTime",\
 		0, 10000, PLATFORM_VALUE(110, 300),\
 		CFG_VALUE_OR_DEFAULT, "passive dwell time")
 
@@ -365,7 +365,7 @@ enum scan_mode_6ghz {
 /*
  * <ini>
  * hostscan_adaptive_dwell_mode - Enable adaptive dwell mode
- * during host scan with connection
+ * during host scan with conneciton
  * @Min: 0
  * @Max: 4
  * @Default: 1
@@ -397,7 +397,7 @@ enum scan_mode_6ghz {
 /*
  * <ini>
  * hostscan_adaptive_dwell_mode_no_conn - Enable adaptive dwell mode
- * during host scan without connection
+ * during host scan without conneciton
  * @Min: 0
  * @Max: 4
  * @Default: 4
@@ -714,7 +714,7 @@ enum scan_mode_6ghz {
  * This ini is used to set the periodic timer upon which
  * a full scan needs to be triggered when PNO channel
  * prediction feature is enabled. This parameter is intended
- * to tweak the internal algorithm for experiments.
+ * to tweak the internal algortihm for experiments.
  *
  * Related: None
  *
@@ -773,7 +773,7 @@ enum scan_mode_6ghz {
  * @Max: 255
  * @Default: 0
  *
- * For Network Listen Offload and Preferred Network Offload, multiply the fast
+ * For Network Listen Offload and Perfered Network Offload, multiply the fast
  * scan period by this value after max cycles have occurred. Setting this to 0
  * disables the feature.
  *
@@ -989,7 +989,7 @@ enum scan_mode_6ghz {
 
 /*
  * <ini>
- * min_rest_time_conc - Minimum time spent on home channel before moving to a
+ * min_rest_time_conc - Mininum time spent on home channel before moving to a
  * new channel to scan.
  * @Min: 0
  * @Max: 50
@@ -1066,29 +1066,6 @@ enum scan_mode_6ghz {
 				0, 25, PLATFORM_VALUE(25, 0),\
 				CFG_VALUE_OR_DEFAULT, \
 				"data inactivity time on bss channel")
-
-/*
- * <ini>
- * gChlistTrimConc - Enable scan list modification on concurrent mode.
- * @Min: 0
- * @Max: 1
- * @Default: 0
- *
- * This ini is used to enable/disable scan list modification
- * on concurrent mode.
- *
- * Related: None.
- *
- * Supported Feature: Concurrency, Scan
- *
- * Usage: Internal/External
- *
- * </ini>
- */
-#define CFG_CHAN_LIST_TRIM_CONC CFG_INI_BOOL(\
-				"ch_list_trim_conc",\
-				false, \
-				"Enable scan list trim")
 
 /*
  * <ini>
@@ -1326,7 +1303,7 @@ enum scan_mode_6ghz {
  * gEnableSNRMonitoring - Enables SNR Monitoring
  * @Min: 0
  * @Max: 1
- * @Default: 1
+ * @Default: 0
  *
  * This ini is used to set default snr monitor
  *
@@ -1340,7 +1317,7 @@ enum scan_mode_6ghz {
  */
 #define CFG_ENABLE_SNR_MONITORING CFG_INI_BOOL(\
 			"gEnableSNRMonitoring",\
-			true,\
+			false,\
 			"Enable/Disable SNR Monitoring")
 
 /*
@@ -1386,7 +1363,7 @@ enum scan_mode_6ghz {
  * scan_mode_6ghz_duty_cycle - 6ghz Scan mode duty cycle
  * @Min: 0
  * @Max: 0xFFFF
- * @Default: 2
+ * @Default: 4
  *
  * Configure the 6Ghz scan mode duty cycle
  * 0 - No full scan needed, all scans are optimized
@@ -1409,7 +1386,7 @@ enum scan_mode_6ghz {
 			"scan_mode_6ghz_duty_cycle", \
 			0, \
 			0xFFFF, \
-			2, \
+			4, \
 			CFG_VALUE_OR_DEFAULT, \
 			"6ghz scan mode duty cycle")
 
@@ -1457,34 +1434,6 @@ enum scan_mode_6ghz {
 			"skip_6g_and_indoor_freq_scan", \
 			false, \
 			"skip sta scan on 6Ghz and 5Ghz indoor channel")
-/*
- * <ini>
- * last_scan_ageout_time - To use cached scan results for provided time
- * duration.
- * @Min: 0
- * @Max: 30000 ms
- * @Default: 0
- *
- * This is used to use last cached scan results for provided time.
- * Instead of issuing new scan, cached scan results can be used to
- * select best SAP channel if channels are scanned with in the provided
- * value.
- *
- * Related: None.
- *
- * Supported Feature: ACS scan optimization
- *
- * Usage: Internal
- *
- * </ini>
- */
-#define CFG_LAST_SCAN_AGEOUT_TIME CFG_INI_UINT( \
-			"last_scan_ageout_time", \
-			0, \
-			30000, \
-			30000, \
-			CFG_VALUE_OR_DEFAULT, \
-			"last scan ageout time")
 #define CFG_SCAN_ALL \
 	CFG(CFG_DROP_BCN_ON_CHANNEL_MISMATCH) \
 	CFG(CFG_DROP_BCN_ON_INVALID_FREQ) \
@@ -1510,7 +1459,6 @@ enum scan_mode_6ghz {
 	CFG(CFG_MAX_REST_TIME_CONC) \
 	CFG(CFG_MIN_REST_TIME_CONC) \
 	CFG(CFG_IDLE_TIME_CONC) \
-	CFG(CFG_CHAN_LIST_TRIM_CONC) \
 	CFG(CFG_ENABLE_MAC_ADDR_SPOOFING) \
 	CFG(CFG_SCAN_AGING_TIME) \
 	CFG(CFG_ADAPTIVE_EXTSCAN_DWELL_MODE) \
@@ -1524,6 +1472,6 @@ enum scan_mode_6ghz {
 	CFG(CFG_6GHZ_SCAN_MODE_DUTY_CYCLE) \
 	CFG(CFG_SCAN_ALLOW_BSS_WITH_CORRUPTED_IE) \
 	CFG(CFG_SKIP_6GHZ_AND_INDOOR_FREQ_SCAN) \
-	CFG_SCAN_PNO \
-	CFG(CFG_LAST_SCAN_AGEOUT_TIME)
+	CFG_SCAN_PNO
+
 #endif /* __CONFIG_SCAN_H */

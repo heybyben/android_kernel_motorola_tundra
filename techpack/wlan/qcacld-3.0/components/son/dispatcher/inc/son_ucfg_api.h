@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -16,7 +16,7 @@
  */
 
 /**
- * DOC: contains interface prototypes for OS_IF layer
+ * DOC : contains interface prototypes for OS_IF layer
  */
 #ifndef _SON_UCFG_API_H_
 #define _SON_UCFG_API_H_
@@ -111,8 +111,8 @@ QDF_STATUS ucfg_son_set_peer_kickout_allow(struct wlan_objmgr_vdev *vdev,
 
 /**
  * ucfg_son_register_deliver_opmode_cb() - register deliver opmode cb
- * @psoc: pointer to psoc
- * @cb: deliver opmode callback
+ * psoc: pointer to psoc
+ * cb: deliver opmode callback
  *
  * Return: QDF_STATUS_SUCCESS on Success else failure.
  */
@@ -121,112 +121,12 @@ QDF_STATUS ucfg_son_register_deliver_opmode_cb(struct wlan_objmgr_psoc *psoc,
 
 /**
  * ucfg_son_register_deliver_smps_cb() - register deliver smps cb
- * @psoc: pointer to psoc
- * @cb: deliver smps callback
+ * psoc: pointer to psoc
+ * cb: deliver smps callback
  *
  * Return: QDF_STATUS_SUCCESS on Success else failure.
  */
 
 QDF_STATUS ucfg_son_register_deliver_smps_cb(struct wlan_objmgr_psoc *psoc,
 					     mlme_deliver_cb cb);
-
-/**
- * ucfg_son_cbs_init() - son cbs init
- *
- * Return: 0 if succeed
- */
-int ucfg_son_cbs_init(void);
-
-/**
- * ucfg_son_cbs_deinit() - son cbs deinit
- *
- * Return: 0 if succeed
- */
-int ucfg_son_cbs_deinit(void);
-
-/**
- * ucfg_son_set_cbs() - son cbs set
- * @vdev: pointer to vdev
- * @enable: enable or disable son cbs
- *
- * Return: 0 if succeed
- */
-int ucfg_son_set_cbs(struct wlan_objmgr_vdev *vdev,
-		     bool enable);
-
-/**
- * ucfg_son_set_cbs_wait_time() - cbs wait time configure
- * @vdev: pointer to vdev
- * @val: wait time value
- *
- * Return: 0 if succeed
- */
-int ucfg_son_set_cbs_wait_time(struct wlan_objmgr_vdev *vdev,
-			       uint32_t val);
-
-/**
- * ucfg_son_set_cbs_dwell_split_time() - cbs dwell spilt time configure
- * @vdev: pointer to vdev
- * @val: dwell spilt time value
- *
- * Return: 0 if succeed
- */
-int ucfg_son_set_cbs_dwell_split_time(struct wlan_objmgr_vdev *vdev,
-				      uint32_t val);
-
-/**
- * ucfg_son_get_tx_power() - Gets the max transmit power for peer
- * @assoc_req_ies: assoc req ies
- *
- * Return: Returns the max tx power
- */
-uint8_t ucfg_son_get_tx_power(struct element_info assoc_req_ies);
-
-/**
- * ucfg_son_get_peer_rrm_info() - Get RRM info for peer
- * @assoc_req_ies: assoc req ies
- * @rrmcaps: rrm capabilities
- * @is_beacon_meas_supported: if beacon meas is supported
- *
- * Return: Returns QDF_STATUS_SUCCESS if succeed
- */
-QDF_STATUS ucfg_son_get_peer_rrm_info(struct element_info assoc_req_ies,
-				      uint8_t *rrmcaps,
-				      bool *is_beacon_meas_supported);
-
-/**
- * ucfg_son_vdev_get_supported_txrx_streams() - get supported spatial streams
- * @vdev: pointer to vdev
- * @num_tx_streams: pointer to number of tx streams
- * @num_rx_streams: pointer to number of rx streams
- *
- * Return: QDF_STATUS_SUCCESS on Success else failure.
- */
-QDF_STATUS
-ucfg_son_vdev_get_supported_txrx_streams(struct wlan_objmgr_vdev *vdev,
-					 uint32_t *num_tx_streams,
-					 uint32_t *num_rx_streams);
-/**
- * ucfg_son_get_vht_cap() - get the vht capability ie
- * @psoc: psoc object
- * @vht_caps: VHT caps bit fields
- *
- * Return: QDF_STATUS_SUCCESS on Success else failure.
- */
-QDF_STATUS ucfg_son_get_vht_cap(struct wlan_objmgr_psoc *psoc,
-				int32_t *vht_caps);
-
-#ifdef WLAN_FEATURE_SON
-/* ucfg_son_disable_cbs() - son cbs disable
- * @vdev: vdev pointer
- *
- * Return: 0 if succeed
- */
-int ucfg_son_disable_cbs(struct wlan_objmgr_vdev *vdev);
-#else
-static inline int ucfg_son_disable_cbs(struct wlan_objmgr_vdev *vdev)
-{
-	return -EINVAL;
-}
-#endif
 #endif

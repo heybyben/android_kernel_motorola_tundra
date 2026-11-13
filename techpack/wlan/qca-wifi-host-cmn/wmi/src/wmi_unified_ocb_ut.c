@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -78,7 +77,7 @@ static QDF_STATUS fake_vdev_delete_cmd_tlv(wmi_unified_t wmi_handle,
  * @wmi_handle: pointer to the wmi handle
  * @utc: pointer to the UTC time struct
  *
- * Return: 0 on success
+ * Return: 0 on succes
  */
 static QDF_STATUS fake_ocb_set_utc_time_cmd_tlv(wmi_unified_t wmi_handle,
 				struct ocb_utc_param *utc)
@@ -90,9 +89,9 @@ static QDF_STATUS fake_ocb_set_utc_time_cmd_tlv(wmi_unified_t wmi_handle,
 /**
  * fake_ocb_get_tsf_timer_cmd_tlv() - get ocb tsf timer val
  * @wmi_handle: pointer to the wmi handle
- * @vdev_id: vdev of interest
+ * @request: pointer to the request
  *
- * Return: 0 on success
+ * Return: 0 on succes
  */
 static QDF_STATUS fake_ocb_get_tsf_timer_cmd_tlv(wmi_unified_t wmi_handle,
 			  uint8_t vdev_id)
@@ -133,7 +132,7 @@ static QDF_STATUS fake_ocb_get_tsf_timer_cmd_tlv(wmi_unified_t wmi_handle,
  * @vdev_id: vdev id
  * @dcc_stats_bitmap: dcc status bitmap
  *
- * Return: 0 on success
+ * Return: 0 on succes
  */
 static QDF_STATUS fake_dcc_clear_stats_cmd_tlv(wmi_unified_t wmi_handle,
 				uint32_t vdev_id, uint32_t dcc_stats_bitmap)
@@ -164,7 +163,7 @@ wmi_dcc_ndl_stats_per_channel chan1_info[2] = {
  * @wmi_handle: pointer to the wmi handle
  * @get_stats_param: pointer to the dcc stats
  *
- * Return: 0 on success
+ * Return: 0 on succes
  */
 static QDF_STATUS fake_dcc_get_stats_cmd_tlv(wmi_unified_t wmi_handle,
 		     struct ocb_dcc_get_stats_param *get_stats_param)
@@ -329,7 +328,7 @@ static QDF_STATUS fake_ocb_set_config_cmd_tlv(wmi_unified_t wmi_handle,
  * @wmi_handle: pointer to the wmi handle
  * @timing_advert: pointer to the timing advertisement struct
  *
- * Return: 0 on success
+ * Return: 0 on succes
  */
 static QDF_STATUS fake_ocb_stop_timing_advert_cmd_tlv(wmi_unified_t wmi_handle,
 	struct ocb_timing_advert_param *timing_advert)
@@ -344,7 +343,7 @@ static QDF_STATUS fake_ocb_stop_timing_advert_cmd_tlv(wmi_unified_t wmi_handle,
  * @wmi_handle: pointer to the wmi handle
  * @timing_advert: pointer to the timing advertisement struct
  *
- * Return: 0 on success
+ * Return: 0 on succes
  */
 static QDF_STATUS
 fake_ocb_start_timing_advert_cmd_tlv(wmi_unified_t wmi_handle,
@@ -357,7 +356,9 @@ fake_ocb_start_timing_advert_cmd_tlv(wmi_unified_t wmi_handle,
 /**
  * fake_peer_create_cmd_tlv() - send peer create command to fw
  * @wmi: wmi handle
- * @param: peer create parameters
+ * @peer_addr: peer mac address
+ * @peer_type: peer type
+ * @vdev_id: vdev id
  *
  * Return: QDF_STATUS_SUCCESS for success or error code
  */
@@ -372,13 +373,13 @@ static QDF_STATUS fake_peer_create_cmd_tlv(wmi_unified_t wmi,
  * fake_peer_delete_cmd_tlv() - send PEER delete command to fw
  * @wmi: wmi handle
  * @peer_addr: peer mac addr
- * @param: peer delete parameters
+ * @vdev_id: vdev id
  *
  * Return: QDF_STATUS_SUCCESS for success or error code
  */
 static QDF_STATUS fake_peer_delete_cmd_tlv(wmi_unified_t wmi,
 				 uint8_t peer_addr[QDF_MAC_ADDR_SIZE],
-				 struct peer_delete_cmd_params *param)
+				 uint8_t vdev_id)
 {
 	wmi_debug("called");
 	return QDF_STATUS_SUCCESS;
@@ -427,8 +428,9 @@ static QDF_STATUS fake_vdev_down_cmd_tlv(wmi_unified_t wmi, uint8_t vdev_id)
 
 /**
  *  fake_vdev_set_param_cmd_tlv() - WMI vdev set parameter function
- *  @wmi_handle: handle to WMI.
- *  @param: pointer to hold vdev set parameter
+ *  @param wmi_handle      : handle to WMI.
+ *  @param macaddr        : MAC address
+ *  @param param    : pointer to hold vdev set parameter
  *
  *  Return: 0  on success and -ve on failure.
  */
@@ -444,7 +446,6 @@ static QDF_STATUS fake_vdev_set_param_cmd_tlv(wmi_unified_t wmi_handle,
  *  faked API to enable/disable mcc scheduler
  * @wmi_handle: wmi handle
  * @mcc_adaptive_scheduler: enable/disable
- * @pdev_id: pdev ID
  *
  * This function enable/disable mcc adaptive scheduler in fw.
  *
@@ -458,10 +459,10 @@ static QDF_STATUS fake_set_enable_disable_mcc_adaptive_scheduler_cmd_tlv(
 	return QDF_STATUS_SUCCESS;
 }
 
-/**
+/*
  * fake_process_set_ie_info_cmd_tlv() - Function to send IE info to firmware
  * @wmi_handle:    Pointer to WMi handle
- * @ie_info:       Pointer for ie info
+ * @ie_data:       Pointer for ie data
  *
  * This function sends IE information to firmware
  *

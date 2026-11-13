@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -140,9 +140,6 @@ static void mlme_vdev_state_init_exit(void *ctx)
 /**
  * mlme_vdev_state_init_event() - Init State event handler
  * @ctx: VDEV MLME object
- * @event: MLME event
- * @event_data_len: data size
- * @event_data: event data
  *
  * API to handle events in INIT state
  *
@@ -156,7 +153,6 @@ static bool mlme_vdev_state_init_event(void *ctx, uint16_t event,
 	struct vdev_mlme_obj *vdev_mlme = (struct vdev_mlme_obj *)ctx;
 	bool status;
 	enum QDF_OPMODE mode;
-	QDF_STATUS sm_status;
 
 	mode = wlan_vdev_mlme_get_opmode(vdev_mlme->vdev);
 
@@ -212,17 +208,9 @@ static bool mlme_vdev_state_init_event(void *ctx, uint16_t event,
 		 */
 		if (wlan_vdev_mlme_is_mlo_link_vdev(vdev_mlme->vdev)) {
 			mlme_vdev_sm_transition_to(vdev_mlme, WLAN_VDEV_S_UP);
-			sm_status = mlme_vdev_sm_deliver_event(vdev_mlme, event,
-							       event_data_len,
-							       event_data);
-			status = !sm_status;
-			/*
-			 * Error in handling link-vdev roam event, move the
-			 * SM back to INIT.
-			 */
-			if (QDF_IS_STATUS_ERROR(sm_status))
-				mlme_vdev_sm_transition_to(vdev_mlme,
-							   WLAN_VDEV_S_INIT);
+			mlme_vdev_sm_deliver_event(vdev_mlme, event,
+						   event_data_len, event_data);
+			status = true;
 		} else {
 			status = false;
 		}
@@ -268,9 +256,6 @@ static void mlme_vdev_state_start_exit(void *ctx)
 /**
  * mlme_vdev_state_start_event() - Start State event handler
  * @ctx: VDEV MLME object
- * @event: MLME event
- * @event_data_len: data size
- * @event_data: event data
  *
  * API to handle events in START state
  *
@@ -350,9 +335,6 @@ static void mlme_vdev_state_dfs_cac_wait_exit(void *ctx)
 /**
  * mlme_vdev_state_dfs_cac_wait_event() - DFS CAC WAIT State event handler
  * @ctx: VDEV MLME object
- * @event: MLME event
- * @event_data_len: data size
- * @event_data: event data
  *
  * API to handle events in DFS CAC WAIT state
  *
@@ -388,8 +370,8 @@ static bool mlme_vdev_state_dfs_cac_wait_event(void *ctx, uint16_t event,
 		/* stop the CAC timer, then notify state machine */
 		mlme_vdev_dfs_cac_timer_stop(vdev_mlme, event_data_len,
 					     event_data);
-		mlme_vdev_sm_transition_to(vdev_mlme, WLAN_VDEV_S_SUSPEND);
-		mlme_vdev_sm_deliver_event(vdev_mlme, WLAN_VDEV_SM_EV_DOWN,
+		mlme_vdev_sm_transition_to(vdev_mlme, WLAN_VDEV_S_STOP);
+		mlme_vdev_sm_deliver_event(vdev_mlme, WLAN_VDEV_SM_EV_STOP_REQ,
 					   event_data_len, event_data);
 		status = true;
 		break;
@@ -461,9 +443,6 @@ static void mlme_vdev_state_up_exit(void *ctx)
 /**
  * mlme_vdev_state_up_event() - UP State event handler
  * @ctx: VDEV MLME object
- * @event: MLME event
- * @event_data_len: data size
- * @event_data: event data
  *
  * API to handle events in UP state
  *
@@ -477,15 +456,13 @@ static bool mlme_vdev_state_up_event(void *ctx, uint16_t event,
 	enum QDF_OPMODE mode;
 	struct wlan_objmgr_vdev *vdev;
 	bool status;
-	QDF_STATUS sm_status;
 
 	vdev = vdev_mlme->vdev;
 	mode = wlan_vdev_mlme_get_opmode(vdev);
 
 	switch (event) {
 	case WLAN_VDEV_SM_EV_START_SUCCESS:
-		if (wlan_vdev_mlme_is_mlo_ap(vdev) &&
-		    !wlan_vdev_mlme_is_mlo_ap_sync_disabled(vdev))
+		if (wlan_vdev_mlme_is_mlo_ap(vdev))
 			mlme_vdev_sm_transition_to(vdev_mlme,
 						   WLAN_VDEV_SS_MLO_SYNC_WAIT);
 		else
@@ -520,10 +497,9 @@ static bool mlme_vdev_state_up_event(void *ctx, uint16_t event,
 		if (wlan_vdev_mlme_is_mlo_link_vdev(vdev_mlme->vdev)) {
 			mlme_vdev_sm_transition_to(vdev_mlme,
 						   WLAN_VDEV_SS_UP_ACTIVE);
-			sm_status = mlme_vdev_sm_deliver_event(vdev_mlme, event,
-							       event_data_len,
-							       event_data);
-			status = !sm_status;
+			mlme_vdev_sm_deliver_event(vdev_mlme, event,
+						   event_data_len, event_data);
+			status = true;
 		} else {
 			status = false;
 		}
@@ -569,9 +545,6 @@ static void mlme_vdev_state_suspend_exit(void *ctx)
 /**
  * mlme_vdev_state_suspend_event() - Suspend State event handler
  * @ctx: VDEV MLME object
- * @event: MLME event
- * @event_data_len: data size
- * @event_data: event data
  *
  * API to handle events in SUSPEND state
  *
@@ -667,9 +640,6 @@ static void mlme_vdev_state_stop_exit(void *ctx)
 /**
  * mlme_vdev_state_stop_event() - Stop State event handler
  * @ctx: VDEV MLME object
- * @event: MLME event
- * @event_data_len: data size
- * @event_data: event data
  *
  * API to handle events in STOP state
  *
@@ -724,9 +694,6 @@ static void mlme_vdev_subst_start_start_progress_exit(void *ctx)
  * mlme_vdev_subst_start_start_progress_event() - Event handler API for Start
  *                                                Progress substate
  * @ctx: VDEV MLME object
- * @event: MLME event
- * @event_data_len: data size
- * @event_data: event data
  *
  * API to handle events in START-PROGRESS substate
  *
@@ -831,9 +798,6 @@ static void mlme_vdev_subst_start_restart_progress_exit(void *ctx)
  * mlme_vdev_subst_start_restart_progress_event() - Event handler API for
  *                                                  Restart Progress substate
  * @ctx: VDEV MLME object
- * @event: MLME event
- * @event_data_len: data size
- * @event_data: event data
  *
  * API to handle events in RESTART-PROGRESS substate
  *
@@ -941,9 +905,6 @@ static void mlme_vdev_subst_start_conn_progress_exit(void *ctx)
  * mlme_vdev_subst_start_conn_progress_event() - Event handler API for Conn.
  *                                                Progress substate
  * @ctx: VDEV MLME object
- * @event: MLME event
- * @event_data_len: data size
- * @event_data: event data
  *
  * API to handle events in CONN-PROGRESS substate
  *
@@ -1069,9 +1030,6 @@ static void mlme_vdev_subst_start_disconn_progress_exit(void *ctx)
  * mlme_vdev_subst_start_disconn_progress_event() - Event handler API for Discon
  *                                                Progress substate
  * @ctx: VDEV MLME object
- * @event: MLME event
- * @event_data_len: data size
- * @event_data: event data
  *
  * API to handle events in DISCONN-PROGRESS substate
  *
@@ -1162,9 +1120,6 @@ static void mlme_vdev_subst_suspend_suspend_down_exit(void *ctx)
  * mlme_vdev_subst_suspend_suspend_down_event() - Event handler API for Suspend
  *                                                down substate
  * @ctx: VDEV MLME object
- * @event: MLME event
- * @event_data_len: data size
- * @event_data: event data
  *
  * API to handle events in SUSPEND-DOWN substate
  *
@@ -1181,7 +1136,7 @@ static bool mlme_vdev_subst_suspend_suspend_down_event(void *ctx,
 	case WLAN_VDEV_SM_EV_DOWN:
 	case WLAN_VDEV_SM_EV_RESTART_REQ_FAIL:
 		mlme_vdev_disconnect_peers(vdev_mlme,
-					   event_data_len, event_data, false);
+					   event_data_len, event_data);
 		status = true;
 		break;
 
@@ -1241,9 +1196,6 @@ static void mlme_vdev_subst_suspend_suspend_restart_exit(void *ctx)
  * mlme_vdev_subst_suspend_suspend_restart_event() - Event handler API for
  *                                                   Suspend restart substate
  * @ctx: VDEV MLME object
- * @event: MLME event
- * @event_data_len: data size
- * @event_data: event data
  *
  * API to handle events in SUSPEND-RESTART substate
  *
@@ -1259,7 +1211,7 @@ static bool mlme_vdev_subst_suspend_suspend_restart_event(void *ctx,
 	switch (event) {
 	case WLAN_VDEV_SM_EV_SUSPEND_RESTART:
 		mlme_vdev_disconnect_peers(vdev_mlme,
-					   event_data_len, event_data, false);
+					   event_data_len, event_data);
 		status = true;
 		break;
 
@@ -1284,12 +1236,6 @@ static bool mlme_vdev_subst_suspend_suspend_restart_event(void *ctx,
 		mlme_vdev_sm_deliver_event(vdev_mlme,
 					   WLAN_VDEV_SM_EV_CSA_RESTART,
 					   event_data_len, event_data);
-		status = true;
-		break;
-
-	case WLAN_VDEV_SM_EV_SUSPEND_CSA_RESTART:
-		mlme_vdev_disconnect_peers(vdev_mlme,
-					   event_data_len, event_data, true);
 		status = true;
 		break;
 
@@ -1338,12 +1284,9 @@ static void mlme_vdev_subst_suspend_host_restart_exit(void *ctx)
 }
 
 /**
- * mlme_vdev_subst_suspend_host_restart_event() - Event handler API for Host
+ * mlme_vdev_subst_suspend_host_restart_entry() - Event handler API for Host
  *                                                restart substate
  * @ctx: VDEV MLME object
- * @event: MLME event
- * @event_data_len: data size
- * @event_data: event data
  *
  * API to handle events in HOST-RESTART substate
  *
@@ -1358,7 +1301,7 @@ static bool mlme_vdev_subst_suspend_host_restart_event(void *ctx,
 	switch (event) {
 	case WLAN_VDEV_SM_EV_HOST_RESTART:
 		mlme_vdev_disconnect_peers(vdev_mlme,
-					   event_data_len, event_data, false);
+					   event_data_len, event_data);
 		status = true;
 		break;
 
@@ -1434,9 +1377,6 @@ static void mlme_vdev_subst_suspend_csa_restart_exit(void *ctx)
  * mlme_vdev_subst_suspend_csa_restart_event() - Event handler API for CSA
  *                                               restart substate
  * @ctx: VDEV MLME object
- * @event: MLME event
- * @event_data_len: data size
- * @event_data: event data
  *
  * API to handle events in CSA-RESTART substate
  *
@@ -1447,7 +1387,6 @@ static bool mlme_vdev_subst_suspend_csa_restart_event(void *ctx,
 		uint16_t event, uint16_t event_data_len, void *event_data)
 {
 	struct vdev_mlme_obj *vdev_mlme = (struct vdev_mlme_obj *)ctx;
-	struct wlan_objmgr_psoc *psoc = wlan_vdev_get_psoc(vdev_mlme->vdev);
 	bool status;
 
 	switch (event) {
@@ -1472,7 +1411,7 @@ static bool mlme_vdev_subst_suspend_csa_restart_event(void *ctx,
 	case WLAN_VDEV_SM_EV_CSA_COMPLETE:
 		if ((mlme_vdev_is_newchan_no_cac(vdev_mlme) ==
 		    QDF_STATUS_SUCCESS) ||
-		    mlme_max_chan_switch_is_set(psoc)) {
+		    mlme_max_chan_switch_is_set(vdev_mlme->vdev)) {
 			mlme_vdev_sm_transition_to(vdev_mlme,
 						   WLAN_VDEV_S_START);
 			mlme_vdev_sm_deliver_event(vdev_mlme,
@@ -1483,7 +1422,7 @@ static bool mlme_vdev_subst_suspend_csa_restart_event(void *ctx,
 				(vdev_mlme,
 				 WLAN_VDEV_SS_SUSPEND_SUSPEND_RESTART);
 			mlme_vdev_sm_deliver_event
-				(vdev_mlme, WLAN_VDEV_SM_EV_SUSPEND_CSA_RESTART,
+				(vdev_mlme, WLAN_VDEV_SM_EV_SUSPEND_RESTART,
 				 event_data_len, event_data);
 		}
 		status = true;
@@ -1552,9 +1491,6 @@ static void mlme_vdev_subst_stop_stop_progress_exit(void *ctx)
  * mlme_vdev_subst_stop_stop_progress_event() - Event handler API for Stop
  *                                                Progress substate
  * @ctx: VDEV MLME object
- * @event: MLME event
- * @event_data_len: data size
- * @event_data: event data
  *
  * API to handle events in STOP-PROGRESS substate
  *
@@ -1653,9 +1589,6 @@ static void mlme_vdev_subst_stop_down_progress_exit(void *ctx)
  * mlme_vdev_subst_stop_down_progress_event() - Event handler API for Down
  *                                                Progress substate
  * @ctx: VDEV MLME object
- * @event: MLME event
- * @event_data_len: data size
- * @event_data: event data
  *
  * API to handle events in DOWN-PROGRESS substate
  *
@@ -1724,7 +1657,6 @@ static void mlme_vdev_subst_mlo_sync_wait_entry(void *ctx)
 		QDF_BUG(0);
 
 	mlme_vdev_set_substate(vdev, WLAN_VDEV_SS_MLO_SYNC_WAIT);
-	mlme_vdev_notify_mlo_sync_wait_entry(vdev_mlme);
 }
 
 /**
@@ -1735,43 +1667,15 @@ static void mlme_vdev_subst_mlo_sync_wait_entry(void *ctx)
  *
  * Return: void
  */
-#ifdef WLAN_FEATURE_11BE_MLO
-static void mlme_vdev_subst_mlo_sync_wait_exit(void *ctx)
-{
-	struct vdev_mlme_obj *vdev_mlme = (struct vdev_mlme_obj *)ctx;
-	struct wlan_objmgr_vdev *vdev = vdev_mlme->vdev;
-	struct wlan_mlo_dev_context *mld_ctx = vdev->mlo_dev_ctx;
-	enum QDF_OPMODE mode;
-	uint8_t idx;
-
-	if (!vdev->mlo_dev_ctx)
-		return;
-
-	idx = mlo_get_link_vdev_ix(mld_ctx, vdev);
-	if (idx == MLO_INVALID_LINK_IDX)
-		return;
-
-	mode = wlan_vdev_mlme_get_opmode(vdev);
-	if (mode != QDF_SAP_MODE)
-		return;
-
-	wlan_util_change_map_index(mld_ctx->ap_ctx->mlo_vdev_up_bmap,
-				   idx, 0);
-}
-#else
 static void mlme_vdev_subst_mlo_sync_wait_exit(void *ctx)
 {
 	/* NONE */
 }
-#endif
 
 /**
  * mlme_vdev_subst_mlo_sync_wait_event() - Event handler API for mlo sync wait
  *                                         substate
  * @ctx: VDEV MLME object
- * @event: MLME event
- * @event_data_len: data size
- * @event_data: event data
  *
  * API to handle events in MLO-SYNC-WAIT substate
  *
@@ -1787,11 +1691,7 @@ static bool mlme_vdev_subst_mlo_sync_wait_event(void *ctx, uint16_t event,
 
 	switch (event) {
 	case WLAN_VDEV_SM_EV_START_SUCCESS:
-		if (mlme_vdev_up_notify_mlo_mgr(vdev_mlme))
-			mlme_vdev_sm_deliver_event(
-					vdev_mlme,
-					WLAN_VDEV_SM_EV_MLO_SYNC_COMPLETE,
-					event_data_len, event_data);
+		mlme_vdev_up_notify_mlo_mgr(vdev_mlme);
 		status = true;
 		break;
 
@@ -1803,15 +1703,13 @@ static bool mlme_vdev_subst_mlo_sync_wait_event(void *ctx, uint16_t event,
 		break;
 
 	case WLAN_VDEV_SM_EV_DOWN:
-		mlme_vdev_sm_transition_to(vdev_mlme, WLAN_VDEV_S_SUSPEND);
-		mlme_vdev_sm_deliver_event(vdev_mlme, event,
+		mlme_vdev_sm_transition_to(vdev_mlme, WLAN_VDEV_S_STOP);
+		mlme_vdev_sm_deliver_event(vdev_mlme, WLAN_VDEV_SM_EV_STOP_REQ,
 					   event_data_len, event_data);
 		status = true;
 		break;
 
 	case WLAN_VDEV_SM_EV_RADAR_DETECTED:
-	case WLAN_VDEV_SM_EV_CSA_RESTART:
-	case WLAN_VDEV_SM_EV_FW_VDEV_RESTART:
 		mlme_vdev_sm_transition_to(vdev_mlme, WLAN_VDEV_S_START);
 		mlme_vdev_sm_deliver_event(vdev_mlme,
 					   WLAN_VDEV_SM_EV_RESTART_REQ,
@@ -1864,9 +1762,6 @@ static void mlme_vdev_subst_up_active_exit(void *ctx)
 /**
  * mlme_vdev_subst_up_active_event() - Event handler API for up active substate
  * @ctx: VDEV MLME object
- * @event: MLME event
- * @event_data_len: data size
- * @event_data: event data
  *
  * API to handle events in UP-ACTIVE substate
  *
@@ -1881,15 +1776,13 @@ static bool mlme_vdev_subst_up_active_event(void *ctx, uint16_t event,
 	enum QDF_OPMODE mode;
 	struct wlan_objmgr_vdev *vdev;
 	bool status;
-	QDF_STATUS sm_status;
 
 	vdev = vdev_mlme->vdev;
 	mode = wlan_vdev_mlme_get_opmode(vdev);
 
 	switch (event) {
 	case WLAN_VDEV_SM_EV_START_SUCCESS:
-		if (wlan_vdev_mlme_is_mlo_ap(vdev) &&
-		    !wlan_vdev_mlme_is_mlo_ap_sync_disabled(vdev))
+		if (wlan_vdev_mlme_is_mlo_ap(vdev))
 			QDF_BUG(0);
 		fallthrough;
 	case WLAN_VDEV_SM_EV_MLO_SYNC_COMPLETE:
@@ -1961,10 +1854,9 @@ static bool mlme_vdev_subst_up_active_event(void *ctx, uint16_t event,
 		break;
 
 	case WLAN_VDEV_SM_EV_ROAM:
-		sm_status = mlme_vdev_notify_roam_start(vdev_mlme,
-							event_data_len,
-							event_data);
-		status = !sm_status;
+		mlme_vdev_notify_roam_start(vdev_mlme, event_data_len,
+					    event_data);
+		status = true;
 		break;
 
 	default:
@@ -2009,7 +1901,6 @@ static const char *vdev_sm_event_names[] = {
 	"EV_STOP_REQ",
 	"EV_CHAN_SWITCH_DISABLED",
 	"EV_MLO_SYNC_COMPLETE",
-	"EV_SUSPEND_CSA_RESTART"
 };
 
 struct wlan_sm_state_info sm_info[] = {
@@ -2198,7 +2089,7 @@ struct wlan_sm_state_info sm_info[] = {
 		(uint8_t)WLAN_VDEV_S_UP,
 		(uint8_t)WLAN_SM_ENGINE_STATE_NONE,
 		false,
-		"UP-MLO_SYNC_WAIT",
+		"UP-MLO-SYNC-WAIT",
 		mlme_vdev_subst_mlo_sync_wait_entry,
 		mlme_vdev_subst_mlo_sync_wait_exit,
 		mlme_vdev_subst_mlo_sync_wait_event
@@ -2208,7 +2099,7 @@ struct wlan_sm_state_info sm_info[] = {
 		(uint8_t)WLAN_VDEV_S_UP,
 		(uint8_t)WLAN_SM_ENGINE_STATE_NONE,
 		false,
-		"UP-UP_ACTIVE",
+		"UP-UP-ACTIVE",
 		mlme_vdev_subst_up_active_entry,
 		mlme_vdev_subst_up_active_exit,
 		mlme_vdev_subst_up_active_event
@@ -2278,9 +2169,8 @@ QDF_STATUS mlme_vdev_sm_create(struct vdev_mlme_obj *vdev_mlme)
 	uint8_t name[WLAN_SM_ENGINE_MAX_NAME];
 	struct wlan_objmgr_vdev *vdev = vdev_mlme->vdev;
 
-	qdf_scnprintf(name, sizeof(name), "VM-PS_%d-VD_%d",
-		      wlan_psoc_get_id(wlan_vdev_get_psoc(vdev)),
-		      wlan_vdev_get_id(vdev));
+	qdf_scnprintf(name, sizeof(name), "VDEV%d-MLME",
+		      wlan_vdev_get_id(vdev_mlme->vdev));
 	sm = wlan_sm_create(name, vdev_mlme,
 			    WLAN_VDEV_S_INIT,
 			    sm_info,

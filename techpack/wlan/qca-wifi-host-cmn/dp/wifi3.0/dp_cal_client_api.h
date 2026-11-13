@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -18,8 +17,8 @@
  */
 
 /**
- * DOC: dp_cal_client_api.h
- *      define timer to update DP stats
+ * @file cal_client_api.h
+ * @brief: define timer to update DP stats
  */
 #ifndef _DP_CAL_CLIENT_H_
 #define _DP_CAL_CLIENT_H_
@@ -46,8 +45,6 @@ void dp_cal_client_timer_start(void *ctx);
 void dp_cal_client_timer_stop(void *ctx);
 void dp_cal_client_stats_timer_fn(void *pdev_hdl);
 void dp_cal_client_update_peer_stats(struct cdp_peer_stats *peer_stats);
-void dp_cal_client_update_peer_stats_wifi3(struct cdp_calibr_stats_intf *stats_intf,
-					   struct cdp_calibr_stats *calibr_stats);
 
 #ifndef ATH_SUPPORT_EXT_STAT
 void dp_cal_client_attach(struct cdp_cal_client **cal_client_ctx,
@@ -73,11 +70,6 @@ void dp_cal_client_stats_timer_fn(void *pdev_hdl)
 }
 
 void dp_cal_client_update_peer_stats(struct cdp_peer_stats *peer_stats)
-{
-}
-
-void dp_cal_client_update_peer_stats_wifi3(struct cdp_calibr_stats_intf *stats_intf,
-					   struct cdp_calibr_stats *calibr_stats)
 {
 }
 #endif

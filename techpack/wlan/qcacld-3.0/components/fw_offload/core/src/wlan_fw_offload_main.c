@@ -32,7 +32,7 @@ struct wlan_fwol_psoc_obj *fwol_get_psoc_obj(struct wlan_objmgr_psoc *psoc)
 }
 
 /**
- * fwol_mpta_helper_config_get() - Populate btc_mpta_helper_enable from cfg
+ * fwol_mpta_helper_config_get: Populate btc_mpta_helper_enable from cfg
  * @psoc: The global psoc handler
  * @coex_config: The cfg structure
  *
@@ -55,7 +55,7 @@ fwol_mpta_helper_config_get(struct wlan_objmgr_psoc *psoc,
 #endif
 
 /**
- * fwol_three_way_coex_config_legacy_config_get() - Populate
+ * fwol_three_way_coex_config_legacy_config_get: Populate
  * btc_three_way_coex_config_legacy_enable from cfg
  * @psoc: The global psoc handler
  * @coex_config: The cfg structure
@@ -152,14 +152,6 @@ fwol_init_thermal_temp_in_cfg(struct wlan_objmgr_psoc *psoc,
 				cfg_get(psoc, CFG_THERMAL_TEMP_MIN_LEVEL3);
 	thermal_temp->thermal_temp_max_level[3] =
 				cfg_get(psoc, CFG_THERMAL_TEMP_MAX_LEVEL3);
-	thermal_temp->thermal_temp_min_level[4] =
-				cfg_get(psoc, CFG_THERMAL_TEMP_MIN_LEVEL4);
-	thermal_temp->thermal_temp_max_level[4] =
-				cfg_get(psoc, CFG_THERMAL_TEMP_MAX_LEVEL4);
-	thermal_temp->thermal_temp_min_level[5] =
-				cfg_get(psoc, CFG_THERMAL_TEMP_MIN_LEVEL5);
-	thermal_temp->thermal_temp_max_level[5] =
-				cfg_get(psoc, CFG_THERMAL_TEMP_MAX_LEVEL5);
 
 	thermal_temp->thermal_mitigation_enable =
 				cfg_get(psoc, CFG_THERMAL_MITIGATION_ENABLE);
@@ -188,8 +180,8 @@ fwol_init_thermal_temp_in_cfg(struct wlan_objmgr_psoc *psoc,
 }
 
 /**
- * fwol_set_neighbor_report_offload_params() - set neighbor report parameters
- *                                             for rso user config
+ * fwol_set_neighbor_report_offload_params: set neighbor report parameters
+ *                                          for rso user config
  * @psoc: The global psoc handler
  * @fwol_neighbor_report_cfg: neighbor report config params
  *
@@ -300,9 +292,9 @@ fwol_set_adaptive_dwelltime_config(
 	return status;
 }
 /**
- * fwol_parse_probe_req_ouis() - form ouis from ini gProbeReqOUIs
+ * fwol_parse_probe_req_ouis - form ouis from ini gProbeReqOUIs
  * @psoc: Pointer to struct wlan_objmgr_psoc context
- * @allowlist: Pointer to struct wlan_fwol_ie_allowlist
+ * @whitelist: Pointer to struct wlan_fwol_ie_whitelist
  *
  * This function parses the ini string gProbeReqOUIs which needs be to in the
  * following format:
@@ -314,10 +306,10 @@ fwol_set_adaptive_dwelltime_config(
  * Return: None
  */
 static void fwol_parse_probe_req_ouis(struct wlan_objmgr_psoc *psoc,
-				      struct wlan_fwol_ie_allowlist *allowlist)
+				      struct wlan_fwol_ie_whitelist *whitelist)
 {
 	uint8_t probe_req_ouis[MAX_PRB_REQ_VENDOR_OUI_INI_LEN] = {0};
-	uint32_t *voui = allowlist->probe_req_voui;
+	uint32_t *voui = whitelist->probe_req_voui;
 	char *str;
 	uint8_t *token;
 	uint32_t oui_indx = 0;
@@ -327,7 +319,7 @@ static void fwol_parse_probe_req_ouis(struct wlan_objmgr_psoc *psoc,
 	qdf_str_lcopy(probe_req_ouis, cfg_get(psoc, CFG_PROBE_REQ_OUI),
 		      MAX_PRB_REQ_VENDOR_OUI_INI_LEN);
 	str = probe_req_ouis;
-	allowlist->no_of_probe_req_ouis = 0;
+	whitelist->no_of_probe_req_ouis = 0;
 
 	if (!qdf_str_len(str)) {
 		fwol_debug("NO OUIs to parse");
@@ -351,27 +343,27 @@ next_token:
 	}
 
 	if (!oui_indx) {
-		allowlist->ie_allowlist = false;
+		whitelist->ie_whitelist = false;
 		return;
 	}
 
-	allowlist->no_of_probe_req_ouis = oui_indx;
+	whitelist->no_of_probe_req_ouis = oui_indx;
 }
 
 /**
- * fwol_validate_ie_bitmaps() - Validate all IE allowlist bitmap param values
+ * fwol_validate_ie_bitmaps() - Validate all IE whitelist bitmap param values
  * @psoc: Pointer to struct wlan_objmgr_psoc
- * @allowlist: Pointer to struct wlan_fwol_ie_allowlist
+ * @whitelist: Pointer to struct wlan_fwol_ie_whitelist
  *
  * Return: True if all bitmap values are valid, else false
  */
 static bool fwol_validate_ie_bitmaps(struct wlan_objmgr_psoc *psoc,
-				     struct wlan_fwol_ie_allowlist *allowlist)
+				     struct wlan_fwol_ie_whitelist *whitelist)
 {
-	if (!(allowlist->ie_bitmap_0 || allowlist->ie_bitmap_1 ||
-	      allowlist->ie_bitmap_2 || allowlist->ie_bitmap_3 ||
-	      allowlist->ie_bitmap_4 || allowlist->ie_bitmap_5 ||
-	      allowlist->ie_bitmap_6 || allowlist->ie_bitmap_7))
+	if (!(whitelist->ie_bitmap_0 || whitelist->ie_bitmap_1 ||
+	      whitelist->ie_bitmap_2 || whitelist->ie_bitmap_3 ||
+	      whitelist->ie_bitmap_4 || whitelist->ie_bitmap_5 ||
+	      whitelist->ie_bitmap_6 || whitelist->ie_bitmap_7))
 		return false;
 
 	/*
@@ -380,12 +372,12 @@ static bool fwol_validate_ie_bitmaps(struct wlan_objmgr_psoc *psoc,
 	 * for atleast one OUI, minimum length is 8 and hence this string length
 	 * is checked for minimum of 8
 	 */
-	if ((allowlist->ie_bitmap_6 & VENDOR_SPECIFIC_IE_BITMAP) &&
+	if ((whitelist->ie_bitmap_6 & VENDOR_SPECIFIC_IE_BITMAP) &&
 	    (qdf_str_len(cfg_get(psoc, CFG_PROBE_REQ_OUI)) < 8))
 		return false;
 
 	/* check whether vendor oui IE is not set but OUIs are present */
-	if (!(allowlist->ie_bitmap_6 & VENDOR_SPECIFIC_IE_BITMAP) &&
+	if (!(whitelist->ie_bitmap_6 & VENDOR_SPECIFIC_IE_BITMAP) &&
 	    (qdf_str_len(cfg_get(psoc, CFG_PROBE_REQ_OUI)) > 0))
 		return false;
 
@@ -394,25 +386,25 @@ static bool fwol_validate_ie_bitmaps(struct wlan_objmgr_psoc *psoc,
 
 static void
 fwol_init_ie_whiltelist_in_cfg(struct wlan_objmgr_psoc *psoc,
-			       struct wlan_fwol_ie_allowlist *allowlist)
+			       struct wlan_fwol_ie_whitelist *whitelist)
 {
-	allowlist->ie_allowlist = cfg_get(psoc, CFG_PROBE_REQ_IE_ALLOWLIST);
-	allowlist->ie_bitmap_0 = cfg_get(psoc, CFG_PROBE_REQ_IE_BIT_MAP0);
-	allowlist->ie_bitmap_1 = cfg_get(psoc, CFG_PROBE_REQ_IE_BIT_MAP1);
-	allowlist->ie_bitmap_2 = cfg_get(psoc, CFG_PROBE_REQ_IE_BIT_MAP2);
-	allowlist->ie_bitmap_3 = cfg_get(psoc, CFG_PROBE_REQ_IE_BIT_MAP3);
-	allowlist->ie_bitmap_4 = cfg_get(psoc, CFG_PROBE_REQ_IE_BIT_MAP4);
-	allowlist->ie_bitmap_5 = cfg_get(psoc, CFG_PROBE_REQ_IE_BIT_MAP5);
-	allowlist->ie_bitmap_6 = cfg_get(psoc, CFG_PROBE_REQ_IE_BIT_MAP6);
-	allowlist->ie_bitmap_7 = cfg_get(psoc, CFG_PROBE_REQ_IE_BIT_MAP7);
-	if (!fwol_validate_ie_bitmaps(psoc, allowlist))
-		allowlist->ie_allowlist = false;
-	fwol_parse_probe_req_ouis(psoc, allowlist);
+	whitelist->ie_whitelist = cfg_get(psoc, CFG_PROBE_REQ_IE_WHITELIST);
+	whitelist->ie_bitmap_0 = cfg_get(psoc, CFG_PROBE_REQ_IE_BIT_MAP0);
+	whitelist->ie_bitmap_1 = cfg_get(psoc, CFG_PROBE_REQ_IE_BIT_MAP1);
+	whitelist->ie_bitmap_2 = cfg_get(psoc, CFG_PROBE_REQ_IE_BIT_MAP2);
+	whitelist->ie_bitmap_3 = cfg_get(psoc, CFG_PROBE_REQ_IE_BIT_MAP3);
+	whitelist->ie_bitmap_4 = cfg_get(psoc, CFG_PROBE_REQ_IE_BIT_MAP4);
+	whitelist->ie_bitmap_5 = cfg_get(psoc, CFG_PROBE_REQ_IE_BIT_MAP5);
+	whitelist->ie_bitmap_6 = cfg_get(psoc, CFG_PROBE_REQ_IE_BIT_MAP6);
+	whitelist->ie_bitmap_7 = cfg_get(psoc, CFG_PROBE_REQ_IE_BIT_MAP7);
+	if (!fwol_validate_ie_bitmaps(psoc, whitelist))
+		whitelist->ie_whitelist = false;
+	fwol_parse_probe_req_ouis(psoc, whitelist);
 }
 
 /**
- * ucfg_fwol_fetch_dhcp_server_settings() - Populate the DHCP server settings
- *                                          from cfg
+ * ucfg_fwol_fetch_dhcp_server_settings: Populate the enable_dhcp_server_offload
+ * and dhcp_max_num_clients from cfg
  * @psoc: The global psoc handler
  * @fwol_cfg: The cfg structure
  *
@@ -435,7 +427,7 @@ static void ucfg_fwol_fetch_dhcp_server_settings(struct wlan_objmgr_psoc *psoc,
 #endif
 
 /**
- * ucfg_fwol_fetch_tsf_gpio_pin() - Populate the tsf_gpio_pin from cfg
+ * ucfg_fwol_fetch_tsf_gpio_pin: Populate the tsf_gpio_pin from cfg
  * @psoc: The global psoc handler
  * @fwol_cfg: The cfg structure
  *
@@ -454,58 +446,19 @@ static void ucfg_fwol_fetch_tsf_gpio_pin(struct wlan_objmgr_psoc *psoc,
 }
 #endif
 
+/**
+ * ucfg_fwol_init_tsf_ptp_options: Populate the tsf_ptp_options from cfg
+ * @psoc: The global psoc handler
+ * @fwol_cfg: The cfg structure
+ *
+ * Return: none
+ */
 #if defined(WLAN_FEATURE_TSF) && defined(WLAN_FEATURE_TSF_PLUS)
-#ifdef WLAN_FEATURE_TSF_ACCURACY
-/**
- * fwol_init_tsf_accuracy_configs() - Populate the TSF Accuracy configs from cfg
- * @psoc: The global psoc handler
- * @fwol_cfg: The cfg structure
- *
- * Return: none
- */
-static void fwol_init_tsf_accuracy_configs(struct wlan_objmgr_psoc *psoc,
-					   struct wlan_fwol_cfg *fwol_cfg)
-{
-	int32_t configs[CFG_TSF_ACCURACY_CONFIG_LEN] = { 0 };
-	int status;
-	qdf_size_t len;
-
-	status = qdf_int32_array_parse(cfg_get(psoc, CFG_TSF_ACCURACY_CONFIGS),
-				       configs,
-				       CFG_TSF_ACCURACY_CONFIG_LEN,
-				       &len);
-
-	if (status != QDF_STATUS_SUCCESS || len != CFG_TSF_ACCURACY_CONFIG_LEN) {
-		fwol_cfg->tsf_accuracy_configs.enable = 0;
-		fwol_err("Invalid parameters from INI");
-		return;
-	}
-
-	fwol_cfg->tsf_accuracy_configs.enable = configs[0];
-	fwol_cfg->tsf_accuracy_configs.sync_gpio = configs[1];
-	fwol_cfg->tsf_accuracy_configs.periodic_pulse_gpio = configs[2];
-	fwol_cfg->tsf_accuracy_configs.pulse_interval_ms = configs[3];
-}
-#else
-static void fwol_init_tsf_accuracy_configs(struct wlan_objmgr_psoc *psoc,
-					   struct wlan_fwol_cfg *fwol_cfg)
-{
-}
-#endif
-
-/**
- * ucfg_fwol_init_tsf_ptp_options() - Populate the tsf_ptp_options from cfg
- * @psoc: The global psoc handler
- * @fwol_cfg: The cfg structure
- *
- * Return: none
- */
 static void ucfg_fwol_init_tsf_ptp_options(struct wlan_objmgr_psoc *psoc,
 					   struct wlan_fwol_cfg *fwol_cfg)
 {
 	fwol_cfg->tsf_ptp_options = cfg_get(psoc, CFG_SET_TSF_PTP_OPT);
 	fwol_cfg->tsf_sync_enable = cfg_get(psoc, CFG_TSF_SYNC_ENABLE);
-	fwol_init_tsf_accuracy_configs(psoc, fwol_cfg);
 }
 #else
 static void ucfg_fwol_init_tsf_ptp_options(struct wlan_objmgr_psoc *psoc,
@@ -516,8 +469,8 @@ static void ucfg_fwol_init_tsf_ptp_options(struct wlan_objmgr_psoc *psoc,
 
 #ifdef WLAN_FEATURE_TSF_PLUS_EXT_GPIO_IRQ
 /**
- * ucfg_fwol_fetch_tsf_irq_host_gpio_pin() - Populate the tsf_irq_host_gpio_pin
- *                                           from cfg
+ * ucfg_fwol_fetch_tsf_irq_host_gpio_pin: Populate the
+ * tsf_irq_host_gpio_pin from cfg
  * @psoc: The global psoc handler
  * @fwol_cfg: The cfg structure
  *
@@ -543,8 +496,8 @@ ucfg_fwol_fetch_tsf_irq_host_gpio_pin(struct wlan_objmgr_psoc *psoc,
 
 #ifdef WLAN_FEATURE_TSF_PLUS_EXT_GPIO_SYNC
 /**
- * ucfg_fwol_fetch_tsf_sync_host_gpio_pin() - Populate the
- *                                            tsf_sync_host_gpio_pin from cfg
+ * ucfg_fwol_fetch_tsf_sync_host_gpio_pin: Populate the
+ * tsf_sync_host_gpio_pin from cfg
  * @psoc: The global psoc handler
  * @fwol_cfg: The cfg structure
  *
@@ -568,7 +521,7 @@ ucfg_fwol_fetch_tsf_sync_host_gpio_pin(struct wlan_objmgr_psoc *psoc,
 }
 #endif
 /**
- * ucfg_fwol_init_sae_cfg() - Populate the sae control config from cfg
+ * ucfg_fwol_init_sae_cfg: Populate the sae control config from cfg
  * @psoc: The global psoc handler
  * @fwol_cfg: The cfg structure
  *
@@ -588,7 +541,7 @@ static void ucfg_fwol_init_sae_cfg(struct wlan_objmgr_psoc *psoc,
 #endif
 
 /**
- * ucfg_fwol_fetch_ra_filter() - Populate the RA filter enabled or not from cfg
+ * ucfg_fwol_fetch_ra_filter: Populate the RA filter enabled or not from cfg
  * @psoc: The global psoc handler
  * @fwol_cfg: The cfg structure
  *
@@ -651,10 +604,9 @@ QDF_STATUS fwol_cfg_on_psoc_enable(struct wlan_objmgr_psoc *psoc)
 
 	fwol_init_coex_config_in_cfg(psoc, &fwol_cfg->coex_config);
 	fwol_init_thermal_temp_in_cfg(psoc, &fwol_cfg->thermal_temp_cfg);
-	fwol_init_ie_whiltelist_in_cfg(psoc, &fwol_cfg->ie_allowlist_cfg);
+	fwol_init_ie_whiltelist_in_cfg(psoc, &fwol_cfg->ie_whitelist_cfg);
 	fwol_init_neighbor_report_cfg(psoc, &fwol_cfg->neighbor_report_cfg);
 	fwol_cfg->ani_enabled = cfg_get(psoc, CFG_ENABLE_ANI);
-	fwol_cfg->pcie_config = cfg_get(psoc, CFG_PCIE_CONFIG);
 	fwol_cfg->enable_rts_sifsbursting =
 				cfg_get(psoc, CFG_SET_RTS_FOR_SIFS_BURSTING);
 	fwol_cfg->enable_sifs_burst = cfg_get(psoc, CFG_SET_SIFS_BURST);
@@ -865,14 +817,14 @@ QDF_STATUS fwol_set_ilp_config(struct wlan_objmgr_pdev *pdev,
 			       uint32_t enable_ilp)
 {
 	QDF_STATUS status;
-	struct pdev_params pdev_param = {};
+	struct pdev_params pdev_param;
 
-	pdev_param.param_id = wmi_pdev_param_pcie_hw_ilp;
+	pdev_param.param_id = WMI_PDEV_PARAM_PCIE_HW_ILP;
 	pdev_param.param_value = enable_ilp;
 
 	status = tgt_fwol_pdev_param_send(pdev, pdev_param);
 	if (QDF_IS_STATUS_ERROR(status))
-		fwol_err("wmi_pdev_param_pcie_hw_ilp failed %d", status);
+		fwol_err("WMI_PDEV_PARAM_PCIE_HW_ILP failed %d", status);
 
 	return status;
 }
@@ -884,12 +836,12 @@ QDF_STATUS fwol_set_sap_sho(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id,
 	struct vdev_set_params vdev_param;
 
 	vdev_param.vdev_id = vdev_id;
-	vdev_param.param_id = wmi_vdev_param_sho_config;
+	vdev_param.param_id = WMI_VDEV_PARAM_SHO_CONFIG;
 	vdev_param.param_value = sap_sho;
 
 	status = tgt_fwol_vdev_param_send(psoc, vdev_param);
 	if (QDF_IS_STATUS_ERROR(status))
-		fwol_err("wmi_vdev_param_sho_config failed %d", status);
+		fwol_err("WMI_VDEV_PARAM_SHO_CONFIG failed %d", status);
 
 	return status;
 }
@@ -898,36 +850,14 @@ QDF_STATUS fwol_configure_hw_assist(struct wlan_objmgr_pdev *pdev,
 				    bool disable_hw_assist)
 {
 	QDF_STATUS status;
-	struct pdev_params pdev_param = {};
+	struct pdev_params pdev_param;
 
-	pdev_param.param_id = wmi_pdev_param_disable_hw_assist;
+	pdev_param.param_id = WMI_PDEV_PARAM_DISABLE_HW_ASSIST;
 	pdev_param.param_value = disable_hw_assist;
 
 	status = tgt_fwol_pdev_param_send(pdev, pdev_param);
 	if (QDF_IS_STATUS_ERROR(status))
-		fwol_err("wmi_pdev_param_disable_hw_assist failed %d", status);
+		fwol_err("WMI_PDEV_PARAM_DISABLE_HW_ASSIST failed %d", status);
 
 	return status;
 }
-
-#ifdef FEATURE_WDS
-QDF_STATUS
-fwol_set_sap_wds_config(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id)
-{
-	QDF_STATUS status;
-	struct vdev_set_params vdev_param;
-
-	if (!wlan_mlme_get_wds_mode(psoc))
-		return QDF_STATUS_SUCCESS;
-
-	vdev_param.vdev_id = vdev_id;
-	vdev_param.param_id = wmi_vdev_param_wds;
-	vdev_param.param_value = true;
-
-	status = tgt_fwol_vdev_param_send(psoc, vdev_param);
-	if (QDF_IS_STATUS_ERROR(status))
-		fwol_err("wmi_vdev_param_wds failed %d", status);
-
-	return status;
-}
-#endif

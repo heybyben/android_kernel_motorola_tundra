@@ -1,5 +1,4 @@
 /* Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -22,8 +21,8 @@
 
 /**
  * enum thermal_throttle_level - firmware offload throttle level
- * @THERMAL_FULLPERF: no any throttling
- * @THERMAL_MITIGATION: throttling tx to do mitigation
+ * @THERMAL_FULLPERF: no any throtting
+ * @THERMAL_MITIGATION: throtting tx to do mitigation
  * @THERMAL_SHUTOFF: shut off the tx completely
  * @THERMAL_SHUTDOWN_TARGET: target will be shutdown entirely
  * @THERMAL_UNKNOWN: unknown level from target.
@@ -45,7 +44,7 @@ enum thermal_stats_request_type {
 };
 
 /**
- * struct thermal_throt_level_stats - thermal throttle info from Target
+ * thermal_throt_level_stats - thermal throttle info from Target
  * @start_temp_level: Start temperature range to capture thermal stats
  * @end_temp_level: End temperature range to capture thermal stats
  * @total_time_ms_lo: Start time for every thermal stats level in msec

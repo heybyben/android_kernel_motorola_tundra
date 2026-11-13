@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2014-2017 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -40,26 +39,6 @@ static inline  int32_t __qdf_csum_ipv6(const struct in6_addr *saddr,
 {
 	return csum_ipv6_magic((struct in6_addr *)saddr,
 			       (struct in6_addr *)daddr, len, proto, sum);
-}
-
-static inline char *__qdf_netdev_get_devname(qdf_netdev_t dev)
-{
-	return dev->name;
-}
-
-static inline
-__sum16 __qdf_csum_tcpudp_magic(uint32_t ip_saddr, uint32_t ip_daddr,
-				uint16_t adj_ip_len, uint8_t ip_proto,
-				uint32_t sum)
-{
-	return csum_tcpudp_magic(ip_saddr, ip_daddr,
-				 adj_ip_len, ip_proto, sum);
-}
-
-static inline
-uint16_t __qdf_ip_fast_csum(void *ip_hdr, uint8_t ip_hl)
-{
-	return ip_fast_csum((struct iphdr *)ip_hdr, ip_hl);
 }
 
 #define __QDF_TCPHDR_FIN TCPHDR_FIN

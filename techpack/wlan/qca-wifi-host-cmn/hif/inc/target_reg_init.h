@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -379,14 +378,6 @@ struct targetdef_s *MY_TARGET_DEF = &my_target_def;
 #if !defined(HOST_CE_ADDRESS)
 #define HOST_CE_ADDRESS ATH_UNSUPPORTED_REG_OFFSET
 #endif
-#if !defined(HOST_CMEM_ADDRESS)
-#define HOST_CMEM_ADDRESS ATH_UNSUPPORTED_REG_OFFSET
-#endif
-#if !defined(PMM_SCRATCH_BASE)
-#define PMM_SCRATCH_BASE ATH_UNSUPPORTED_REG_OFFSET
-#endif
-
-
 
 static struct ce_reg_def my_ce_reg_def = {
 	/* copy_engine.c */
@@ -473,9 +464,7 @@ static struct ce_reg_def my_ce_reg_def = {
 		= A_WIFI_APB_3_A_WCMN_APPS_CE_INTR_ENABLES,
 	.d_A_WIFI_APB_3_A_WCMN_APPS_CE_INTR_STATUS
 		= A_WIFI_APB_3_A_WCMN_APPS_CE_INTR_STATUS,
-	.d_HOST_CE_ADDRESS = HOST_CE_ADDRESS,
-	.d_HOST_CMEM_ADDRESS = HOST_CMEM_ADDRESS,
-	.d_PMM_SCRATCH_BASE = PMM_SCRATCH_BASE
+	.d_HOST_CE_ADDRESS = HOST_CE_ADDRESS
 };
 
 struct ce_reg_def *MY_CEREG_DEF = &my_ce_reg_def;

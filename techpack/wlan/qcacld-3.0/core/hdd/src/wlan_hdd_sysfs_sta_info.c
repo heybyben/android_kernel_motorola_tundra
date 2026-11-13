@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -29,7 +28,7 @@ static ssize_t __show_sta_info(struct net_device *net_dev, char *buf)
 {
 	struct hdd_adapter *adapter = netdev_priv(net_dev);
 	struct hdd_context *hdd_ctx;
-	struct hdd_station_info *sta, *tmp = NULL;
+	struct hdd_station_info *sta;
 	int ret_val;
 
 	hdd_enter_dev(net_dev);
@@ -50,16 +49,15 @@ static ssize_t __show_sta_info(struct net_device *net_dev, char *buf)
 			    "%s    get_sta_info:\nstaAddress\n",
 			    net_dev->name);
 
-	hdd_for_each_sta_ref_safe(adapter->sta_info_list, sta, tmp,
-				  STA_INFO_SHOW) {
+	hdd_for_each_sta_ref(adapter->sta_info_list, sta, STA_INFO_SHOW) {
 		if (QDF_IS_ADDR_BROADCAST(sta->sta_mac.bytes)) {
 			hdd_put_sta_info_ref(&adapter->sta_info_list, &sta,
 					     true, STA_INFO_SHOW);
 			continue;
 		}
 		ret_val += scnprintf(buf + ret_val, PAGE_SIZE - ret_val,
-				     QDF_MAC_ADDR_FMT " ecsa=%d\n",
-				     QDF_MAC_ADDR_REF(sta->sta_mac.bytes),
+				     QDF_FULL_MAC_FMT " ecsa=%d\n",
+				     QDF_FULL_MAC_REF(sta->sta_mac.bytes),
 				     sta->ecsa_capable);
 
 		hdd_put_sta_info_ref(&adapter->sta_info_list, &sta, true,

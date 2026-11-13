@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -27,7 +26,22 @@
 #include "osif_psoc_sync.h"
 #include <wlan_hdd_sysfs.h>
 #include <wlan_hdd_sysfs_dp_aggregation.h>
-#include "wlan_dp_ucfg_api.h"
+#if defined(WLAN_SUPPORT_RX_FISA)
+#include "dp_fisa_rx.h"
+#endif
+
+#if defined(WLAN_SUPPORT_RX_FISA)
+static inline
+void hdd_rx_skip_fisa(ol_txrx_soc_handle dp_soc, uint32_t value)
+{
+	dp_rx_skip_fisa(dp_soc, value);
+}
+#else
+static inline
+void hdd_rx_skip_fisa(ol_txrx_soc_handle dp_soc, uint32_t value)
+{
+}
+#endif
 
 static ssize_t
 __hdd_sysfs_dp_aggregation_show(struct hdd_context *hdd_ctx,
@@ -37,7 +51,7 @@ __hdd_sysfs_dp_aggregation_show(struct hdd_context *hdd_ctx,
 		return -EINVAL;
 
 	hdd_debug("dp_aggregation: %d",
-		  ucfg_dp_get_rx_aggregation_val(hdd_ctx->psoc));
+		  qdf_atomic_read(&hdd_ctx->dp_agg_param.rx_aggregation));
 
 	return 0;
 }
@@ -76,8 +90,9 @@ __hdd_sysfs_dp_aggregation_store(struct hdd_context *hdd_ctx,
 	char *sptr, *token;
 	uint32_t value;
 	int ret;
+	ol_txrx_soc_handle dp_soc = cds_get_context(QDF_MODULE_ID_SOC);
 
-	if (!wlan_hdd_validate_modules_state(hdd_ctx))
+	if (!wlan_hdd_validate_modules_state(hdd_ctx) || !dp_soc)
 		return -EINVAL;
 
 	ret = hdd_sysfs_validate_and_copy_buf(buf_local, sizeof(buf_local),
@@ -97,8 +112,8 @@ __hdd_sysfs_dp_aggregation_store(struct hdd_context *hdd_ctx,
 
 	hdd_debug("dp_aggregation: %d", value);
 
-	ucfg_dp_rx_skip_fisa(value);
-	ucfg_dp_set_rx_aggregation_val(hdd_ctx->psoc, !!value);
+	hdd_rx_skip_fisa(dp_soc, value);
+	qdf_atomic_set(&hdd_ctx->dp_agg_param.rx_aggregation, !!value);
 
 	return count;
 }

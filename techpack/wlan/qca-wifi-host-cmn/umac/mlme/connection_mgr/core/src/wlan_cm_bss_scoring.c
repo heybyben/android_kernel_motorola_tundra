@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,7 +15,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/**
+/*
  * DOC: contains bss scoring logic
  */
 
@@ -31,26 +31,9 @@
 #include "wlan_mgmt_txrx_utils_api.h"
 #ifdef CONN_MGR_ADV_FEATURE
 #include "wlan_mlme_api.h"
-#include "wlan_wfa_tgt_if_tx_api.h"
-#include "wlan_action_oui_main.h"
 #endif
-#include "wlan_cm_main_api.h"
-#include "wlan_cm_public_struct.h"
 
 #define CM_PCL_RSSI_THRESHOLD -75
-
-/* To differentiate between SLO and 11AX candidate */
-#define SLO_BOOST 5
-#define ONE_LINK_MLMR_BOOST 5
-#define LINK_BOOST 10
-
-#define CANDIDATE_DUMP_MAX_LEN 255
-
-#define LINK_SCORE                     BIT(0)
-#define ASSOC_LINK                     BIT(1)
-
-#define IS_LINK_SCORE(ml_flag)         ml_flag & LINK_SCORE
-#define IS_ASSOC_LINK(ml_flag)         ml_flag & ASSOC_LINK
 
 #define CM_BAND_2G_INDEX                   0
 #define CM_BAND_5G_INDEX                   1
@@ -86,7 +69,7 @@
 #define CM_HE_CAP_WEIGHTAGE 2
 #define CM_CHAN_WIDTH_WEIGHTAGE 12
 #define CM_CHAN_BAND_WEIGHTAGE 2
-#define CM_NSS_WEIGHTAGE 20
+#define CM_NSS_WEIGHTAGE 16
 #define CM_SECURITY_WEIGHTAGE 4
 #define CM_BEAMFORMING_CAP_WEIGHTAGE 2
 #define CM_PCL_WEIGHT 10
@@ -98,10 +81,8 @@
 #define CM_BEST_CANDIDATE_MAX_WEIGHT 200
 #define CM_MAX_PCT_SCORE 100
 #define CM_MAX_INDEX_PER_INI 4
-#define CM_SLO_CONGESTION_MAX_SCORE 80
-#define CM_ASSOC_INK_BEST_BOOST 20
 
-/*
+/**
  * This macro give percentage value of security_weightage to be used as per
  * security Eg if AP security is WPA 10% will be given for AP.
  *
@@ -117,8 +98,7 @@
 #define CM_SECURITY_INDEX_WEIGHTAGE 0x00643219
 
 #define CM_BEST_CANDIDATE_MAX_BSS_SCORE (CM_BEST_CANDIDATE_MAX_WEIGHT * 100)
-#define CM_AVOID_CANDIDATE_NON_ML_MIN_SCORE 1
-#define CM_AVOID_CANDIDATE_ML_MIN_SCORE 2
+#define CM_AVOID_CANDIDATE_MIN_SCORE 1
 
 #define CM_GET_SCORE_PERCENTAGE(value32, bw_index) \
 	QDF_GET_BITS(value32, (8 * (bw_index)), 8)
@@ -148,35 +128,14 @@ SNR_DB_TO_BIT_PER_TONE_LUT[DB_NUM] = {0, 171, 212, 262, 323, 396, 484,
 586, 706, 844, 1000, 1176, 1370, 1583, 1812, 2058, 2317, 2588, 2870, 3161};
 #endif
 
-#ifdef WLAN_FEATURE_11BE_MLO
-static bool
-cm_is_mlo_entry(struct scan_cache_entry *bss1, struct scan_cache_entry *bss2)
-{
-	if (bss1->ie_list.multi_link_bv &&
-	    !bss2->ie_list.multi_link_bv)
-		return true;
-	else
-		return false;
-}
-#else
-static inline bool
-cm_is_mlo_entry(struct scan_cache_entry *bss1, struct scan_cache_entry *bss2)
-{
-	return false;
-}
-#endif
-
 static bool cm_is_better_bss(struct scan_cache_entry *bss1,
 			     struct scan_cache_entry *bss2)
 {
 	if (bss1->bss_score > bss2->bss_score)
 		return true;
-	else if (bss1->bss_score == bss2->bss_score) {
+	else if (bss1->bss_score == bss2->bss_score)
 		if (bss1->rssi_raw > bss2->rssi_raw)
 			return true;
-		if (qdf_is_macaddr_equal(&bss1->bssid, &bss2->bssid))
-			return cm_is_mlo_entry(bss1, bss2);
-	}
 
 	return false;
 }
@@ -211,6 +170,11 @@ int8_t cm_get_rssi_pcnt_for_slot(int32_t high_rssi_threshold,
 	rssi_pcnt = high_rssi_pcnt - (slot_size * slot_index);
 	if (rssi_pcnt < low_rssi_pcnt)
 		rssi_pcnt = low_rssi_pcnt;
+
+	mlme_debug("Window %d -> %d pcnt range %d -> %d bucket_size %d bss_rssi %d num_slot %d slot_size %d rssi_diff %d slot_index %d rssi_pcnt %d",
+		   high_rssi_threshold, low_rssi_threshold, high_rssi_pcnt,
+		   low_rssi_pcnt, bucket_size, bss_rssi, num_slot, slot_size,
+		   rssi_diff, slot_index, rssi_pcnt);
 
 	return rssi_pcnt;
 }
@@ -276,6 +240,7 @@ static int32_t cm_calculate_rssi_score(struct rssi_config_score *score_param,
 /**
  * cm_rssi_is_same_bucket() - check if both rssi fall in same bucket
  * @rssi_top_thresh: high rssi threshold of the the window
+ * @low_rssi_threshold: low rssi of the window
  * @rssi_ref1: rssi ref one
  * @rssi_ref2: rssi ref two
  * @bucket_size: bucket size of the window
@@ -296,7 +261,7 @@ static inline bool cm_rssi_is_same_bucket(int8_t rssi_top_thresh,
 }
 
 /**
- * cm_get_rssi_prorate_pct() - Calculate prorated RSSI score
+ * cm_roam_calculate_prorated_pcnt_by_rssi() - Calculate prorated RSSI score
  * based on AP RSSI. This will be used to determine HT VHT score
  * @score_param: rssi score params
  * @rssi: bss rssi
@@ -307,9 +272,9 @@ static inline bool cm_rssi_is_same_bucket(int8_t rssi_top_thresh,
  *
  * Return: rssi prorated score
  */
-static int8_t
-cm_get_rssi_prorate_pct(struct rssi_config_score *score_param,
-			int32_t rssi, uint8_t rssi_weightage)
+static int8_t cm_roam_calculate_prorated_pcnt_by_rssi(
+	struct rssi_config_score *score_param,
+	int32_t rssi, uint8_t rssi_weightage)
 {
 	int32_t good_rssi_threshold;
 	int32_t bad_rssi_threshold;
@@ -340,6 +305,128 @@ cm_get_rssi_prorate_pct(struct rssi_config_score *score_param,
 					 score_param->bad_rssi_pcnt,
 					 score_param->bad_rssi_bucket_size,
 					 rssi);
+}
+
+/**
+ * cm_update_ch_width_index_puncturing() - Update channel width index with
+ *                                         puncture bitmap
+ * @entry: scan entry
+ * @ch_width_index: original channel width index
+ *
+ * Return: void
+ */
+#ifdef WLAN_FEATURE_11BE
+static void cm_update_ch_width_index_puncturing(struct scan_cache_entry *entry,
+						uint8_t *ch_width_index)
+{
+	uint16_t tmp_bitmap = entry->channel.puncture_bitmap;
+	uint8_t num_puncture_bw = 0;
+	enum cm_bw_idx original_ch_width_index = *ch_width_index;
+
+	while (tmp_bitmap) {
+		if (tmp_bitmap & 1)
+			++num_puncture_bw;
+		tmp_bitmap >>= 1;
+	}
+
+	switch (original_ch_width_index) {
+	case CM_80MHZ_BW_INDEX:
+		if (num_puncture_bw == 1)
+			*ch_width_index = CM_80MHZ_BW_20MHZ_PUNCTURE_INDEX;
+		break;
+	case CM_160MHZ_BW_INDEX:
+		if (num_puncture_bw == 1)
+			*ch_width_index = CM_160MHZ_BW_20MHZ_PUNCTURE_INDEX;
+		else if (num_puncture_bw == 2)
+			*ch_width_index = CM_160MHZ_BW_40MHZ_PUNCTURE_INDEX;
+		break;
+	case CM_320MHZ_BW_INDEX:
+		if (num_puncture_bw == 2)
+			*ch_width_index = CM_320MHZ_BW_40MHZ_PUNCTURE_INDEX;
+		else if (num_puncture_bw == 4)
+			*ch_width_index = CM_320MHZ_BW_80MHZ_PUNCTURE_INDEX;
+		else if (num_puncture_bw == 6)
+			*ch_width_index =
+				CM_320MHZ_BW_40MHZ_80MHZ_PUNCTURE_INDEX;
+		break;
+	default:
+		break;
+	}
+
+	mlme_debug("scan entry bssid: " QDF_MAC_ADDR_FMT " bw idx %d, punctured bw %d * 20MHZ, output bw idx %d",
+		   QDF_MAC_ADDR_REF(entry->bssid.bytes),
+		   original_ch_width_index, num_puncture_bw, *ch_width_index);
+}
+#else
+static void cm_update_ch_width_index_puncturing(struct scan_cache_entry *entry,
+						uint8_t *ch_width_index)
+{
+}
+#endif
+
+/**
+ * cm_calculate_bandwidth_score() - Calculate BW score
+ * @entry: scan entry
+ * @score_config: scoring config
+ * @phy_config: psoc phy configs
+ * @prorated_pct: prorated % to return dependent on RSSI
+ *
+ * Return: bw score
+ */
+static int32_t cm_calculate_bandwidth_score(struct scan_cache_entry *entry,
+					    struct scoring_cfg *score_config,
+					    struct psoc_phy_config *phy_config,
+					    uint8_t prorated_pct)
+{
+	uint32_t score;
+	int32_t bw_weight_per_idx;
+	uint8_t bw_above_20 = 0;
+	uint8_t ch_width_index;
+	bool is_vht = false;
+	uint8_t array_idx;
+	uint8_t byte_idx;
+
+	if (WLAN_REG_IS_24GHZ_CH_FREQ(entry->channel.chan_freq)) {
+		bw_above_20 = phy_config->bw_above_20_24ghz;
+		if (phy_config->vht_24G_cap)
+			is_vht = true;
+	} else if (phy_config->vht_cap) {
+		is_vht = true;
+		bw_above_20 = phy_config->bw_above_20_5ghz;
+	}
+
+	if (IS_WLAN_PHYMODE_160MHZ(entry->phy_mode))
+		ch_width_index = CM_160MHZ_BW_INDEX;
+	else if (IS_WLAN_PHYMODE_80MHZ(entry->phy_mode))
+		ch_width_index = CM_80MHZ_BW_INDEX;
+	else if (IS_WLAN_PHYMODE_40MHZ(entry->phy_mode))
+		ch_width_index = CM_40MHZ_BW_INDEX;
+	else
+		ch_width_index = CM_20MHZ_BW_INDEX;
+
+	if (!phy_config->ht_cap &&
+	    ch_width_index > CM_20MHZ_BW_INDEX)
+		ch_width_index = CM_20MHZ_BW_INDEX;
+
+	if (!is_vht && ch_width_index > CM_40MHZ_BW_INDEX)
+		ch_width_index = CM_40MHZ_BW_INDEX;
+
+	cm_update_ch_width_index_puncturing(entry, &ch_width_index);
+
+	array_idx = qdf_do_div(ch_width_index, 4);
+	byte_idx = qdf_do_div_rem(ch_width_index, 4);
+	bw_weight_per_idx = score_config->bandwidth_weight_per_index[array_idx];
+
+	if (bw_above_20 && ch_width_index > CM_20MHZ_BW_INDEX)
+		score = CM_GET_SCORE_PERCENTAGE(bw_weight_per_idx,
+						byte_idx);
+	else
+		score = CM_GET_SCORE_PERCENTAGE(bw_weight_per_idx,
+						CM_20MHZ_BW_INDEX);
+
+	return (prorated_pct * score *
+		score_config->weight_config.chan_width_weightage) /
+		CM_MAX_PCT_SCORE;
 }
 
 /**
@@ -417,28 +504,17 @@ static int32_t cm_get_congestion_pct(struct scan_cache_entry *entry)
  * @entry: bss information
  * @score_params: bss score params
  * @congestion_pct: congestion pct
- * @rssi_bad_zone:
  *
  * Return: congestion score
  */
 static int32_t cm_calculate_congestion_score(struct scan_cache_entry *entry,
 					     struct scoring_cfg *score_params,
-					     uint32_t *congestion_pct,
-					     bool rssi_bad_zone)
+					     uint32_t *congestion_pct)
 {
 	uint32_t window_size;
 	uint8_t index;
 	int32_t good_rssi_threshold;
 	uint8_t chan_congestion_weight;
-
-	chan_congestion_weight =
-		score_params->weight_config.channel_congestion_weightage;
-
-	if (!entry)
-		return chan_congestion_weight *
-			   CM_GET_SCORE_PERCENTAGE(
-			   score_params->esp_qbss_scoring.score_pcnt3_to_0,
-			   CM_SCORE_INDEX_0);
 
 	*congestion_pct = cm_get_congestion_pct(entry);
 
@@ -453,8 +529,11 @@ static int32_t cm_calculate_congestion_score(struct scan_cache_entry *entry,
 	good_rssi_threshold =
 		score_params->rssi_score.good_rssi_threshold * (-1);
 
+	chan_congestion_weight =
+		score_params->weight_config.channel_congestion_weightage;
+
 	/* For bad zone rssi get score from last index */
-	if (rssi_bad_zone || entry->rssi_raw <= good_rssi_threshold)
+	if (entry->rssi_raw <= good_rssi_threshold)
 		return cm_get_score_for_index(
 			score_params->esp_qbss_scoring.num_slot,
 			chan_congestion_weight,
@@ -486,7 +565,6 @@ static int32_t cm_calculate_congestion_score(struct scan_cache_entry *entry,
  * @score_config: scoring config
  * @ap_nss: ap nss
  * @prorated_pct: prorated % to return dependent on RSSI
- * @sta_nss: Sta NSS
  *
  * Return: nss score
  */
@@ -502,8 +580,7 @@ static int32_t cm_calculate_nss_score(struct wlan_objmgr_psoc *psoc,
 	if (sta_nss < nss)
 		nss = sta_nss;
 
-	if (nss == 8)
-		score_pct = CM_MAX_PCT_SCORE;
+	/* TODO: enhance for 8x8 */
 	if (nss == 4)
 		score_pct = CM_GET_SCORE_PERCENTAGE(
 				score_config->nss_weight_per_index[0],
@@ -555,10 +632,7 @@ static int32_t cm_calculate_security_score(struct scoring_cfg *score_config,
 		    QDF_HAS_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_OWE) ||
 		    QDF_HAS_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_DPP) ||
 		    QDF_HAS_PARAM(key_mgmt,
-				  WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X_SHA384) ||
-		    QDF_HAS_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_SAE_EXT_KEY) ||
-		    QDF_HAS_PARAM(key_mgmt,
-				  WLAN_CRYPTO_KEY_MGMT_FT_SAE_EXT_KEY)) {
+				  WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X_SHA384)) {
 			/*If security is WPA3, consider score_pct = 100%*/
 			score_pct = CM_GET_SCORE_PERCENTAGE(
 					score_config->security_weight_per_index,
@@ -622,22 +696,6 @@ static uint32_t cm_get_sta_nss(struct wlan_objmgr_psoc *psoc,
 }
 #endif
 
-#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
-static uint32_t wlan_cm_get_min_score(struct scan_cache_entry *entry)
-{
-	if (!entry->ie_list.multi_link_bv)
-		return CM_AVOID_CANDIDATE_NON_ML_MIN_SCORE;
-	/* Add more weigh for candidate with partner link */
-	return CM_AVOID_CANDIDATE_ML_MIN_SCORE +
-	       (CM_AVOID_CANDIDATE_ML_MIN_SCORE * entry->ml_info.num_links);
-}
-#else
-static uint32_t wlan_cm_get_min_score(struct scan_cache_entry *entry)
-{
-	return CM_AVOID_CANDIDATE_NON_ML_MIN_SCORE;
-}
-#endif
-
 #ifdef CONN_MGR_ADV_FEATURE
 static bool
 cm_get_pcl_weight_of_channel(uint32_t chan_freq,
@@ -681,13 +739,6 @@ static int32_t cm_calculate_pcl_score(struct wlan_objmgr_psoc *psoc,
 	 * if primary interface is configured.
 	 */
 	if (!policy_mgr_is_pcl_weightage_required(psoc))
-		return 0;
-
-	/*
-	 * Always choose the best candidate for non-DBS,
-	 * irrespective of the band.
-	 */
-	if (!policy_mgr_is_hw_dbs_capable(psoc))
 		return 0;
 
 	if (pcl_chan_weight) {
@@ -1092,8 +1143,10 @@ cm_get_etp_max_bits_per_sc_1000x_for_nss(struct wlan_objmgr_psoc *psoc,
 
 	bss_vht_cap = (struct wlan_ie_vhtcaps *)util_scan_entry_vhtcap(entry);
 	bss_he_cap = (struct wlan_ie_hecaps *)util_scan_entry_hecap(entry);
-	if (!phy_config->vht_cap || !bss_vht_cap)
+	if (!phy_config->vht_cap || !bss_vht_cap) {
+		mlme_err("vht unsupported");
 		return max_bits_per_sc_1000x;
+	}
 
 	status = wlan_mlme_cfg_get_vht_rx_mcs_map(psoc, &self_rx_mcs_map);
 	if (QDF_IS_STATUS_ERROR(status))
@@ -1216,7 +1269,7 @@ cm_calculate_etp(struct wlan_objmgr_psoc *psoc,
 		 uint8_t max_nss, enum phy_ch_width ch_width,
 		 bool is_ht, bool is_vht, bool is_he,
 		 int8_t rssi,
-		 struct psoc_phy_config *phy_config, uint8_t ml_flag)
+		 struct psoc_phy_config *phy_config)
 {
 	uint16_t ntone;
 	uint16_t phy_hdr_dur_us, max_amsdu_len = 1500, min_mpdu_ss_us_100x = 0;
@@ -1224,12 +1277,10 @@ cm_calculate_etp(struct wlan_objmgr_psoc *psoc,
 	uint32_t ppdu_payload_dur_us = 0, mpdu_per_ampdu, mpdu_per_ppdu;
 	uint32_t single_ppdu_dur_us, estimated_throughput_mbps, data_rate_kbps;
 	struct htcap_cmn_ie *htcap;
-	uint32_t min_score = wlan_cm_get_min_score(entry);
 
 	htcap = (struct htcap_cmn_ie *)util_scan_entry_htcap(entry);
-
 	if (ch_width > CH_WIDTH_160MHZ)
-		return min_score;
+		return CM_AVOID_CANDIDATE_MIN_SCORE;
 
 	if (is_he)
 		ntone = cm_get_etp_he_ntone(ch_width);
@@ -1241,7 +1292,7 @@ cm_calculate_etp(struct wlan_objmgr_psoc *psoc,
 		cm_get_etp_max_bits_per_sc_1000x_for_nss(psoc, entry,
 							 max_nss, phy_config);
 	if (rssi < WLAN_NOISE_FLOOR_DBM_DEFAULT)
-		return min_score;
+		return CM_AVOID_CANDIDATE_MIN_SCORE;
 
 	log_2_snr_tone_1000x = calculate_bit_per_tone(rssi, ch_width);
 
@@ -1254,14 +1305,10 @@ cm_calculate_etp(struct wlan_objmgr_psoc *psoc,
 		data_rate_kbps =
 			QDF_MIN(log_2_snr_tone_1000x, max_bits_per_sc_1000x) *
 			(max_nss * ntone) / PPDU_PAYLOAD_SYMBOL_DUR_US;
+	mlme_debug("data_rate_kbps: %d", data_rate_kbps);
 	if (data_rate_kbps < 1000) {
 		/* Return ETP as 1 since datarate is not even 1 Mbps */
-		mlme_nofl_debug("%s("QDF_MAC_ADDR_FMT" freq %d): data_rate_kbps %d is less than 1Mbps, so return score %d",
-				IS_ASSOC_LINK(ml_flag) ? "Candidate" : "Partner",
-				QDF_MAC_ADDR_REF(entry->bssid.bytes),
-				entry->channel.chan_freq, data_rate_kbps,
-				min_score);
-		return min_score;
+		return CM_AVOID_CANDIDATE_MIN_SCORE;
 	}
 	/* compute MPDU_p_PPDU */
 	if (is_ht) {
@@ -1297,23 +1344,23 @@ cm_calculate_etp(struct wlan_objmgr_psoc *psoc,
 		 etp_param->airtime_fraction) /
 		 CM_MAX_ESTIMATED_AIR_TIME_FRACTION;
 
-	if (estimated_throughput_mbps < min_score)
-		estimated_throughput_mbps = min_score;
+	if (estimated_throughput_mbps < CM_AVOID_CANDIDATE_MIN_SCORE)
+		estimated_throughput_mbps = CM_AVOID_CANDIDATE_MIN_SCORE;
 	if (estimated_throughput_mbps > CM_BEST_CANDIDATE_MAX_BSS_SCORE)
 		estimated_throughput_mbps = CM_BEST_CANDIDATE_MAX_BSS_SCORE;
 
-	mlme_nofl_debug("%s("QDF_MAC_ADDR_FMT" freq %d): rssi %d HT %d VHT %d HE %d ATF %d NSS %d ch_width %d data_rate %d",
-			IS_ASSOC_LINK(ml_flag) ? "Candidate" : "Partner",
+	mlme_nofl_debug("Candidate("QDF_MAC_ADDR_FMT" freq %d): rssi %d HT %d VHT %d HE %d ATF: %d NSS %d, ch_width: %d",
 			QDF_MAC_ADDR_REF(entry->bssid.bytes),
-			entry->channel.chan_freq, entry->rssi_raw, is_ht,
-			is_vht, is_he, etp_param->airtime_fraction,
-			entry->nss, ch_width, data_rate_kbps);
+			entry->channel.chan_freq,
+			entry->rssi_raw, is_ht, is_vht, is_he,
+			etp_param->airtime_fraction,
+			entry->nss, ch_width);
 	if (is_ht)
-		mlme_nofl_debug("min_mpdu_ss_us_100x %d max_amsdu %d ppdu_payload_dur_us %d mpdu_per_ampdu %d mpdu_per_ppdu %d ba_window %d",
+		mlme_nofl_debug("min_mpdu_ss_us_100x = %d, max_amsdu_len = %d, ppdu_payload_dur_us = %d, mpdu_per_ampdu = %d, mpdu_per_ppdu = %d, ba_window_size = %d",
 				min_mpdu_ss_us_100x, max_amsdu_len,
 				ppdu_payload_dur_us, mpdu_per_ampdu,
 				mpdu_per_ppdu, etp_param->ba_window_size);
-	mlme_nofl_debug("ETP score: ntone %d phy_hdr_dur_us %d max_bits_per_sc_1000x %d snr_tone_1000x %d mpdu_p_ppdu %d max_amsdu %d ppdu_dur_us %d TOTAL %d",
+	mlme_nofl_debug("ETP score params: ntone: %d, phy_hdr_dur_us: %d, max_bits_per_sc_1000x: %d, log_2_snr_tone_1000x: %d mpdu_p_ppdu = %d, max_amsdu_len = %d, ppdu_dur_us = %d, total score = %d",
 			ntone, phy_hdr_dur_us, max_bits_per_sc_1000x,
 			log_2_snr_tone_1000x, mpdu_per_ppdu, max_amsdu_len,
 			single_ppdu_dur_us, estimated_throughput_mbps);
@@ -1324,8 +1371,7 @@ cm_calculate_etp(struct wlan_objmgr_psoc *psoc,
 static uint32_t
 cm_calculate_etp_score(struct wlan_objmgr_psoc *psoc,
 		       struct scan_cache_entry *entry,
-		       struct psoc_phy_config *phy_config,
-		       enum MLO_TYPE bss_mlo_type, uint8_t ml_flag)
+		       struct psoc_phy_config *phy_config)
 {
 	enum phy_ch_width ch_width;
 	uint32_t nss;
@@ -1335,9 +1381,6 @@ cm_calculate_etp_score(struct wlan_objmgr_psoc *psoc,
 	struct wlan_esp_info *esp;
 	struct wlan_esp_ie *esp_ie;
 	struct etp_params etp_param;
-	int8_t mlo_prefer_percentage = 0;
-	uint32_t score;
-	int32_t mlo_score = 0;
 
 	if (phy_config->he_cap && entry->ie_list.hecap)
 		is_he_intersect = true;
@@ -1383,26 +1426,15 @@ cm_calculate_etp_score(struct wlan_objmgr_psoc *psoc,
 	 * becomes useless. ETP should be [1Mbps, 20000Mbps],matches score
 	 * range: [1, 20000]
 	 */
-	score = cm_calculate_etp(psoc, entry,
-				 &etp_param,
-				 nss,
-				 ch_width,
-				 is_ht_intersect,
-				 is_vht_intersect,
-				 is_he_intersect,
-				 entry->rssi_raw,
-				 phy_config,
-				 ml_flag);
-	if (bss_mlo_type == SLO)
-		return score;
-	wlan_mlme_get_mlo_prefer_percentage(psoc, &mlo_prefer_percentage);
-	if (mlo_prefer_percentage) {
-		mlo_score = score;
-		mlo_score = mlo_score +
-			   (mlo_score * mlo_prefer_percentage) / 100;
-		score = mlo_score;
-	}
-	return score;
+	return cm_calculate_etp(psoc, entry,
+				  &etp_param,
+				  nss,
+				  ch_width,
+				  is_ht_intersect,
+				  is_vht_intersect,
+				  is_he_intersect,
+				  entry->rssi_raw,
+				  phy_config);
 }
 #else
 static bool
@@ -1459,16 +1491,15 @@ static inline bool cm_is_assoc_allowed(struct psoc_mlme_obj *mlme_psoc_obj,
 static uint32_t
 cm_calculate_etp_score(struct wlan_objmgr_psoc *psoc,
 		       struct scan_cache_entry *entry,
-		       struct psoc_phy_config *phy_config,
-		       enum MLO_TYPE bss_mlo_type, uint8_t ml_flag)
+		       struct psoc_phy_config *phy_config)
 {
 	return 0;
 }
 #endif
 
 /**
- * cm_get_band_score() - Get band preference weightage
- * @freq: Operating frequency of the AP
+ * cm_get_band_score() - Get band prefernce weightage
+ * freq: Operating frequency of the AP
  * @score_config: Score configuration
  *
  * Return: Band score for AP.
@@ -1495,1015 +1526,129 @@ cm_get_band_score(uint32_t freq, struct scoring_cfg *score_config)
 				       band_index);
 }
 
-#ifdef WLAN_FEATURE_11BE
-#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
-#if defined (SAP_MULTI_LINK_EMULATION)
-bool wlan_cm_is_eht_allowed_for_current_security(struct wlan_objmgr_psoc *psoc,
-						 struct scan_cache_entry *entry,
-						 bool is_mlo_connect)
+#ifdef WLAN_FEATURE_11BE_MLO
+static int8_t cm_get_partner_link_rssi(struct scan_cache_entry *entry,
+				       uint8_t link_idx)
 {
-	return true;
+	/* TODO: Get RSSI from partner bracon/derive from ML IE*/
+	return entry->rssi_raw;
 }
-#else
-bool wlan_cm_is_eht_allowed_for_current_security(struct wlan_objmgr_psoc *psoc,
-						 struct scan_cache_entry *entry,
-						 bool is_mlo_connect)
+
+static uint8_t cm_get_parter_link_index(struct scan_cache_entry *entry)
 {
-	bool rf_test_mode = false;
-	QDF_STATUS status;
-	struct security_info *neg_sec_info;
-	uint32_t oem_eht_cfg = 0x0;
-	bool mlie_present;
+	/* TODO: Return best partner link index from entry->ml_info
+	 *                         or
+	 *  take decision to calculate score for all possible combinations.
+	 *  example: if the entry is a 2G beacon of 3-link AP then calculate
+	 *           scores for 2G+5G & 2G+6G ML
+	 */
+	return 0;
+}
 
-	status = wlan_mlme_is_rf_test_mode_enabled(psoc, &rf_test_mode);
-	if (!QDF_IS_STATUS_SUCCESS(status)) {
-		mlme_err("Get rf test mode failed");
-		return false;
-	}
-	if (rf_test_mode) {
-		mlme_debug("rf test mode is enabled, ignore setting");
-		return true;
-	}
+static int8_t cm_get_joint_rssi(struct scan_cache_entry *entry,
+				struct weight_cfg *weight_config,
+				uint8_t link_idx)
+{
+	int8_t low_band_rssi;
+	int8_t high_band_rssi;
+	uint8_t alpha = weight_config->joint_rssi_alpha;
 
-	if (!entry->ie_list.rsn) {
-		mlme_debug(QDF_MAC_ADDR_FMT ": RSN IE not present",
-			   QDF_MAC_ADDR_REF(entry->bssid.bytes));
-		return false;
-	}
-
-	/* Get the OEM EHT configuration. */
-	status = wlan_mlme_get_oem_eht_mlo_config(psoc, &oem_eht_cfg);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		mlme_rl_nofl_err("OEM EHT cfg get failed");
-		return false;
-	}
-
-	/* Check if the AP is ML capable or not */
-	mlie_present = entry->ie_list.multi_link_bv ? true : false;
-
-	neg_sec_info = &entry->neg_sec_info;
-	if (neg_sec_info->rsn_caps & WLAN_CRYPTO_RSN_CAP_MFP_ENABLED) {
-		/* For entreprise APs, only check if PMF is enabled or not */
-		if (WLAN_CRYPTO_IS_AKM_ENTERPRISE(neg_sec_info->key_mgmt))
-			return true;
-
-		/* For APs which are both WPA3 and WPA2, only check WPA3 as it
-		 * is the more secure AKM.
-		 */
-		if (WLAN_CRYPTO_IS_WPA3(neg_sec_info->key_mgmt)) {
-			if (!WLAN_CRYPTO_IS_AKM_SAE(neg_sec_info->key_mgmt))
-				return true;
-
-			/* If OEM enables APs with HnP to connect, don't check
-			 * whether RSNXE has H2E bit set or not. It will be
-			 * allowing both HnP and H2E APs.
-			 *
-			 * If the AP is ML capable, return:
-			 *    -True, if H2E is not required and not for ML assoc
-			 *    -True, if INI bit value for MLO assoc is set.
-			 *
-			 * If AP is not ML capable, return:
-			 *    -True, if INI bit value for allowing EHT only
-			 *     connection is set.
-			 */
-			if (mlie_present) {
-				if (!is_mlo_connect &&
-				    !WLAN_CRYPTO_WPA3_SAE_OEM_EHT_CFG_IS_STRICT_H2E(oem_eht_cfg)) {
-					return true;
-				} else if (is_mlo_connect &&
-					   (oem_eht_cfg & WLAN_HOST_CRYPTO_WPA3_SAE_ALLOW_MLO_HnP)) {
-					return true;
-				}
-			} else if (!is_mlo_connect &&
-				   (oem_eht_cfg & WLAN_HOST_CRYPTO_WPA3_SAE_ALLOW_NON_MLO_EHT_HnP)) {
-				return true;
-			}
-
-			/* If OEM wants strict H2E mandatory for EHT/MLO, then
-			 * allow only if candidate has H2E capability
-			 */
-			return util_scan_entry_sae_h2e_capable(entry);
-		} else if (WLAN_CRYPTO_IS_WPA2(neg_sec_info->key_mgmt) &&
-			   WLAN_CRYPTO_WPA2_OEM_EHT_CFG_PMF_ALLOWED(oem_eht_cfg)) {
-			/* Only checks whether PMF APs are allowed or not via
-			 * the INI cfg.
-			 * Even if no-PMF APs are allowed to connect, PMF APs
-			 * will not be allowed to connect if the bitmap is not
-			 * set for PMF APs.
-			 *
-			 * If the AP is ML capable, return:
-			 *     -True, if not for MLO connection
-			 *     -INI BIT value for allowing MLO assoc with PMF
-			 *      enabled APs.
-			 *
-			 * If the AP is not ML capable, return:
-			 *     -INI BIT value for allowing EHT only connection
-			 *      for PMF enabled APS.
-			 *
-			 */
-			if (mlie_present) {
-				if (!is_mlo_connect)
-					return true;
-				return (oem_eht_cfg & WLAN_HOST_CRYPTO_WPA2_ALLOW_MLO_MFPC_SET);
-			} else {
-				return (oem_eht_cfg & WLAN_HOST_CRYPTO_WPA2_ALLOW_NON_MLO_EHT_MFPC_SET);
-			}
-		} else {
-			return false;
-		}
-	} else if (!WLAN_CRYPTO_IS_WPA3(neg_sec_info->key_mgmt) &&
-		   WLAN_CRYPTO_IS_WPA2(neg_sec_info->key_mgmt) &&
-		   WLAN_CRYPTO_WPA2_OEM_EHT_CFG_NO_PMF_ALLOWED(oem_eht_cfg)) {
-		/*
-		 * Only checks whether no PMF APs are allowed or not via the INI
-		 * cfg.
-		 * All WPA3 configurations has to be PMF, so only allow
-		 * non-WPA3 WPA2 APs in this condition.
-		 *
-		 * If the AP is ML capable, return:
-		 *     -True, if not for MLO connection
-		 *     -INI BIT value for allowing MLO assoc with Non-PMF
-		 *      capable APs.
-		 *
-		 * If the AP is not ML capable, return:
-		 *     -INI BIT value for allowing EHT only connection
-		 *      for Non-PMF capable APs.
-		 */
-		if (mlie_present) {
-			if (!is_mlo_connect)
-				return true;
-			return (oem_eht_cfg & WLAN_HOST_CRYPTO_WPA2_ALLOW_MLO);
-		} else {
-			return (oem_eht_cfg & WLAN_HOST_CRYPTO_WPA2_ALLOW_NON_MLO_EHT);
-		}
+	if (entry->channel.chan_freq <
+				entry->ml_info.link_info[link_idx].freq) {
+		low_band_rssi = entry->rssi_raw;
+		high_band_rssi = cm_get_partner_link_rssi(entry, link_idx);
 	} else {
-		return false;
+		low_band_rssi = cm_get_partner_link_rssi(entry, link_idx);
+		high_band_rssi = entry->rssi_raw;
 	}
-}
-#endif
-#endif
 
-static int cm_calculate_eht_score(struct wlan_objmgr_psoc *psoc,
-				  struct scan_cache_entry *entry,
+	if (((alpha < 50) && (weight_config->low_band_rssi_boost)) ||
+	    ((alpha > 50) && (!weight_config->low_band_rssi_boost)))
+		alpha = 100 - alpha;
+
+	return ((low_band_rssi * alpha) +
+		(high_band_rssi * (100 - alpha))) / 100;
+}
+
+static int cm_calculate_eht_score(struct scan_cache_entry *entry,
 				  struct scoring_cfg *score_config,
-				  struct psoc_phy_config *phy_config,
-				  uint8_t prorated_pcnt)
+				  struct psoc_phy_config *phy_config)
 {
 	uint32_t eht_caps_score;
+	uint32_t mlo_score;
+	uint32_t joint_rssi_score = 0;
+	/* TODO: calculate joint OCE/ESP score using ML_IE/Partner beacon */
+	uint32_t joint_esp_score = 0;
+	uint32_t joint_oce_score = 0;
+	uint32_t wlm_indication_score = 0;
+	uint32_t mlsr_score = 0;
+	uint32_t emlsr_score = 0;
+	uint8_t prorated_pcnt;
+	int8_t joint_rssi;
 	struct weight_cfg *weight_config;
+	uint8_t partner_link_idx = cm_get_parter_link_index(entry);
 
 	if (!phy_config->eht_cap || !entry->ie_list.ehtcap)
 		return 0;
 
-	if (!wlan_cm_is_eht_allowed_for_current_security(psoc, entry, false))
-		return 0;
+	/* TODO: get partner entry and return ml_score for that if it is
+	 *       non-zero
+	 */
 
 	weight_config = &score_config->weight_config;
+
+	joint_rssi = cm_get_joint_rssi(entry, weight_config, partner_link_idx);
+
+	joint_rssi_score = cm_calculate_rssi_score(
+					&score_config->rssi_score, joint_rssi,
+					weight_config->rssi_weightage);
+
+	prorated_pcnt = cm_roam_calculate_prorated_pcnt_by_rssi(
+				&score_config->rssi_score, joint_rssi,
+				weight_config->rssi_weightage);
+
 	eht_caps_score = prorated_pcnt * weight_config->eht_caps_weightage;
+	mlo_score = prorated_pcnt * weight_config->mlo_weightage;
 
-	return eht_caps_score;
+	 mlme_nofl_debug("EHT Scores: eht_caps_score:%d mlo_score:%d joint_rssi_score:%d joint_esp_score:%d joint_oce_score:%d wlm_indication_score:%d mlsr_score:%d emlsr_score:%d",
+			 eht_caps_score, mlo_score, joint_rssi_score,
+			 joint_esp_score, joint_oce_score, wlm_indication_score,
+			 mlsr_score, emlsr_score);
+
+	entry->ml_info.ml_bss_score = eht_caps_score + mlo_score +
+				      joint_rssi_score + joint_esp_score +
+				      joint_oce_score + wlm_indication_score +
+				      mlsr_score + emlsr_score;
+
+	return entry->ml_info.ml_bss_score;
 }
 
-/**
- * cm_get_puncture_bw() - Get puncture band width
- * @entry: Bss scan entry
- *
- * Return: Total bandwidth of punctured subchannels (unit: MHz)
- */
-static uint16_t cm_get_puncture_bw(struct scan_cache_entry *entry)
+static int32_t
+cm_calculate_raw_rssi_score(struct rssi_config_score *score_param,
+			    int32_t rssi, uint8_t rssi_weightage)
 {
-	uint16_t puncture_bitmap;
-	uint8_t num_puncture_bw = 0;
-
-	if (!entry->ie_list.ehtcap || !entry->ie_list.ehtop)
-		return 0;
-
-	puncture_bitmap = entry->channel.puncture_bitmap;
-	while (puncture_bitmap) {
-		if (puncture_bitmap & 1)
-			++num_puncture_bw;
-		puncture_bitmap >>= 1;
-	}
-	return num_puncture_bw * 20;
-}
-
-static bool cm_get_su_beam_former(struct scan_cache_entry *entry)
-{
-	struct wlan_ie_ehtcaps *eht_cap;
-	struct wlan_eht_cap_info *eht_cap_info;
-
-	eht_cap = (struct wlan_ie_ehtcaps *)util_scan_entry_ehtcap(entry);
-	if (eht_cap) {
-		eht_cap_info = (struct wlan_eht_cap_info *)eht_cap->eht_mac_cap;
-		if (eht_cap_info->su_beamformer)
-			return true;
-	}
-
-	return false;
+	return 0;
 }
 #else
-static int cm_calculate_eht_score(struct wlan_objmgr_psoc *psoc,
-				  struct scan_cache_entry *entry,
+static int cm_calculate_eht_score(struct scan_cache_entry *entry,
 				  struct scoring_cfg *score_config,
-				  struct psoc_phy_config *phy_config,
-				  uint8_t prorated_pcnt)
+				  struct psoc_phy_config *phy_config)
 {
 	return 0;
 }
 
-static uint16_t cm_get_puncture_bw(struct scan_cache_entry *entry)
+static int32_t
+cm_calculate_raw_rssi_score(struct rssi_config_score *score_param,
+			    int32_t rssi, uint8_t rssi_weightage)
 {
-	return 0;
-}
-
-static bool cm_get_su_beam_former(struct scan_cache_entry *entry)
-{
-	return false;
+	return cm_calculate_rssi_score(score_param, rssi, rssi_weightage);
 }
 #endif
-
-#define CM_BAND_WIDTH_NUM 16
-#define CM_BAND_WIDTH_UNIT 20
-uint16_t link_bw_score[CM_BAND_WIDTH_NUM] = {
-9, 18, 27, 35, 44, 53, 56, 67, 74, 80, 86, 90, 93, 96, 98, 100};
-
-static uint32_t cm_get_bw_score(uint8_t bw_weightage, uint16_t bw,
-				uint8_t prorated_pcnt)
-{
-	uint32_t score;
-	uint8_t index;
-
-	index = bw / CM_BAND_WIDTH_UNIT - 1;
-	if (index >= CM_BAND_WIDTH_NUM)
-		index = CM_BAND_WIDTH_NUM - 1;
-	score = bw_weightage * link_bw_score[index]
-		* prorated_pcnt / CM_MAX_PCT_SCORE;
-
-	return score;
-}
-
-/**
- * cm_get_ch_width() - Get channel width of bss scan entry
- * @entry: Bss scan entry
- * @phy_config: Phy config
- *
- * Return: Channel width (unit: MHz)
- */
-static uint16_t cm_get_ch_width(struct scan_cache_entry *entry,
-				struct psoc_phy_config *phy_config)
-{
-	uint16_t bw, punctured_bw, total_bw = 20;
-	uint8_t bw_above_20 = 0;
-	bool is_vht = false;
-
-	if (WLAN_REG_IS_24GHZ_CH_FREQ(entry->channel.chan_freq)) {
-		bw_above_20 = phy_config->bw_above_20_24ghz;
-		if (phy_config->vht_24G_cap)
-			is_vht = true;
-	} else if (phy_config->vht_cap) {
-		is_vht = true;
-		bw_above_20 = phy_config->bw_above_20_5ghz;
-	}
-	if (IS_WLAN_PHYMODE_320MHZ(entry->phy_mode))
-		bw = 320;
-	else if (IS_WLAN_PHYMODE_160MHZ(entry->phy_mode))
-		bw = 160;
-	else if (IS_WLAN_PHYMODE_80MHZ(entry->phy_mode))
-		bw = 80;
-	else if (IS_WLAN_PHYMODE_40MHZ(entry->phy_mode))
-		bw = 40;
-	else
-		bw = 20;
-	if (!phy_config->ht_cap && bw > 20)
-		bw = 20;
-
-	if (!is_vht && bw > 40)
-		bw = 40;
-
-	punctured_bw = cm_get_puncture_bw(entry);
-	if (bw > punctured_bw)
-		total_bw = bw - punctured_bw;
-	else
-		mlme_err("Invalid bw %d punctured_bw %d", bw, punctured_bw);
-
-	return total_bw;
-}
-
-#ifdef WLAN_FEATURE_11BE_MLO
-#define CM_MLO_BAD_RSSI_PCT 61
-#define CM_MLO_CONGESTION_PCT_BAD_RSSI 6
-
-static uint8_t mlo_boost_pct[MLO_TYPE_MAX] = {0, 10, CM_MAX_PCT_SCORE};
-
-/**
- * cm_get_mlo_rssi() - Calculate joint rssi for MLO AP
- *
- * @link1_rssi: link1 rssi
- * @link2_rssi: link2 rssi
- * @cw_link1: channel width of link 1
- * @cw_link2: channel width of link 2
- *
- * Return: MLO AP joint rssi score
- */
-static uint32_t cm_get_mlo_rssi(int8_t link1_rssi, int8_t link2_rssi,
-				uint16_t cw_link1, uint16_t cw_link2)
-{
-	uint32_t rssi_mlo;
-
-	rssi_mlo = (cw_link1 * link1_rssi + cw_link2 * link2_rssi) /
-		   (cw_link1 + cw_link2);
-
-	return rssi_mlo;
-}
-
-static inline int cm_calculate_emlsr_score(struct weight_cfg *weight_config)
-{
-	return weight_config->emlsr_weightage * mlo_boost_pct[MLSR];
-}
-
-struct scan_cache_entry *cm_get_entry(qdf_list_t *scan_list,
-				      struct qdf_mac_addr *link_addr)
-{
-	qdf_list_node_t *cur_node = NULL, *next_node = NULL;
-	struct scan_cache_node *curr_entry = NULL;
-
-	qdf_list_peek_front(scan_list, &cur_node);
-	while (cur_node) {
-		curr_entry = qdf_container_of(cur_node, struct scan_cache_node,
-					      node);
-		if (!qdf_mem_cmp(&curr_entry->entry->mac_addr,
-				 link_addr, QDF_MAC_ADDR_SIZE))
-			return curr_entry->entry;
-
-		qdf_list_peek_next(scan_list, cur_node, &next_node);
-		cur_node = next_node;
-		next_node = NULL;
-	}
-
-	return NULL;
-}
-
-#ifdef CONN_MGR_ADV_FEATURE
-static uint8_t cm_get_sta_mlo_conn_max_num(struct wlan_objmgr_psoc *psoc)
-{
-	return wlan_mlme_get_sta_mlo_conn_max_num(psoc);
-}
-
-static bool is_freq_dbs_or_sbs(struct wlan_objmgr_psoc *psoc,
-			       qdf_freq_t freq_1,
-			       qdf_freq_t freq_2)
-{
-	return !policy_mgr_2_freq_always_on_same_mac(psoc, freq_1, freq_2);
-}
-
-#else
-static inline
-uint8_t cm_get_sta_mlo_conn_max_num(struct wlan_objmgr_psoc *psoc)
-{
-	return WLAN_UMAC_MLO_MAX_DEV;
-}
-
-static inline bool is_freq_dbs_or_sbs(struct wlan_objmgr_psoc *psoc,
-				      qdf_freq_t freq_1,
-				      qdf_freq_t freq_2)
-{
-	return false;
-}
-#endif
-
-/**
- * cm_bss_mlo_type() - Get mlo type of bss scan entry
- * @psoc: Pointer of psoc object
- * @entry: Bss scan entry
- * @scan_list:
- *
- * Return: MLO AP type: SLO, MLMR or EMLSR.
- */
-enum MLO_TYPE cm_bss_mlo_type(struct wlan_objmgr_psoc *psoc,
-			      struct scan_cache_entry *entry,
-			      qdf_list_t *scan_list)
-{
-	uint8_t mlo_link_num;
-	uint8_t i;
-	uint32_t freq_entry;
-	uint32_t freq[MLD_MAX_LINKS - 1];
-	struct scan_cache_entry *entry_partner[MLD_MAX_LINKS - 1];
-	bool multi_link = false;
-
-	mlo_link_num = cm_get_sta_mlo_conn_max_num(psoc);
-	if (!entry->ie_list.multi_link_bv)
-		return SLO;
-	else if (!entry->ml_info.num_links)
-		return SLO;
-	else if (mlo_link_num == 1)
-		return SLO;
-
-	for (i = 0; i < entry->ml_info.num_links; i++) {
-		if (!entry->ml_info.link_info[i].is_valid_link)
-			continue;
-		freq_entry = entry->channel.chan_freq;
-		freq[i] = entry->ml_info.link_info[i].freq;
-		entry_partner[i] =
-			cm_get_entry(scan_list,
-				     &entry->ml_info.link_info[i].link_addr);
-		if (entry_partner[i])
-			freq[i] = entry_partner[i]->channel.chan_freq;
-		if (is_freq_dbs_or_sbs(psoc, freq[i], freq_entry)) {
-			return MLMR;
-		} else if (freq[i] == freq_entry) {
-			mlme_debug("Partner " QDF_MAC_ADDR_FMT
-				   " freq %d same as assoc freq, invalid it",
-				   QDF_MAC_ADDR_REF(entry->ml_info.link_info[i].link_addr.bytes),
-				   freq[i]);
-			entry->ml_info.link_info[i].is_valid_link = false;
-		} else {
-			multi_link = true;
-		}
-	}
-
-	if (multi_link)
-		return MLSR;
-	else
-		return SLO;
-}
-
-/**
- * cm_get_mlo_congestion_score() - Get mlo jointer congestion percent
- * @bw1: channel width of link1
- * @bw2: channel width of link2
- * @congestion_score1: congestion score of link1
- * @congestion_score2: congestion score of link2
- * @score_params: score param
- *
- * Return: Mlo jointer congestion percent
- */
-static uint32_t
-cm_get_mlo_congestion_score(uint16_t bw1,
-			    uint16_t bw2,
-			    uint32_t congestion_score1,
-			    uint32_t congestion_score2,
-			    struct scoring_cfg *score_params)
-{
-	uint32_t congestion_best;
-	uint32_t congestion_worst;
-	uint32_t congestion_weight;
-
-	congestion_weight =
-		score_params->weight_config.channel_congestion_weightage;
-	if (congestion_score1 > congestion_score2) {
-		congestion_best = congestion_score1;
-		congestion_worst = congestion_score2 * bw1 / (bw1 + bw2);
-	} else if (congestion_score1 < congestion_score2) {
-		congestion_best = congestion_score2;
-		congestion_worst = congestion_score1 * bw2 / (bw1 + bw2);
-	} else {
-		congestion_best = congestion_score1;
-		congestion_worst = congestion_score2 / 2;
-	}
-	congestion_best = congestion_best * CM_SLO_CONGESTION_MAX_SCORE /
-			 CM_MAX_PCT_SCORE;
-	congestion_worst = congestion_worst * CM_SLO_CONGESTION_MAX_SCORE /
-			 CM_MAX_PCT_SCORE;
-	congestion_worst = QDF_MIN(congestion_worst, 20 * congestion_weight);
-
-	return congestion_best + congestion_worst;
-}
-
-/**
- * cm_estimate_rssi() - Get estimated rssi by frequency
- * @rssi_entry: Rssi of bss scan entry
- * @freq_entry: Frequency of bss scan entry
- * @freq_partner: Frequency of partner link of MLO
- *
- * Estimated equation: RSSI(2G) = RSSI(5G) + 7 = RSSI(6G) + 8
- *
- * Return: Estimated rssi of partner link of MLO
- */
-static int8_t cm_estimate_rssi(int8_t rssi_entry, uint32_t freq_entry,
-			       uint32_t freq_partner)
-{
-	if (wlan_reg_is_24ghz_ch_freq(freq_entry)) {
-		if (wlan_reg_is_5ghz_ch_freq(freq_partner))
-			return rssi_entry - 7;
-		else if (wlan_reg_is_6ghz_chan_freq(freq_partner))
-			return rssi_entry - 8;
-	} else if (wlan_reg_is_5ghz_ch_freq(freq_entry)) {
-		if (wlan_reg_is_24ghz_ch_freq(freq_partner))
-			return rssi_entry + 7;
-		else if (wlan_reg_is_6ghz_chan_freq(freq_partner))
-			return rssi_entry - 1;
-	} else if (wlan_reg_is_6ghz_chan_freq(freq_entry)) {
-		if (wlan_reg_is_24ghz_ch_freq(freq_partner))
-			return rssi_entry + 8;
-		else if (wlan_reg_is_5ghz_ch_freq(freq_partner))
-			return rssi_entry + 1;
-	}
-
-	return rssi_entry;
-}
 
 static int cm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 				  struct scan_cache_entry *entry,
 				  int pcl_chan_weight,
-				  struct qdf_mac_addr *bssid_hint,
-				  qdf_list_t *scan_list,
-				  uint8_t ml_flag);
-
-/**
- * cm_calculate_mlo_bss_score() - Calculate mlo bss score
- * @psoc: Pointer to psoc object
- * @entry: Bss scan entry
- * @score_params: score parameters
- * @phy_config: Phy config
- * @scan_list: Scan entry list of bss candidates after filtering
- * @rssi_prorated_pct: Rssi prorated percent
- * @pcl_chan_weight: PCL chan weight
- *
- * For MLMR case, besides adding MLMR boost score,
- * calculate joint RSSI/band width/congestion score for combination of
- * scan entry + each partner link, select highest total score as candidate
- * combination, only activate that partner link.
- *
- * Return: MLO AP joint total score
- */
-static int cm_calculate_mlo_bss_score(struct wlan_objmgr_psoc *psoc,
-				      struct scan_cache_entry *entry,
-				      struct scoring_cfg *score_params,
-				      struct psoc_phy_config *phy_config,
-				      qdf_list_t *scan_list,
-				      uint8_t *rssi_prorated_pct,
-				      int pcl_chan_weight)
-{
-	struct scan_cache_entry *entry_partner[MLD_MAX_LINKS - 1];
-	int32_t rssi[MLD_MAX_LINKS - 1];
-	uint32_t rssi_mlo[MLD_MAX_LINKS - 1] = {};
-	uint32_t rssi_score[MLD_MAX_LINKS - 1] = {};
-	uint16_t prorated_pct[MLD_MAX_LINKS - 1] = {};
-	uint32_t freq[MLD_MAX_LINKS - 1];
-	uint16_t ch_width[MLD_MAX_LINKS - 1];
-	uint32_t bandwidth_score[MLD_MAX_LINKS - 1] = {};
-	uint32_t congestion_pct[MLD_MAX_LINKS - 1] = {};
-	uint32_t congestion_score[MLD_MAX_LINKS - 1] = {};
-	uint32_t cong_total_score[MLD_MAX_LINKS - 1] = {};
-	uint32_t total_score[MLD_MAX_LINKS - 1] = {};
-	uint8_t i, j;
-	uint16_t chan_width;
-	uint32_t best_total_score = 0;
-	uint8_t best_partner_index = 0;
-	uint32_t cong_pct = 0;
-	uint32_t cong_score = 0;
-	uint32_t freq_entry;
-	struct weight_cfg *weight_config;
-	struct partner_link_info *link;
-	struct wlan_objmgr_pdev *pdev;
-	bool rssi_bad_zone;
-	bool eht_capab;
-	struct partner_link_info tmp_link_info;
-	uint32_t tmp_total_score = 0;
-	uint32_t assoc_score = 0;
-	uint32_t link_score[MLD_MAX_LINKS - 1] = {0};
-	bool is_assoc_link_best = true;
-	uint32_t assoc_band_score;
-	uint32_t link_band_score[MLD_MAX_LINKS - 1] = {0};
-	uint32_t total_band_score[MLD_MAX_LINKS - 1] = {0};
-
-	wlan_psoc_mlme_get_11be_capab(psoc, &eht_capab);
-	if (!eht_capab)
-		return 0;
-
-	weight_config = &score_params->weight_config;
-	freq_entry = entry->channel.chan_freq;
-	chan_width = cm_get_ch_width(entry, phy_config);
-	cong_score = cm_calculate_congestion_score(entry,
-						   score_params,
-						   &cong_pct, false);
-
-	assoc_score =
-		cm_calculate_bss_score(psoc, entry, pcl_chan_weight,
-				       NULL, scan_list, LINK_SCORE | ASSOC_LINK);
-	entry->ml_info.link_score = assoc_score;
-
-	assoc_band_score = cm_get_band_score(entry->channel.chan_freq,
-					     score_params);
-
-	link = &entry->ml_info.link_info[0];
-	for (i = 0; i < entry->ml_info.num_links; i++) {
-		if (!link[i].is_valid_link)
-			continue;
-		entry_partner[i] = cm_get_entry(scan_list, &link[i].link_addr);
-		if (entry_partner[i])
-			freq[i] = entry_partner[i]->channel.chan_freq;
-		else
-			freq[i] = link[i].freq;
-		if (!is_freq_dbs_or_sbs(psoc, freq[i], freq_entry)) {
-			mlme_nofl_debug("freq %d and %d can't be MLMR",
-					freq[i], freq_entry);
-			continue;
-		}
-
-		if (entry_partner[i]) {
-			link_score[i] =
-				cm_calculate_bss_score(psoc, entry_partner[i],
-						       pcl_chan_weight,
-						       NULL, scan_list, LINK_SCORE);
-			entry_partner[i]->ml_info.link_score = link_score[i];
-
-			rssi[i] = entry_partner[i]->rssi_raw;
-			ch_width[i] = cm_get_ch_width(entry_partner[i],
-						      phy_config);
-		} else {
-			rssi[i] = cm_estimate_rssi(entry->rssi_raw,
-						   freq_entry,
-						   freq[i]);
-			pdev = psoc->soc_objmgr.wlan_pdev_list[0];
-			ch_width[i] =
-				wlan_reg_get_op_class_width(pdev,
-							    link[i].op_class,
-							    true);
-			mlme_nofl_debug("No entry for partner, estimate with rnr");
-		}
-		rssi_mlo[i] =
-			cm_get_mlo_rssi(entry->rssi_raw, rssi[i],
-					chan_width, ch_width[i]);
-
-		rssi_score[i] =
-			cm_calculate_rssi_score(&score_params->rssi_score,
-						rssi_mlo[i],
-						weight_config->rssi_weightage);
-		prorated_pct[i] =
-			cm_get_rssi_prorate_pct(&score_params->rssi_score,
-						rssi_mlo[i],
-						weight_config->rssi_weightage);
-
-		bandwidth_score[i] =
-			cm_get_bw_score(weight_config->chan_width_weightage,
-					chan_width + ch_width[i],
-					prorated_pct[i]);
-
-		rssi_bad_zone = prorated_pct[i] < CM_MAX_PCT_SCORE;
-		congestion_score[i] =
-			cm_calculate_congestion_score(entry_partner[i],
-						      score_params,
-						      &congestion_pct[i],
-						      rssi_bad_zone);
-		cong_total_score[i] =
-			cm_get_mlo_congestion_score(chan_width,
-						    ch_width[i],
-						    cong_score,
-						    congestion_score[i],
-						    score_params);
-
-		link_band_score[i] = cm_get_band_score(freq[i], score_params);
-		total_band_score[i] =
-			(assoc_band_score + link_band_score[i]) / 2;
-
-		total_score[i] = rssi_score[i] + bandwidth_score[i] +
-				 cong_total_score[i] + total_band_score[i];
-		if (total_score[i] > best_total_score) {
-			best_total_score = total_score[i];
-			best_partner_index = i;
-		}
-
-		mlme_nofl_debug("ML idx %d score: freq (%d + %d) rssi %u pror %u bw %u congest %u %u %u band score: %u %u total %u",
-				i, freq_entry, freq[i], rssi_score[i],
-				prorated_pct[i], bandwidth_score[i], cong_score,
-				congestion_score[i], cong_total_score[i],
-				assoc_band_score, link_band_score[i],
-				total_score[i]);
-	}
-
-	*rssi_prorated_pct = prorated_pct[best_partner_index];
-
-	/* reorder the link idx per score */
-	for (j = 0; j < entry->ml_info.num_links; j++) {
-		tmp_total_score = total_score[j];
-		best_partner_index = j;
-		for (i = j + 1; i < entry->ml_info.num_links; i++) {
-			if (tmp_total_score < total_score[i]) {
-				tmp_total_score = total_score[i];
-				best_partner_index = i;
-			}
-		}
-
-		if (best_partner_index != j) {
-			tmp_link_info = entry->ml_info.link_info[j];
-			entry->ml_info.link_info[j] =
-				entry->ml_info.link_info[best_partner_index];
-			entry->ml_info.link_info[best_partner_index] =
-							tmp_link_info;
-			total_score[best_partner_index] = total_score[j];
-		}
-		total_score[j] = 0;
-	}
-
-	for (i = 0; i < entry->ml_info.num_links; i++) {
-		if (link_score[i] > assoc_score) {
-			is_assoc_link_best = false;
-			break;
-		}
-	}
-	if (is_assoc_link_best) {
-		mlme_nofl_debug("assoc link (freq %d) is best, boost %d",
-				freq_entry, CM_ASSOC_INK_BEST_BOOST);
-		best_total_score += CM_ASSOC_INK_BEST_BOOST;
-	}
-
-	best_total_score += weight_config->mlo_weightage *
-			    mlo_boost_pct[MLMR];
-	entry->ml_info.ml_bss_score = best_total_score;
-
-	return best_total_score;
-}
-
-#else
-static inline int cm_calculate_emlsr_score(struct weight_cfg *weight_config)
-{
-	return 0;
-}
-
-static int cm_calculate_mlo_bss_score(struct wlan_objmgr_psoc *psoc,
-				      struct scan_cache_entry *entry,
-				      struct scoring_cfg *score_params,
-				      struct psoc_phy_config *phy_config,
-				      qdf_list_t *scan_list,
-				      uint8_t *rssi_prorated_pct,
-				      int pcl_chan_weight)
-{
-	return 0;
-}
-#endif
-
-#if defined(WLAN_FEATURE_11BE_MLO) && defined(CONN_MGR_ADV_FEATURE)
-static void
-cm_sort_vendor_algo_mlo_bss_entry(struct wlan_objmgr_psoc *psoc,
-				  struct scan_cache_entry *entry,
-				  struct psoc_phy_config *phy_config,
-				  qdf_list_t *scan_list,
-				  enum MLO_TYPE bss_mlo_type)
-{
-	struct scan_cache_entry *entry_partner[MLD_MAX_LINKS - 1];
-	uint32_t freq[MLD_MAX_LINKS - 1];
-	uint32_t etp_score[MLD_MAX_LINKS - 1] = {0};
-	uint32_t total_score[MLD_MAX_LINKS - 1] = {0};
-	uint8_t i, j;
-	uint32_t best_total_score = 0;
-	uint8_t best_partner_index = 0;
-	uint32_t freq_entry;
-	struct partner_link_info *link;
-	bool eht_capab;
-	struct partner_link_info tmp_link_info;
-	uint32_t tmp_total_score = 0;
-	uint8_t mlo_support_link_num;
-
-	wlan_psoc_mlme_get_11be_capab(psoc, &eht_capab);
-	if (!eht_capab)
-		return;
-
-	mlo_support_link_num = wlan_mlme_get_sta_mlo_conn_max_num(psoc);
-	link = &entry->ml_info.link_info[0];
-	freq_entry = entry->channel.chan_freq;
-	for (i = 0; i < entry->ml_info.num_links; i++) {
-		if (!link[i].is_valid_link)
-			continue;
-
-		entry_partner[i] = cm_get_entry(scan_list, &link[i].link_addr);
-		if (entry_partner[i])
-			freq[i] = entry_partner[i]->channel.chan_freq;
-		else
-			freq[i] = link[i].freq;
-
-		if (policy_mgr_2_freq_always_on_same_mac(psoc, freq[i],
-							 freq_entry)) {
-			total_score[i] = 0;
-			if (!wlan_mlme_is_5gl_5gh_mlsr_supported(psoc)) {
-				mlme_nofl_debug("Partner(" QDF_MAC_ADDR_FMT " freq %d): assoc freq %d can't be MLMR",
-						QDF_MAC_ADDR_REF(link[i].link_addr.bytes),
-						freq[i], freq_entry);
-				if (mlo_support_link_num <= WLAN_MAX_ML_DEFAULT_LINK ||
-				    entry->ml_info.num_links <
-				    WLAN_MAX_ML_DEFAULT_LINK)
-					link[i].is_valid_link = false;
-			}
-			continue;
-		}
-
-		if (!entry_partner[i])
-			continue;
-
-		etp_score[i] = cm_calculate_etp_score(psoc, entry_partner[i],
-						      phy_config, bss_mlo_type,
-						      0);
-
-		total_score[i] = etp_score[i];
-		if (total_score[i] > best_total_score) {
-			best_total_score = total_score[i];
-			best_partner_index = i;
-		}
-	}
-
-	/* reorder the link idx per score */
-	for (j = 0; j < entry->ml_info.num_links; j++) {
-		tmp_total_score = total_score[j];
-		best_partner_index = j;
-		for (i = j + 1; i < entry->ml_info.num_links; i++) {
-			if (tmp_total_score < total_score[i]) {
-				tmp_total_score = total_score[i];
-				best_partner_index = i;
-			}
-		}
-
-		if (best_partner_index != j) {
-			tmp_link_info = entry->ml_info.link_info[j];
-			entry->ml_info.link_info[j] =
-				entry->ml_info.link_info[best_partner_index];
-			entry->ml_info.link_info[best_partner_index] =
-							tmp_link_info;
-			total_score[best_partner_index] = total_score[j];
-		}
-		total_score[j] = 0;
-	}
-}
-#else
-static void
-cm_sort_vendor_algo_mlo_bss_entry(struct wlan_objmgr_psoc *psoc,
-				  struct scan_cache_entry *entry,
-				  struct psoc_phy_config *phy_config,
-				  qdf_list_t *scan_list,
-				  enum MLO_TYPE bss_mlo_type)
-{}
-#endif
-
-/**
- * cm_calculate_ml_scores() - Calculate mlo score of AP
- * @psoc: Pointer to psoc object
- * @entry: Bss scan entry
- * @score_config: Score config
- * @phy_config: Self phy config
- * @scan_list: Scan entry list of bss candidates after filtering
- * @ml_flag: MLO flag
- * @bss_mlo_type: Bss MLO type
- * @pcl_chan_weight:  PCL channel weight
- * @rssi_prorated_pct: RSSI prorated pencentage
- *
- * For MLO AP, consider partner link to calculate combined score,
- * For legacy/SLO AP or link, get total score of RSSI, bandwidth,
- * congestion and band.
- *
- * Return: MLO score of AP
- */
-static int cm_calculate_ml_scores(struct wlan_objmgr_psoc *psoc,
-				  struct scan_cache_entry *entry,
-				  struct scoring_cfg *score_config,
-				  struct psoc_phy_config *phy_config,
-				  qdf_list_t *scan_list, uint8_t ml_flag,
-				  enum MLO_TYPE bss_mlo_type,
-				  int pcl_chan_weight,
-				  uint8_t *rssi_prorated_pct)
-{
-	int32_t score = 0;
-	int32_t rssi_score = 0;
-	int32_t congestion_pct = 0;
-	int32_t bandwidth_score = 0;
-	int32_t congestion_score = 0;
-	uint8_t prorated_pcnt = 0;
-	int32_t band_score = 0;
-	struct weight_cfg *weight_config;
-
-	weight_config = &score_config->weight_config;
-	if (IS_LINK_SCORE(ml_flag) || bss_mlo_type == SLO ||
-	    bss_mlo_type == MLSR ||
-	    !wlan_cm_is_eht_allowed_for_current_security(psoc, entry, false)) {
-		rssi_score =
-			cm_calculate_rssi_score(&score_config->rssi_score,
-						entry->rssi_raw,
-						weight_config->rssi_weightage);
-		prorated_pcnt =
-			cm_get_rssi_prorate_pct(&score_config->rssi_score,
-						entry->rssi_raw,
-						weight_config->rssi_weightage);
-		score += rssi_score;
-		bandwidth_score =
-			cm_get_bw_score(weight_config->chan_width_weightage,
-					cm_get_ch_width(entry, phy_config),
-					prorated_pcnt);
-		score += bandwidth_score;
-
-		congestion_score =
-			cm_calculate_congestion_score(entry,
-						      score_config,
-						      &congestion_pct, 0);
-		score += congestion_score * CM_SLO_CONGESTION_MAX_SCORE /
-			 CM_MAX_PCT_SCORE;
-
-		band_score = cm_get_band_score(entry->channel.chan_freq,
-					       score_config);
-		score += band_score;
-
-		if (bss_mlo_type == MLSR)
-			score += cm_calculate_emlsr_score(weight_config);
-	} else {
-		score += cm_calculate_mlo_bss_score(psoc, entry, score_config,
-						    phy_config, scan_list,
-						    &prorated_pcnt,
-						    pcl_chan_weight);
-	}
-
-	*rssi_prorated_pct = prorated_pcnt;
-
-	return score;
-}
-
-static bool
-cm_check_and_update_bssid_hint_entry_bss_score(struct scan_cache_entry *entry,
-					       struct scoring_cfg *score_config,
-					       struct qdf_mac_addr *bssid_hint,
-					       uint8_t ml_flag)
-{
-	if (!score_config->is_bssid_hint_priority)
-		return false;
-
-	if (!bssid_hint || !qdf_is_macaddr_equal(bssid_hint, &entry->bssid))
-		return false;
-
-	entry->bss_score = entry->bss_score + CM_BEST_CANDIDATE_MAX_BSS_SCORE;
-	mlme_nofl_debug("%s("QDF_MAC_ADDR_FMT" freq %d): rssi %d BSSID hint given, give max score %d",
-			IS_ASSOC_LINK(ml_flag) ? "Candidate" : "Partner",
-			QDF_MAC_ADDR_REF(entry->bssid.bytes),
-			entry->channel.chan_freq, entry->rssi_raw,
-			entry->bss_score);
-	return true;
-}
-
-#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
-static void cm_vendor_specific_boost(struct wlan_objmgr_psoc *psoc,
-				     struct scan_cache_entry *entry,
-				     int32_t score)
-{
-	struct partner_link_info *link = NULL;
-	uint32_t freq = 0;
-	uint32_t freq_entry = 0;
-
-	if (entry->ie_list.multi_link_bv) {
-		if (entry->ml_info.num_links == ONE_LINK) {
-			freq_entry = entry->channel.chan_freq;
-			link = &entry->ml_info.link_info[0];
-
-			if (!link[0].is_valid_link)
-				return;
-
-			freq = link[0].freq;
-
-			/* Add boost of 15% for one link MLMR candidate  */
-			if (!policy_mgr_are_2_freq_on_same_mac(psoc, freq,
-							       freq_entry))
-				score = score + (score *
-						 (LINK_BOOST +
-						  ONE_LINK_MLMR_BOOST)) / 100;
-			else
-				score = score + (score * (LINK_BOOST)) / 100;
-		} else if (entry->ml_info.num_links > ONE_LINK) {
-			/* Add boost of 5%/per link for MLO candidate */
-			score = score  + (score * (entry->ml_info.num_links * LINK_BOOST)) / 100;
-		} else {
-			/* Add boost of 5% for SLO candidate  */
-			score = score  + (score * (SLO_BOOST)) / 100;
-		}
-	}
-
-	entry->bss_score = score;
-}
-#else
-static void cm_vendor_specific_boost(struct wlan_objmgr_psoc *psoc,
-				     struct scan_cache_entry *entry,
-				     int32_t score)
-{
-}
-#endif
-
-/**
- * cm_calculate_bss_score() - Calculate score of AP or 1 link of MLO AP
- * @psoc: Pointer to psoc object
- * @entry: Bss scan entry
- * @pcl_chan_weight: pcl chan weight
- * @bssid_hint: bssid hint
- * @scan_list: Scan entry list of bss candidates after filtering
- * @ml_flag: ML related bitmap
- *           BIT(0): SET, if score is for link.
- *           BIT(1): SET, if it is for Assoc link.
- *
- * For MLO AP, consider partner link to calculate combined score, prefer to
- * select best link as assoc link.
- * For legacy AP or 1 link of MLO AP, just consider single link.
- * Prefer to select AP of higher score to connect by sort AP by score.
- *
- * Return: score of AP or 1 link of MLO AP
- */
-static int cm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
-				  struct scan_cache_entry *entry,
-				  int pcl_chan_weight,
-				  struct qdf_mac_addr *bssid_hint,
-				  qdf_list_t *scan_list,
-				  uint8_t ml_flag)
+				  struct qdf_mac_addr *bssid_hint)
 {
 	int32_t score = 0;
 	int32_t rssi_score = 0;
@@ -2525,7 +1670,7 @@ static int cm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 	bool oce_subnet_id_present = 0;
 	bool sae_pk_cap_present = 0;
 	int8_t ap_tx_pwr_dbm = 0;
-	uint8_t prorated_pcnt = 0;
+	uint8_t prorated_pcnt;
 	bool is_vht = false;
 	int8_t good_rssi_threshold;
 	int8_t rssi_pref_5g_rssi_thresh;
@@ -2539,8 +1684,6 @@ static int cm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 	struct psoc_mlme_obj *mlme_psoc_obj;
 	struct psoc_phy_config *phy_config;
 	uint32_t eht_score;
-	enum MLO_TYPE bss_mlo_type;
-	int ml_score = 0;
 
 	mlme_psoc_obj = wlan_psoc_mlme_get_cmpt_obj(psoc);
 	if (!mlme_psoc_obj)
@@ -2550,51 +1693,33 @@ static int cm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 	score_config = &mlme_psoc_obj->psoc_cfg.score_config;
 	weight_config = &score_config->weight_config;
 
-	bss_mlo_type = cm_bss_mlo_type(psoc, entry, scan_list);
-	if (score_config->vendor_roam_score_algorithm) {
-		score = cm_calculate_etp_score(psoc, entry, phy_config,
-					       bss_mlo_type, ml_flag);
-		entry->bss_score = score;
-		if (bss_mlo_type == MLMR || bss_mlo_type == MLSR)
-			cm_sort_vendor_algo_mlo_bss_entry(psoc, entry,
-							  phy_config, scan_list,
-							  bss_mlo_type);
-		/* vendor specific boost */
-		cm_vendor_specific_boost(psoc, entry, score);
-
-		if (cm_check_and_update_bssid_hint_entry_bss_score(entry,
-								   score_config,
-								   bssid_hint,
-								   ml_flag))
-			return CM_BEST_CANDIDATE_MAX_BSS_SCORE;
-
-		mlme_nofl_debug("Candidate score("QDF_MAC_ADDR_FMT" freq %d): rssi %d score %d",
+	if (score_config->is_bssid_hint_priority && bssid_hint &&
+	    qdf_is_macaddr_equal(bssid_hint, &entry->bssid)) {
+		entry->bss_score = CM_BEST_CANDIDATE_MAX_BSS_SCORE;
+		mlme_nofl_debug("Candidate("QDF_MAC_ADDR_FMT" freq %d): rssi %d BSSID hint given, give max score %d",
 				QDF_MAC_ADDR_REF(entry->bssid.bytes),
 				entry->channel.chan_freq,
-				entry->rssi_raw, entry->bss_score);
-
+				entry->rssi_raw,
+				CM_BEST_CANDIDATE_MAX_BSS_SCORE);
+		return CM_BEST_CANDIDATE_MAX_BSS_SCORE;
+	}
+	if (score_config->vendor_roam_score_algorithm) {
+		score = cm_calculate_etp_score(psoc, entry, phy_config);
+		entry->bss_score = score;
 		return score;
 	}
-
-	ml_score += cm_calculate_ml_scores(psoc, entry, score_config,
-					   phy_config, scan_list,
-					   ml_flag, bss_mlo_type,
-					   pcl_chan_weight,
-					   &prorated_pcnt);
-	score += ml_score;
-
-	/*
-	 * Check if the given entry matches with the BSSID Hint after
-	 * calculating ML Scores as the cm_calculate_ml_scores() also sorts
-	 * the partner links based on hw mode capabilities & link scores
-	 */
-	if (cm_check_and_update_bssid_hint_entry_bss_score(entry, score_config,
-							   bssid_hint, ml_flag))
-		return CM_BEST_CANDIDATE_MAX_BSS_SCORE;
+	rssi_score = cm_calculate_raw_rssi_score(&score_config->rssi_score,
+						 entry->rssi_raw,
+						 weight_config->rssi_weightage);
+	score += rssi_score;
 
 	pcl_score = cm_calculate_pcl_score(psoc, pcl_chan_weight,
 					   weight_config->pcl_weightage);
 	score += pcl_score;
+
+	prorated_pcnt = cm_roam_calculate_prorated_pcnt_by_rssi(
+				&score_config->rssi_score, entry->rssi_raw,
+				weight_config->rssi_weightage);
 
 	/*
 	 * Add HT weight if HT is supported by the AP. In case
@@ -2624,8 +1749,13 @@ static int cm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 
 	if (phy_config->he_cap && entry->ie_list.hecap)
 		he_score = prorated_pcnt *
-			   weight_config->he_caps_weightage;
+				 weight_config->he_caps_weightage;
 	score += he_score;
+
+	bandwidth_score = cm_calculate_bandwidth_score(entry, score_config,
+						       phy_config,
+						       prorated_pcnt);
+	score += bandwidth_score;
 
 	good_rssi_threshold =
 		score_config->rssi_score.good_rssi_threshold * (-1);
@@ -2645,8 +1775,6 @@ static int cm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 		   WLAN_HE_PHYCAP_SU_BFER_OFFSET), WLAN_HE_PHYCAP_SU_BFER_IDX,
 		   WLAN_HE_PHYCAP_SU_BFER_BITS)) {
 		ap_su_beam_former = true;
-	} else {
-		ap_su_beam_former = cm_get_su_beam_former(entry);
 	}
 
 	if (phy_config->beamformee_cap && is_vht &&
@@ -2656,11 +1784,32 @@ static int cm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 				weight_config->beamforming_cap_weightage;
 	score += beamformee_score;
 
+	congestion_score = cm_calculate_congestion_score(entry, score_config,
+							 &congestion_pct);
+	score += congestion_score;
 	/*
-	 * Consider OCE WAN score score only if
+	 * Consider OCE WAN score and band preference score only if
 	 * congestion_pct is greater than CONGESTION_THRSHOLD_FOR_BAND_OCE_SCORE
 	 */
 	if (congestion_pct < CM_CONGESTION_THRSHOLD_FOR_BAND_OCE_SCORE) {
+		/*
+		 * If AP is on 5/6 GHZ channel , extra weigtage is added to BSS
+		 * score. if RSSI is greater tha 5g rssi threshold or fall in
+		 * same bucket else give weigtage to 2.4 GHZ AP.
+		 */
+		if ((entry->rssi_raw > rssi_pref_5g_rssi_thresh) &&
+		    !same_bucket) {
+			if (!WLAN_REG_IS_24GHZ_CH_FREQ(entry->channel.chan_freq))
+				band_score = cm_get_band_score(
+						entry->channel.chan_freq,
+						score_config);
+		} else if (WLAN_REG_IS_24GHZ_CH_FREQ(
+			   entry->channel.chan_freq)) {
+			band_score = cm_get_band_score(entry->channel.chan_freq,
+						       score_config);
+		}
+		score += band_score;
+
 		oce_wan_score = cm_calculate_oce_wan_score(entry, score_config);
 		score += oce_wan_score;
 	}
@@ -2698,49 +1847,33 @@ static int cm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 	 */
 	security_score = cm_calculate_security_score(score_config,
 						     entry->neg_sec_info);
+
 	score += security_score;
 
-	eht_score = cm_calculate_eht_score(psoc, entry, score_config,
-					   phy_config,
-					   prorated_pcnt);
+	eht_score = cm_calculate_eht_score(entry, score_config, phy_config);
+
 	score += eht_score;
 
-	if (!(IS_LINK_SCORE(ml_flag))) {
-		/* Add boost of 10% for one partner link MLMR candidate  */
-		if (bss_mlo_type == MLMR)
-			score = score + (score * ONE_LINK_MLMR_BOOST) / 100;
-
-		entry->bss_score = score;
-	}
-
-	if (bss_mlo_type == SLO || IS_LINK_SCORE(ml_flag))
-		mlme_nofl_debug("%s("QDF_MAC_ADDR_FMT" freq %d): rssi %d HT %d VHT %d HE %d EHT %d su_bfer %d phy %d atf %d qbss %d cong_pct %d NSS %d ap_tx_pwr %d oce_subnet %d sae_pk_cap %d prorated_pcnt %d keymgmt 0x%x mlo type %d",
-				IS_ASSOC_LINK(ml_flag) ? "Candidate" : "Partner",
-				QDF_MAC_ADDR_REF(entry->bssid.bytes),
-				entry->channel.chan_freq,
-				entry->rssi_raw,
-				util_scan_entry_htcap(entry) ? 1 : 0,
-				util_scan_entry_vhtcap(entry) ? 1 : 0,
-				util_scan_entry_hecap(entry) ? 1 : 0,
-				util_scan_entry_ehtcap(entry) ? 1 : 0,
-				ap_su_beam_former,
-				entry->phy_mode, entry->air_time_fraction,
-				entry->qbss_chan_load, congestion_pct,
-				entry->nss, ap_tx_pwr_dbm,
-				oce_subnet_id_present, sae_pk_cap_present,
-				prorated_pcnt, entry->neg_sec_info.key_mgmt,
-				bss_mlo_type);
-
-	mlme_nofl_debug("%s score("QDF_MAC_ADDR_FMT" freq %d): rssi %d pcl %d ht %d vht %d he %d bfee %d bw %d band %d cong %d nss %d oce_wan %d oce_ap_pwr %d oce_subnet %d sae_pk %d eht %d security %d ml %d TOTAL %d",
-			IS_LINK_SCORE(ml_flag) ? "Link" : "Candidate",
+	mlme_nofl_debug("Candidate("QDF_MAC_ADDR_FMT" freq %d): rssi %d HT %d VHT %d HE %d su bfer %d phy %d  air time frac %d qbss %d cong_pct %d NSS %d ap_tx_pwr_dbm %d oce_subnet_id_present %d sae_pk_cap_present %d prorated_pcnt %d keymgmt 0x%x",
 			QDF_MAC_ADDR_REF(entry->bssid.bytes),
 			entry->channel.chan_freq,
+			entry->rssi_raw, util_scan_entry_htcap(entry) ? 1 : 0,
+			util_scan_entry_vhtcap(entry) ? 1 : 0,
+			util_scan_entry_hecap(entry) ? 1 : 0, ap_su_beam_former,
+			entry->phy_mode, entry->air_time_fraction,
+			entry->qbss_chan_load, congestion_pct, entry->nss,
+			ap_tx_pwr_dbm, oce_subnet_id_present,
+			sae_pk_cap_present, prorated_pcnt,
+			entry->neg_sec_info.key_mgmt);
+
+	mlme_nofl_debug("Scores: rssi %d pcl %d ht %d vht %d he %d bfee %d bw %d band %d congestion %d nss %d oce wan %d oce ap tx pwr %d subnet %d sae_pk %d eht %d security %d TOTAL %d",
 			rssi_score, pcl_score, ht_score,
 			vht_score, he_score, beamformee_score, bandwidth_score,
 			band_score, congestion_score, nss_score, oce_wan_score,
 			oce_ap_tx_pwr_score, oce_subnet_id_score,
-			sae_pk_score, eht_score, security_score, ml_score,
-			score);
+			sae_pk_score, eht_score, security_score, score);
+
+	entry->bss_score = score;
 
 	return score;
 }
@@ -2769,570 +1902,10 @@ static void cm_list_insert_sorted(qdf_list_t *scan_list,
 		qdf_list_insert_back(scan_list, &scan_entry->node);
 }
 
-#ifdef CONN_MGR_ADV_FEATURE
-/**
- * cm_is_bad_rssi_entry() - check the entry have rssi value, if rssi is lower
- * than threshold limit, then it is considered ad bad rssi value.
- * @scan_entry: pointer to scan cache entry
- * @score_config: pointer to score config structure
- * @bssid_hint: bssid hint
- *
- * Return: true if rssi is lower than threshold
- */
-static
-bool cm_is_bad_rssi_entry(struct scan_cache_entry *scan_entry,
-			  struct scoring_cfg *score_config,
-			  struct qdf_mac_addr *bssid_hint)
-{
-	int8_t rssi_threshold =
-		score_config->rssi_score.con_non_hint_target_rssi_threshold;
-
-	 /* do not need to consider BSSID hint if it is invalid entry(zero) */
-	if (qdf_is_macaddr_zero(bssid_hint))
-		return false;
-
-	if (score_config->is_bssid_hint_priority &&
-	    !qdf_is_macaddr_equal(bssid_hint, &scan_entry->bssid) &&
-	    scan_entry->rssi_raw < rssi_threshold) {
-		mlme_nofl_debug("Candidate(" QDF_MAC_ADDR_FMT "  freq %d): remove entry, rssi %d lower than rssi_threshold %d",
-				QDF_MAC_ADDR_REF(scan_entry->bssid.bytes),
-				scan_entry->channel.chan_freq,
-				scan_entry->rssi_raw, rssi_threshold);
-		return true;
-	}
-
-	return false;
-}
-
-/**
- * cm_update_bss_score_for_mac_addr_matching() - boost score based on mac
- * address matching
- * @scan_entry: pointer to scan cache entry
- * @self_mac: pointer to bssid to be matched
- *
- * Some IOT APs only allow to connect if last 3 bytes of BSSID
- * and self MAC is same. They create a new bssid on receiving
- * unicast probe/auth req from STA and allow STA to connect to
- * this matching BSSID only. So boost the matching BSSID to try
- * to connect to this BSSID.
- *
- * Return: void
- */
-static void
-cm_update_bss_score_for_mac_addr_matching(struct scan_cache_node *scan_entry,
-					  struct qdf_mac_addr *self_mac)
-{
-	struct qdf_mac_addr *scan_entry_bssid;
-
-	if (!self_mac)
-		return;
-	scan_entry_bssid = &scan_entry->entry->bssid;
-	if (QDF_IS_LAST_3_BYTES_OF_MAC_SAME(
-		self_mac, scan_entry_bssid)) {
-		mlme_nofl_debug("Candidate("QDF_MAC_ADDR_FMT" freq %d): boost bss score due to same last 3 byte match",
-				QDF_MAC_ADDR_REF(
-				scan_entry_bssid->bytes),
-				scan_entry->entry->channel.chan_freq);
-		scan_entry->entry->bss_score =
-			CM_BEST_CANDIDATE_MAX_BSS_SCORE;
-	}
-}
-#else
-static inline
-bool cm_is_bad_rssi_entry(struct scan_cache_entry *scan_entry,
-			  struct scoring_cfg *score_config,
-			  struct qdf_mac_addr *bssid_hint)
-
-{
-	return false;
-}
-
-static void
-cm_update_bss_score_for_mac_addr_matching(struct scan_cache_node *scan_entry,
-					  struct qdf_mac_addr *self_mac)
-{
-}
-#endif
-
-#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
-void cm_print_candidate_list(qdf_list_t *candidate_list)
-{
-	struct scan_cache_node *scan_entry = NULL;
-	qdf_list_node_t *cur_node = NULL, *next_node = NULL;
-	uint32_t freq_entry = 0;
-	struct partner_link_info *link = NULL;
-	uint8_t i = 0;
-	uint32_t len = 0;
-	char log_str[CANDIDATE_DUMP_MAX_LEN] = {0};
-	uint32_t str_len = CANDIDATE_DUMP_MAX_LEN;
-
-	if (qdf_list_peek_front(candidate_list, &cur_node) !=
-	    QDF_STATUS_SUCCESS) {
-		mlme_err("failed to get front of candidate_list");
-		return;
-	}
-	while (cur_node) {
-		qdf_list_peek_next(candidate_list, cur_node, &next_node);
-
-		scan_entry = qdf_container_of(cur_node, struct scan_cache_node,
-					      node);
-		link = scan_entry->entry->ml_info.link_info;
-		freq_entry = scan_entry->entry->channel.chan_freq;
-
-		if (scan_entry->entry->ml_info.num_links)
-			len += qdf_scnprintf(log_str + len, str_len - len, "num_link %d partners ",
-					     scan_entry->entry->ml_info.num_links);
-		for (i = 0; i < scan_entry->entry->ml_info.num_links; i++)
-			len += qdf_scnprintf(log_str + len, str_len - len, QDF_MAC_ADDR_FMT " freq (%d) link_id %d is_valid_link %d ",
-					     QDF_MAC_ADDR_REF(link[i].link_addr.bytes),
-					     link[i].freq, link[i].link_id,
-					     link[i].is_valid_link);
-			mlme_nofl_debug("Candidate(" QDF_MAC_ADDR_FMT " %s freq %d self_link_id %d): %s bss_score %d ",
-			   QDF_MAC_ADDR_REF(scan_entry->entry->bssid.bytes),
-			   scan_entry->entry->ie_list.multi_link_bv ? "MLO" :
-			   "NON MLO",
-			   scan_entry->entry->channel.chan_freq,
-			   scan_entry->entry->ml_info.self_link_id,
-			   log_str,
-			   scan_entry->entry->bss_score);
-		cur_node = next_node;
-		next_node = NULL;
-		memset(log_str, 0, sizeof(*log_str));
-		len = 0;
-	}
-}
-
-/**
- * cm_find_and_remove_dup_candidate() - remove duplicate candidate
- * @bss_entry: bss scan entry
- * @next_can: next candidate
- * @candidate_list: candidate list
- *
- * Ex1:
- * Single AP1 3 link  6 GHz 2 GHz 5 GHz
- *
- * All possible combination of candidate[INPUT]
- * AP1 6 GHz + 2 GHz + 5 GHz
- * AP1 6 GHz + 2 GHz
- * AP1 6 GHz + 5 GHz
- * AP1 6 GHz
- * AP1 2 GHz + 5 GHz + 6 GHz
- * AP1 2 GHz + 5 GHz
- * AP1 2 GHz + 6 GHz
- * AP1 2 GHz
- * AP1 5 GHz + 6 GHz + 2 GHz
- * AP1 5 GHz + 6 GHz
- * AP1 5 GHz + 2 GHz
- * AP1 5 GHz
- *
- * All possible valid unique combination of candidate after applying [OUTPUT]
- * filter.
- * AP1 6 GHz + 2 GHz + 5 GHz
- * AP1 6 GHz + 2 GHz
- * AP1 6 GHz + 5 GHz
- * AP1 6 GHz
- * AP1 5 GHz + 2 GHz
- * AP1 5 GHz
- * AP1 2 GHz
- *
- * Return: none
- */
-static void cm_find_and_remove_dup_candidate(struct scan_cache_node *bss_entry,
-					     qdf_list_node_t  *next_can,
-					     qdf_list_t *candidate_list)
-{
-	qdf_list_node_t *cur_node = NULL, *next_node = NULL;
-	struct scan_cache_node *scan_node;
-	uint8_t i = 0, j = 0;
-	int match = 0;
-	uint8_t bss_num_link = 0, curr_num_link = 0;
-	struct partner_link_info *cur_can = NULL, *bss_can = NULL;
-	uint32_t size = 0;
-
-	bss_num_link = bss_entry->entry->ml_info.num_links;
-
-	cur_node = next_can;
-	size = qdf_list_size(candidate_list);
-
-	while (cur_node && size > 0) {
-		qdf_list_peek_next(candidate_list, cur_node, &next_node);
-
-		scan_node  = qdf_container_of(cur_node, struct scan_cache_node,
-					      node);
-		curr_num_link = scan_node->entry->ml_info.num_links;
-		cur_can = scan_node->entry->ml_info.link_info;
-		bss_can = bss_entry->entry->ml_info.link_info;
-
-		if (scan_node->entry->ml_info.num_links !=
-		    bss_entry->entry->ml_info.num_links)
-			goto next;
-
-		match = 0;
-		for (i = 0; i < bss_num_link; i++)
-			if ((bss_entry->entry->ie_list.multi_link_bv &&
-			     scan_node->entry->ie_list.multi_link_bv) &&
-			    (qdf_is_macaddr_equal(&bss_entry->entry->bssid,
-						 &scan_node->entry->bssid) ||
-			    qdf_is_macaddr_equal(&bss_entry->entry->bssid,
-						 &cur_can[i].link_addr)))
-				match++;
-		for (i = 0; i < bss_num_link; i++) {
-			for (j = 0; j < curr_num_link; j++) {
-				if (cur_can[j].is_valid_link &&
-				    (qdf_is_macaddr_equal(
-						&cur_can[j].link_addr,
-						&bss_can[i].link_addr) ||
-				    qdf_is_macaddr_equal(
-						&cur_can[j].link_addr,
-						&bss_can[i].link_addr) ||
-				    qdf_is_macaddr_equal(
-						&scan_node->entry->bssid,
-						&bss_can[i].link_addr))) {
-					match++;
-					if (match == bss_num_link + 1) {
-						qdf_list_remove_node(
-							candidate_list,
-							cur_node);
-						util_scan_free_cache_entry(
-							scan_node->entry);
-						qdf_mem_free(cur_node);
-						goto next;
-					}
-				}
-			}
-		}
-next:
-	cur_node = next_node;
-	next_node = NULL;
-	size--;
-	}
-}
-
-#if defined(FEATURE_DENYLIST_MGR) && defined(WLAN_FEATURE_11BE_MLO)
-/**
- * cm_add_11_ax_candidate() - update candidate list with 11AX candidate
- * @pdev: pdev object
- * @candidate_list: candidate list
- * @scan_entry: scan entry node
- *
- * This API update candidate list with new 11AX candidate.
- *
- *Return: NA
- */
-static void
-cm_add_11_ax_candidate(struct wlan_objmgr_pdev *pdev,
-		       qdf_list_t *candidate_list,
-		       struct scan_cache_node *scan_entry)
-{
-	struct scan_cache_node *scan_node = NULL;
-	struct scan_cache_entry *tmp_scan_entry = NULL;
-
-	tmp_scan_entry = util_scan_copy_cache_entry(scan_entry->entry);
-	if (!tmp_scan_entry) {
-		mlme_err("Copy cache entry failed");
-		return;
-	}
-
-	/* Add 11AX entry for MLO Candidate */
-	if (!tmp_scan_entry->ie_list.multi_link_bv) {
-		util_scan_free_cache_entry(tmp_scan_entry);
-		return;
-	}
-
-	scan_node = qdf_mem_malloc_atomic(sizeof(*scan_node));
-	if (!scan_node) {
-		util_scan_free_cache_entry(tmp_scan_entry);
-		return;
-	}
-	tmp_scan_entry->ml_info.num_links = 0;
-	tmp_scan_entry->mlo_max_recom_simult_links = 0;
-	tmp_scan_entry->ie_list.multi_link_bv = NULL;
-	tmp_scan_entry->ie_list.ehtcap = NULL;
-	tmp_scan_entry->ie_list.ehtop = NULL;
-	tmp_scan_entry->channel.puncture_bitmap = 0;
-	qdf_mem_zero(&tmp_scan_entry->ml_info, sizeof(struct ml_info));
-	tmp_scan_entry->phy_mode =
-		util_scan_get_phymode(pdev, tmp_scan_entry);
-
-	scan_node->entry = tmp_scan_entry;
-	qdf_list_insert_after(candidate_list, &scan_node->node,
-			      &scan_entry->node);
-}
-#else
-static inline void
-cm_add_11_ax_candidate(struct wlan_objmgr_pdev *pdev,
-		       qdf_list_t *candidate_list,
-		       struct scan_cache_node *scan_entry)
-{};
-#endif
-
-static bool cm_is_slo_candidate_allowed(struct wlan_objmgr_psoc *psoc,
-					struct scan_cache_entry *scan_entry)
-{
-	struct action_oui_search_attr attr = {0};
-
-	attr.ie_data = util_scan_entry_ie_data(scan_entry);
-	attr.ie_length = util_scan_entry_ie_len(scan_entry);
-
-	if (wlan_action_oui_search(psoc, &attr,
-				   ACTION_OUI_RESTRICT_MAX_MLO_LINKS)) {
-		mlme_debug("IoT AP " QDF_MAC_ADDR_FMT
-			   " slo candidate not allowed",
-			   QDF_MAC_ADDR_REF(scan_entry->bssid.bytes));
-		return false;
-	}
-
-	return true;
-}
-
-/**
- * cm_mlo_generate_candidate_list() - generate candidate list
- * @pdev: pdev object
- * @candidate_list: candidate list
- *
- * For any candidate list this api generates all possible unique
- * candidates from mlo candidates
- * Input candidate list
- * c1 6 GHz + 2 GHz + 5 GHz
- * c2 2 GHz + 5 GHz + 6 GHz
- * c3 5 GHz + 6 GHz + 2 GHz
- *
- * Output candidate list
- * AP1 6 GHz + 2 GHz + 5 GHz
- * AP1 6 GHz + 2 GHz
- * AP1 6 GHz + 5 GHz
- * AP1 6 GHz
- * AP1 2 GHz + 5 GHz + 6 GHz
- * AP1 2 GHz + 5 GHz
- * AP1 2 GHz + 6 GHz
- * AP1 2 GHz
- * AP1 5 GHz + 6 GHz + 2 GHz
- * AP1 5 GHz + 6 GHz
- * AP1 5 GHz + 2 GHz
- * AP1 5 GHz
- *
- * Return none
- */
-static void cm_mlo_generate_candidate_list(struct wlan_objmgr_pdev *pdev,
-					   qdf_list_t *candidate_list)
-{
-	struct scan_cache_entry *tmp_scan_entry = NULL;
-	struct scan_cache_node *scan_entry = NULL, *scan_node = NULL;
-	qdf_list_node_t *cur_node = NULL, *next_node = NULL;
-	struct partner_link_info *link = NULL;
-	struct partner_link_info tmp = {0};
-	uint32_t num_link = 0;
-	uint32_t i = 0;
-	uint32_t j = 0;
-	struct wlan_objmgr_psoc *psoc;
-	bool is_slo_candidate_allowed = true;
-
-	psoc = wlan_pdev_get_psoc(pdev);
-	if (!psoc) {
-		mlme_err("psoc NULL");
-		return;
-	}
-
-	if (qdf_list_peek_front(candidate_list, &cur_node) !=
-	    QDF_STATUS_SUCCESS) {
-		mlme_err("failed to get front of candidate_list");
-		return;
-	}
-
-	while (cur_node) {
-		qdf_list_peek_next(candidate_list, cur_node, &next_node);
-
-		scan_entry = qdf_container_of(cur_node, struct scan_cache_node,
-					      node);
-		num_link = scan_entry->entry->ml_info.num_links;
-
-		is_slo_candidate_allowed =
-			cm_is_slo_candidate_allowed(psoc, scan_entry->entry);
-		if (!is_slo_candidate_allowed)
-			goto next;
-
-		for (i = 0; i < num_link; i++) {
-			tmp_scan_entry = util_scan_copy_cache_entry(
-						scan_entry->entry);
-			scan_node = qdf_mem_malloc_atomic(sizeof(*scan_node));
-			if (!scan_node) {
-				util_scan_free_cache_entry(tmp_scan_entry);
-				goto next;
-			}
-
-			scan_node->entry = tmp_scan_entry;
-			scan_node->entry->ml_info.num_links = i;
-			link = scan_node->entry->ml_info.link_info;
-			for (j = i; j < num_link; j++)
-				link[j].is_valid_link = false;
-			qdf_list_insert_after(candidate_list,
-					      &scan_node->node,
-					      &scan_entry->node);
-
-			if (i == 1) {
-				tmp_scan_entry = util_scan_copy_cache_entry(
-							scan_entry->entry);
-				scan_node = qdf_mem_malloc_atomic(
-						sizeof(*scan_node));
-				if (!scan_node) {
-					util_scan_free_cache_entry(
-							tmp_scan_entry);
-					goto next;
-				}
-
-				scan_node->entry = tmp_scan_entry;
-				scan_node->entry->ml_info.num_links = i;
-				link = scan_node->entry->ml_info.link_info;
-				tmp  = link[1];
-				link[1] = link[0];
-				link[0] = tmp;
-				for (j = i; j < num_link; j++)
-					link[j].is_valid_link = false;
-				qdf_list_insert_after(candidate_list,
-						      &scan_node->node,
-						      &scan_entry->node);
-			}
-		}
-
-		cm_add_11_ax_candidate(pdev, candidate_list, scan_entry);
-next:
-		cur_node = next_node;
-		next_node = NULL;
-	}
-}
-
-static void cm_eliminate_common_candidate(qdf_list_t *candidate_list)
-{
-	struct scan_cache_node *scan_entry = NULL;
-	qdf_list_node_t *cur_node = NULL, *next_node = NULL;
-	uint32_t size = 0;
-	QDF_STATUS status;
-
-	size = qdf_list_size(candidate_list);
-
-	if (qdf_list_peek_front(candidate_list, &cur_node) !=
-		QDF_STATUS_SUCCESS) {
-		mlme_err("failed to get front of candidate_list");
-		return;
-	}
-
-	while (cur_node && size > 0) {
-		qdf_list_peek_next(candidate_list, cur_node, &next_node);
-
-		scan_entry = qdf_container_of(cur_node,
-					      struct scan_cache_node, node);
-
-		cm_find_and_remove_dup_candidate(scan_entry,
-						 next_node, candidate_list);
-
-		/*
-		 * Find next again as next entry might have deleted.
-		 * If reach end of list, next_node won't be updated, may still
-		 * be freed node, but it's next is itself, qdf_list_peek_next
-		 * will return QDF_STATUS_E_EMPTY, need break loop, or double
-		 * free will happen.
-		 */
-		status = qdf_list_peek_next(candidate_list, cur_node,
-					    &next_node);
-		if (QDF_IS_STATUS_ERROR(status))
-			break;
-
-		cur_node = next_node;
-		next_node = NULL;
-		size--;
-	}
-}
-
-static void cm_validate_partner_links(struct wlan_objmgr_psoc *psoc,
-				      struct scan_cache_entry *entry,
-				      qdf_list_t *scan_list)
-{
-	uint8_t idx;
-	struct scan_cache_entry *partner_entry;
-	struct partner_link_info *partner_info;
-	struct wlan_objmgr_peer *peer;
-
-	if (!entry->ie_list.multi_link_bv || !entry->ml_info.num_links)
-		return;
-
-	for (idx = 0; idx < entry->ml_info.num_links; idx++) {
-		partner_info = &entry->ml_info.link_info[idx];
-		if (!partner_info->is_valid_link)
-			continue;
-
-		peer = wlan_objmgr_get_peer_by_mac(psoc,
-						   partner_info->link_addr.bytes,
-						   WLAN_MLME_CM_ID);
-		if (peer) {
-			mlme_debug(QDF_MAC_ADDR_FMT "link (%d) dup peer existed",
-				   QDF_MAC_ADDR_REF(partner_info->link_addr.bytes),
-				   partner_info->freq);
-			partner_info->is_valid_link = false;
-			wlan_objmgr_peer_release_ref(peer, WLAN_MLME_CM_ID);
-			continue;
-		}
-
-		if (partner_info->link_id == entry->ml_info.self_link_id) {
-			mlme_err(QDF_MAC_ADDR_FMT " dup link id %d",
-				 QDF_MAC_ADDR_REF(partner_info->link_addr.bytes),
-				 partner_info->link_id);
-			partner_info->is_valid_link = false;
-		}
-
-		if (qdf_is_macaddr_equal(&partner_info->link_addr,
-					 &entry->bssid)) {
-			mlme_err(QDF_MAC_ADDR_FMT " link id %d dup mac",
-				 QDF_MAC_ADDR_REF(partner_info->link_addr.bytes),
-				 partner_info->link_id);
-			partner_info->is_valid_link = false;
-		}
-
-		/*
-		 * If partner link is not found in the current candidate list
-		 * don't treat it as failure, it can be removed post ML
-		 * probe resp generation time.
-		 */
-		partner_entry = cm_get_entry(scan_list,
-					     &partner_info->link_addr);
-		if (!partner_entry)
-			continue;
-
-		if (wlan_scan_entries_contain_cmn_akm(entry, partner_entry) &&
-		    wlan_cm_is_eht_allowed_for_current_security(psoc,
-								partner_entry,
-								true)) {
-			continue;
-		}
-
-		partner_info->is_valid_link = false;
-		mlme_debug(QDF_MAC_ADDR_FMT "link (%d) akm not matching",
-			   QDF_MAC_ADDR_REF(partner_entry->bssid.bytes),
-			   partner_info->freq);
-	}
-}
-#else
-static inline void
-cm_mlo_generate_candidate_list(struct wlan_objmgr_pdev *pdev,
-			       qdf_list_t *candidate_list)
-{
-}
-
-static void cm_eliminate_common_candidate(qdf_list_t *candidate_list)
-{
-}
-
-static inline void
-cm_validate_partner_links(struct wlan_objmgr_psoc *psoc,
-			  struct scan_cache_entry *entry,
-			  qdf_list_t *scan_list)
-{
-}
-#endif
 void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 				 struct pcl_freq_weight_list *pcl_lst,
 				 qdf_list_t *scan_list,
-				 struct qdf_mac_addr *bssid_hint,
-				 struct qdf_mac_addr *self_mac)
+				 struct qdf_mac_addr *bssid_hint)
 {
 	struct scan_cache_node *scan_entry;
 	qdf_list_node_t *cur_node = NULL, *next_node = NULL;
@@ -3341,12 +1914,11 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 	int pcl_chan_weight;
 	QDF_STATUS status;
 	struct psoc_phy_config *config;
-	enum cm_denylist_action denylist_action;
+	enum cm_blacklist_action blacklist_action;
 	struct wlan_objmgr_psoc *psoc;
 	bool assoc_allowed;
 	struct scan_cache_node *force_connect_candidate = NULL;
-	bool are_all_candidate_denylisted = true;
-	bool is_rssi_bad = false;
+	bool are_all_candidate_blacklisted = true;
 
 	psoc = wlan_pdev_get_psoc(pdev);
 
@@ -3366,14 +1938,12 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 	score_config = &mlme_psoc_obj->psoc_cfg.score_config;
 	config = &mlme_psoc_obj->psoc_cfg.phy_config;
 
-	mlme_nofl_debug("Self caps: HT %d VHT %d HE %d EHT %d VHT_24Ghz %d BF cap %d bw_above_20_24ghz %d bw_above_20_5ghz %d 2.4G NSS %d 5G NSS %d",
+	mlme_nofl_debug("Self caps: HT %d VHT %d HE %d VHT_24Ghz %d BF cap %d bw_above_20_24ghz %d bw_above_20_5ghz %d 2.4G NSS %d 5G NSS %d",
 			config->ht_cap, config->vht_cap,
-			config->he_cap, config->eht_cap, config->vht_24G_cap,
+			config->he_cap, config->vht_24G_cap,
 			config->beamformee_cap, config->bw_above_20_24ghz,
 			config->bw_above_20_5ghz, config->vdev_nss_24g,
 			config->vdev_nss_5g);
-
-	cm_mlo_generate_candidate_list(pdev, scan_list);
 
 	/* calculate score for each AP */
 	if (qdf_list_peek_front(scan_list, &cur_node) != QDF_STATUS_SUCCESS) {
@@ -3387,23 +1957,20 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 		scan_entry = qdf_container_of(cur_node, struct scan_cache_node,
 					      node);
 
-		is_rssi_bad = cm_is_bad_rssi_entry(scan_entry->entry,
-						   score_config, bssid_hint);
-
 		assoc_allowed = cm_is_assoc_allowed(mlme_psoc_obj,
 						    scan_entry->entry);
 
-		if (assoc_allowed && !is_rssi_bad)
-			denylist_action = wlan_denylist_action_on_bssid(pdev,
+		if (assoc_allowed)
+			blacklist_action = wlan_blacklist_action_on_bssid(pdev,
 							scan_entry->entry);
 		else
-			denylist_action = CM_DLM_FORCE_REMOVE;
+			blacklist_action = CM_BLM_FORCE_REMOVE;
 
-		if (denylist_action == CM_DLM_NO_ACTION ||
-		    denylist_action == CM_DLM_AVOID)
-			are_all_candidate_denylisted = false;
+		if (blacklist_action == CM_BLM_NO_ACTION ||
+		    blacklist_action == CM_BLM_AVOID)
+			are_all_candidate_blacklisted = false;
 
-		if (denylist_action == CM_DLM_NO_ACTION &&
+		if (blacklist_action == CM_BLM_NO_ACTION &&
 		    pcl_lst && pcl_lst->num_of_pcl_channels &&
 		    scan_entry->entry->rssi_raw > CM_PCL_RSSI_THRESHOLD &&
 		    score_config->weight_config.pcl_weightage) {
@@ -3416,42 +1983,32 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 			}
 		}
 
-		/* Check if the partner links RSN caps are matching. */
-		cm_validate_partner_links(psoc, scan_entry->entry, scan_list);
-		if (denylist_action == CM_DLM_NO_ACTION ||
-		    (are_all_candidate_denylisted && denylist_action ==
-		     CM_DLM_REMOVE)) {
+		if (blacklist_action == CM_BLM_NO_ACTION ||
+		    (are_all_candidate_blacklisted && blacklist_action == CM_BLM_REMOVE)) {
 			cm_calculate_bss_score(psoc, scan_entry->entry,
-					       pcl_chan_weight, bssid_hint,
-					       scan_list, ASSOC_LINK);
-		} else if (denylist_action == CM_DLM_AVOID) {
+					       pcl_chan_weight, bssid_hint);
+		} else if (blacklist_action == CM_BLM_AVOID) {
 			/* add min score so that it is added back in the end */
 			scan_entry->entry->bss_score =
-				wlan_cm_get_min_score(scan_entry->entry);
+					CM_AVOID_CANDIDATE_MIN_SCORE;
 			mlme_nofl_debug("Candidate("QDF_MAC_ADDR_FMT" freq %d): rssi %d, is in Avoidlist, give min score %d",
 					QDF_MAC_ADDR_REF(scan_entry->entry->bssid.bytes),
 					scan_entry->entry->channel.chan_freq,
 					scan_entry->entry->rssi_raw,
 					scan_entry->entry->bss_score);
-		} else {
-			mlme_nofl_debug("Candidate("QDF_MAC_ADDR_FMT" freq %d): denylist_action %d",
-					QDF_MAC_ADDR_REF(scan_entry->entry->bssid.bytes),
-					scan_entry->entry->channel.chan_freq,
-					denylist_action);
 		}
 
-		cm_update_bss_score_for_mac_addr_matching(scan_entry, self_mac);
 		/*
 		 * The below logic is added to select the best candidate
-		 * amongst the denylisted candidates. This is done to
-		 * handle a case where all the BSSIDs become denylisted
+		 * amongst the blacklisted candidates. This is done to
+		 * handle a case where all the BSSIDs become blacklisted
 		 * and hence there are continuous connection failures.
 		 * With the below logic if the action on BSSID is to remove
 		 * then we keep a backup node and restore the candidate
 		 * list.
 		 */
-		if (denylist_action == CM_DLM_REMOVE &&
-		    are_all_candidate_denylisted) {
+		if (blacklist_action == CM_BLM_REMOVE &&
+		    are_all_candidate_blacklisted) {
 			if (!force_connect_candidate) {
 				force_connect_candidate =
 					qdf_mem_malloc(
@@ -3483,17 +2040,17 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 		}
 
 		/*
-		 * If CM_DLM_REMOVE ie denylisted or assoc not allowed then
+		 * If CM_BLM_REMOVE ie blacklisted or assoc not allowed then
 		 * free the entry else add back to the list sorted
 		 */
-		if (denylist_action == CM_DLM_REMOVE ||
-		    denylist_action == CM_DLM_FORCE_REMOVE) {
-			if (assoc_allowed && !is_rssi_bad)
-				mlme_nofl_debug("Candidate( " QDF_MAC_ADDR_FMT " freq %d): rssi %d, dlm action %d is in Denylist, remove entry",
+		if (blacklist_action == CM_BLM_REMOVE ||
+		    blacklist_action == CM_BLM_FORCE_REMOVE) {
+			if (assoc_allowed)
+				mlme_nofl_debug("Candidate("QDF_MAC_ADDR_FMT" freq %d): rssi %d, blm action %d is in Blacklist, remove entry",
 					QDF_MAC_ADDR_REF(scan_entry->entry->bssid.bytes),
 					scan_entry->entry->channel.chan_freq,
 					scan_entry->entry->rssi_raw,
-					denylist_action);
+					blacklist_action);
 			util_scan_free_cache_entry(scan_entry->entry);
 			qdf_mem_free(scan_entry);
 		} else {
@@ -3504,8 +2061,8 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 		next_node = NULL;
 	}
 
-	if (are_all_candidate_denylisted && force_connect_candidate) {
-		mlme_nofl_debug("All candidates in denylist, Candidate( " QDF_MAC_ADDR_FMT " freq %d): rssi %d, selected for connection",
+	if (are_all_candidate_blacklisted && force_connect_candidate) {
+		mlme_nofl_debug("All candidates in blacklist, Candidate("QDF_MAC_ADDR_FMT" freq %d): rssi %d, selected for connection",
 			QDF_MAC_ADDR_REF(force_connect_candidate->entry->bssid.bytes),
 			force_connect_candidate->entry->channel.chan_freq,
 			force_connect_candidate->entry->rssi_raw);
@@ -3514,24 +2071,27 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 		util_scan_free_cache_entry(force_connect_candidate->entry);
 		qdf_mem_free(force_connect_candidate);
 	}
-
-	cm_eliminate_common_candidate(scan_list);
-	/* print all vendor candidates*/
-	cm_print_candidate_list(scan_list);
 }
 
 #ifdef CONFIG_BAND_6GHZ
-#ifdef CONN_MGR_ADV_FEATURE
-static bool wlan_cm_wfa_get_test_feature_flags(struct wlan_objmgr_psoc *psoc)
+static bool cm_check_h2e_support(const uint8_t *rsnxe)
 {
-	return wlan_wfa_get_test_feature_flags(psoc, WFA_TEST_IGNORE_RSNXE);
-}
-#else
-static bool wlan_cm_wfa_get_test_feature_flags(struct wlan_objmgr_psoc *psoc)
-{
+	const uint8_t *rsnxe_cap;
+	uint8_t cap_len;
+
+	rsnxe_cap = wlan_crypto_parse_rsnxe_ie(rsnxe, &cap_len);
+	if (!rsnxe_cap) {
+		mlme_debug("RSNXE caps not present");
+		return false;
+	}
+
+	if (*rsnxe_cap & WLAN_CRYPTO_RSNX_CAP_SAE_H2E)
+		return true;
+
+	mlme_debug("RSNXE caps %x dont have H2E support", *rsnxe_cap);
+
 	return false;
 }
-#endif
 
 bool wlan_cm_6ghz_allowed_for_akm(struct wlan_objmgr_psoc *psoc,
 				  uint32_t key_mgmt, uint16_t rsn_caps,
@@ -3562,7 +2122,7 @@ bool wlan_cm_6ghz_allowed_for_akm(struct wlan_objmgr_psoc *psoc,
 		 * Check if any AKM is allowed as per user 6Ghz allowed AKM mask
 		 */
 		if (!(config->key_mgmt_mask_6ghz & key_mgmt)) {
-			mlme_debug("user configured mask %x didn't match AKM %x",
+			mlme_debug("user configured mask %x didnt match AKM %x",
 				   config->key_mgmt_mask_6ghz , key_mgmt);
 			return false;
 		}
@@ -3585,13 +2145,10 @@ bool wlan_cm_6ghz_allowed_for_akm(struct wlan_objmgr_psoc *psoc,
 
 	/* for SAE we need to check H2E support */
 	if (!(QDF_HAS_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_SAE) ||
-	    QDF_HAS_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FT_SAE) ||
-	    QDF_HAS_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_SAE_EXT_KEY) ||
-	    QDF_HAS_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FT_SAE_EXT_KEY)))
+	    QDF_HAS_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FT_SAE)))
 		return true;
 
-	return (util_is_rsnxe_h2e_capable(rsnxe) ||
-		wlan_cm_wfa_get_test_feature_flags(psoc));
+	return cm_check_h2e_support(rsnxe);
 }
 
 void wlan_cm_set_check_6ghz_security(struct wlan_objmgr_psoc *psoc,
@@ -3618,13 +2175,7 @@ void wlan_cm_reset_check_6ghz_security(struct wlan_objmgr_psoc *psoc)
 	mlme_psoc_obj->psoc_cfg.score_config.check_6ghz_security =
 					cfg_get(psoc, CFG_CHECK_6GHZ_SECURITY);
 }
-#if defined (SAP_MULTI_LINK_EMULATION)
-	/*Disable security check for 2link SAP emulation */
-bool wlan_cm_get_check_6ghz_security(struct wlan_objmgr_psoc *psoc)
-{
-	return true;
-}
-#else
+
 bool wlan_cm_get_check_6ghz_security(struct wlan_objmgr_psoc *psoc)
 {
 	struct psoc_mlme_obj *mlme_psoc_obj;
@@ -3635,7 +2186,7 @@ bool wlan_cm_get_check_6ghz_security(struct wlan_objmgr_psoc *psoc)
 
 	return mlme_psoc_obj->psoc_cfg.score_config.check_6ghz_security;
 }
-#endif
+
 void wlan_cm_set_standard_6ghz_conn_policy(struct wlan_objmgr_psoc *psoc,
 					   bool value)
 {
@@ -3649,6 +2200,30 @@ void wlan_cm_set_standard_6ghz_conn_policy(struct wlan_objmgr_psoc *psoc,
 	mlme_psoc_obj->psoc_cfg.score_config.standard_6ghz_conn_policy = value;
 }
 
+void wlan_cm_set_relaxed_6ghz_conn_policy(struct wlan_objmgr_psoc *psoc,
+					  bool value)
+{
+	struct psoc_mlme_obj *mlme_psoc_obj;
+
+	mlme_psoc_obj = wlan_psoc_mlme_get_cmpt_obj(psoc);
+	if (!mlme_psoc_obj)
+		return;
+
+	mlme_debug("6ghz relaxed connection policy val %x", value);
+	mlme_psoc_obj->psoc_cfg.score_config.relaxed_6ghz_conn_policy = value;
+}
+
+bool wlan_cm_get_relaxed_6ghz_conn_policy(struct wlan_objmgr_psoc *psoc)
+{
+	struct psoc_mlme_obj *mlme_psoc_obj;
+
+	mlme_psoc_obj = wlan_psoc_mlme_get_cmpt_obj(psoc);
+	if (!mlme_psoc_obj)
+		return false;
+
+	return mlme_psoc_obj->psoc_cfg.score_config.relaxed_6ghz_conn_policy;
+}
+
 bool wlan_cm_get_standard_6ghz_conn_policy(struct wlan_objmgr_psoc *psoc)
 {
 	struct psoc_mlme_obj *mlme_psoc_obj;
@@ -3658,30 +2233,6 @@ bool wlan_cm_get_standard_6ghz_conn_policy(struct wlan_objmgr_psoc *psoc)
 		return false;
 
 	return mlme_psoc_obj->psoc_cfg.score_config.standard_6ghz_conn_policy;
-}
-
-void wlan_cm_set_disable_vlp_sta_conn_to_sp_ap(struct wlan_objmgr_psoc *psoc,
-					       bool value)
-{
-	struct psoc_mlme_obj *mlme_psoc_obj;
-
-	mlme_psoc_obj = wlan_psoc_mlme_get_cmpt_obj(psoc);
-	if (!mlme_psoc_obj)
-		return;
-
-	mlme_debug("disable_vlp_sta_conn_to_sp_ap val %x", value);
-	mlme_psoc_obj->psoc_cfg.score_config.disable_vlp_sta_conn_to_sp_ap = value;
-}
-
-bool wlan_cm_get_disable_vlp_sta_conn_to_sp_ap(struct wlan_objmgr_psoc *psoc)
-{
-	struct psoc_mlme_obj *mlme_psoc_obj;
-
-	mlme_psoc_obj = wlan_psoc_mlme_get_cmpt_obj(psoc);
-	if (!mlme_psoc_obj)
-		return false;
-
-	return mlme_psoc_obj->psoc_cfg.score_config.disable_vlp_sta_conn_to_sp_ap;
 }
 
 void wlan_cm_set_6ghz_key_mgmt_mask(struct wlan_objmgr_psoc *psoc,
@@ -3744,6 +2295,7 @@ cm_limit_max_per_index_score(uint32_t per_index_score)
 #define CM_MLO_WEIGHTAGE 3
 #define CM_WLM_INDICATION_WEIGHTAGE 2
 #define CM_EMLSR_WEIGHTAGE 3
+
 static void cm_init_mlo_score_config(struct wlan_objmgr_psoc *psoc,
 				     struct scoring_cfg *score_cfg,
 				     uint32_t *total_weight)
@@ -4000,9 +2552,6 @@ void wlan_cm_init_score_config(struct wlan_objmgr_psoc *psoc,
 
 	score_cfg->rssi_score.rssi_pref_5g_rssi_thresh =
 		cfg_get(psoc, CFG_SCORING_RSSI_PREF_5G_THRESHOLD);
-
-	score_cfg->rssi_score.con_non_hint_target_rssi_threshold =
-		cfg_get(psoc, CFG_CON_NON_HINT_TARGET_MIN_RSSI);
 
 	score_cfg->esp_qbss_scoring.num_slot =
 		cfg_get(psoc, CFG_SCORING_NUM_ESP_QBSS_SLOTS);

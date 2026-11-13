@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -565,12 +565,6 @@ QDF_STATUS ucfg_pmo_config_listen_interval(struct wlan_objmgr_vdev *vdev,
 	return pmo_core_config_listen_interval(vdev, listen_interval);
 }
 
-QDF_STATUS ucfg_pmo_get_listen_interval(struct wlan_objmgr_vdev *vdev,
-					uint32_t *listen_interval)
-{
-	return pmo_core_get_listen_interval(vdev, listen_interval);
-}
-
 QDF_STATUS ucfg_pmo_config_modulated_dtim(struct wlan_objmgr_vdev *vdev,
 					  uint32_t mod_dtim)
 {
@@ -592,31 +586,6 @@ ucfg_pmo_set_wow_enable(struct wlan_objmgr_psoc *psoc,
 	struct pmo_psoc_priv_obj *pmo_psoc_ctx = pmo_psoc_get_priv(psoc);
 
 	pmo_psoc_ctx->psoc_cfg.wow_enable = val;
-}
-
-void
-ucfg_pmo_set_ps_params(struct wlan_objmgr_vdev *vdev,
-		       struct pmo_ps_params *ps_params)
-{
-	pmo_core_vdev_set_ps_params(vdev, ps_params);
-}
-
-QDF_STATUS ucfg_pmo_get_ps_params(struct wlan_objmgr_vdev *vdev,
-				  struct pmo_ps_params *ps_params)
-{
-	return pmo_core_vdev_get_ps_params(vdev, ps_params);
-}
-
-QDF_STATUS ucfg_pmo_core_vdev_set_ps_opm_mode(struct wlan_objmgr_vdev *vdev,
-					      enum powersave_mode opm_mode)
-{
-	return pmo_vdev_set_ps_opm_mode(vdev, opm_mode);
-}
-
-QDF_STATUS ucfg_pmo_core_vdev_get_ps_opm_mode(struct wlan_objmgr_vdev *vdev,
-					      enum powersave_mode *opm_mode)
-{
-	return pmo_vdev_get_ps_opm_mode(vdev, opm_mode);
 }
 
 bool
@@ -738,9 +707,6 @@ uint32_t
 ucfg_pmo_get_runtime_pm_delay(struct wlan_objmgr_psoc *psoc)
 {
 	struct pmo_psoc_priv_obj *pmo_psoc_ctx = pmo_psoc_get_priv(psoc);
-
-	if (!pmo_psoc_ctx)
-		return 0;
 
 	return pmo_psoc_ctx->psoc_cfg.runtime_pm_delay;
 }
@@ -974,11 +940,6 @@ ucfg_pmo_get_active_mc_bc_apf_mode(struct wlan_objmgr_psoc *psoc)
 	return pmo_psoc_ctx->psoc_cfg.active_mc_bc_apf_mode;
 }
 
-bool ucfg_pmo_is_configure_apf_per_screen_state(struct wlan_objmgr_psoc *psoc)
-{
-	return pmo_core_is_configure_apf_per_screen_state(psoc);
-}
-
 #ifdef WLAN_ENABLE_GPIO_WAKEUP
 bool ucfg_pmo_is_gpio_wakeup_enabled(struct wlan_objmgr_psoc *psoc)
 {
@@ -1100,30 +1061,3 @@ QDF_STATUS ucfg_pmo_config_icmp_offload(struct wlan_objmgr_psoc *psoc,
 	return pmo_tgt_config_icmp_offload_req(psoc, pmo_icmp_req);
 }
 #endif
-
-QDF_STATUS ucfg_pmo_set_vdev_bridge_addr(struct wlan_objmgr_vdev *vdev,
-					 struct qdf_mac_addr *bridgeaddr)
-{
-	return pmo_set_vdev_bridge_addr(vdev, bridgeaddr);
-}
-
-QDF_STATUS ucfg_pmo_get_vdev_bridge_addr(struct wlan_objmgr_vdev *vdev,
-					 struct qdf_mac_addr *bridgeaddr)
-{
-	return pmo_get_vdev_bridge_addr(vdev, bridgeaddr);
-}
-
-bool
-ucfg_pmo_get_ns_offload_enable_dynamic(struct wlan_objmgr_vdev *vdev)
-{
-	return pmo_core_get_ns_offload_enable_dynamic(vdev);
-}
-
-void
-ucfg_pmo_set_ns_offload_enable_dynamic(struct wlan_objmgr_vdev *vdev,
-				       enum pmo_offload_trigger trigger,
-				       bool ns_offload_enable_dyn)
-{
-	return pmo_core_set_ns_offload_enable_dynamic(vdev, trigger,
-						      ns_offload_enable_dyn);
-}

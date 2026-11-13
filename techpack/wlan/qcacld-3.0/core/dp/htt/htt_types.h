@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2011, 2014-2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -42,7 +41,7 @@
 
 /*
  * Set the base misclist size to the size of the htt tx copy engine
- * to guarantee that a packet on the misclist won't be freed while it
+ * to guarantee that a packet on the misclist wont be freed while it
  * is sitting in the copy engine.
  */
 #define HTT_HTC_PKT_MISCLIST_SIZE          2048
@@ -78,6 +77,17 @@ struct htt_host_tx_desc_t {
 	} align32;
 };
 
+struct htt_tx_mgmt_desc_buf {
+	qdf_nbuf_t msg_buf;
+	A_BOOL is_inuse;
+	qdf_nbuf_t mgmt_frm;
+};
+
+struct htt_tx_mgmt_desc_ctxt {
+	struct htt_tx_mgmt_desc_buf *pool;
+	A_UINT32 pending_cnt;
+};
+
 struct htt_list_node {
 	struct htt_list_node *prev;
 	struct htt_list_node *next;
@@ -110,7 +120,7 @@ struct htt_ipa_uc_tx_resource_t {
 	qdf_shared_mem_t *tx_ce_idx;
 	qdf_shared_mem_t *tx_comp_ring;
 
-	qdf_dma_addr_t tx_comp_idx_paddr;
+	uint32_t tx_comp_idx_paddr;
 	qdf_shared_mem_t **tx_buf_pool_strg;
 	uint32_t alloc_tx_buf_cnt;
 	bool ipa_smmu_mapped;
@@ -409,6 +419,7 @@ struct htt_pdev_t {
 #ifdef CONFIG_HL_SUPPORT
 	int cur_seq_num_hl;
 #endif
+	struct htt_tx_mgmt_desc_ctxt tx_mgmt_desc_ctxt;
 	struct targetdef_s *targetdef;
 	struct ce_reg_def *target_ce_def;
 

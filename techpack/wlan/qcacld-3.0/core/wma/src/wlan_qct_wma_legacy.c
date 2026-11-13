@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -58,7 +57,7 @@ QDF_STATUS wma_post_ctrl_msg(struct mac_context *mac, struct scheduler_msg *pMsg
 
 /**
  * u_mac_post_ctrl_msg() - post ctrl msg
- * @pMb: A pointer to the mailbox message
+ * @pMb: A pointer to the maibox message
  *
  * Forwards the completely received message to the respective
  * modules for further processing.

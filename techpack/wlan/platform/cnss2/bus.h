@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CNSS_BUS_H
@@ -21,6 +21,7 @@ int cnss_bus_init(struct cnss_plat_data *plat_priv);
 void cnss_bus_deinit(struct cnss_plat_data *plat_priv);
 void cnss_bus_add_fw_prefix_name(struct cnss_plat_data *plat_priv,
 				 char *prefix_name, char *name);
+int cnss_bus_load_sku_license(struct cnss_plat_data *plat_priv);
 int cnss_bus_load_tme_patch(struct cnss_plat_data *plat_priv);
 int cnss_bus_load_tme_opt_file(struct cnss_plat_data *plat_priv,
 				enum wlfw_tme_lite_file_type_v01 file);
@@ -30,7 +31,6 @@ int cnss_bus_load_m3(struct cnss_plat_data *plat_priv);
 int cnss_bus_load_aux(struct cnss_plat_data *plat_priv);
 int cnss_bus_handle_dev_sol_irq(struct cnss_plat_data *plat_priv);
 int cnss_bus_alloc_fw_mem(struct cnss_plat_data *plat_priv);
-void cnss_bus_free_fw_mem(struct cnss_plat_data *plat_priv, int k);
 int cnss_bus_alloc_qdss_mem(struct cnss_plat_data *plat_priv);
 void cnss_bus_free_qdss_mem(struct cnss_plat_data *plat_priv);
 u32 cnss_bus_get_wake_irq(struct cnss_plat_data *plat_priv);
@@ -38,7 +38,7 @@ int cnss_bus_force_fw_assert_hdlr(struct cnss_plat_data *plat_priv);
 int cnss_bus_qmi_send_get(struct cnss_plat_data *plat_priv);
 int cnss_bus_qmi_send_put(struct cnss_plat_data *plat_priv);
 void cnss_bus_fw_boot_timeout_hdlr(struct timer_list *t);
-void cnss_bus_collect_dump_info(struct cnss_plat_data *plat_priv,
+int cnss_bus_collect_dump_info(struct cnss_plat_data *plat_priv,
 				bool in_panic);
 void cnss_bus_device_crashed(struct cnss_plat_data *plat_priv);
 int cnss_bus_call_driver_probe(struct cnss_plat_data *plat_priv);
@@ -51,6 +51,8 @@ int cnss_bus_register_driver_hdlr(struct cnss_plat_data *plat_priv, void *data);
 int cnss_bus_unregister_driver_hdlr(struct cnss_plat_data *plat_priv);
 int cnss_bus_call_driver_modem_status(struct cnss_plat_data *plat_priv,
 				      int modem_current_status);
+int cnss_bus_fmd_status(struct cnss_plat_data *plat_priv,
+			int fmd_status);
 int cnss_bus_update_status(struct cnss_plat_data *plat_priv,
 			   enum cnss_driver_status status);
 int cnss_bus_update_uevent(struct cnss_plat_data *plat_priv,
@@ -79,10 +81,4 @@ int cnss_bus_get_msi_assignment(struct cnss_plat_data *plat_priv,
 				int *num_vectors,
 				u32 *user_base_data,
 				u32 *base_vector);
-int cnss_bus_dsp_link_control(struct cnss_plat_data *plat_priv,
-			      bool link_enable);
-int cnss_bus_set_dsp_link_status(struct cnss_plat_data *plat_priv,
-				 bool link_enable);
-int cnss_bus_get_dsp_link_status(struct cnss_plat_data *plat_priv);
-int cnss_bus_dsp_link_enable(struct cnss_plat_data *plat_priv);
 #endif /* _CNSS_BUS_H */

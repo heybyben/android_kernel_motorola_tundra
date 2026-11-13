@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2011-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022,2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -86,7 +85,7 @@ lim_collect_bss_description(struct mac_context *mac,
 	rfBand = WMA_GET_RX_RFBAND(pRxPacketInfo);
 
 	/**
-	 * Length of BSS description is without length of
+	 * Length of BSS desription is without length of
 	 * length itself and length of pointer that holds ieFields.
 	 *
 	 * struct bss_description
@@ -103,6 +102,9 @@ lim_collect_bss_description(struct mac_context *mac,
 	/* Copy BSS Id */
 	qdf_mem_copy((uint8_t *) &pBssDescr->bssId,
 		     (uint8_t *) pHdr->bssId, sizeof(tSirMacAddr));
+
+	/* Copy Timestamp, Beacon Interval and Capability Info */
+	pBssDescr->scansystimensec = qdf_get_bootbased_boottime_ns();
 
 	pBssDescr->timeStamp[0] = pBPR->timeStamp[0];
 	pBssDescr->timeStamp[1] = pBPR->timeStamp[1];
@@ -139,17 +141,22 @@ lim_collect_bss_description(struct mac_context *mac,
 	pBssDescr->rssi = (int8_t) WMA_GET_RX_RSSI_NORMALIZED(pRxPacketInfo);
 	pBssDescr->rssi_raw = (int8_t) WMA_GET_RX_RSSI_RAW(pRxPacketInfo);
 
+	/* SINR no longer reported by HW */
+	pBssDescr->sinr = 0;
 	pe_debug(QDF_MAC_ADDR_FMT " rssi: normalized: %d, absolute: %d",
 		QDF_MAC_ADDR_REF(pHdr->bssId), pBssDescr->rssi,
 		pBssDescr->rssi_raw);
 
-	pe_debug("Received %s from BSSID: " QDF_MAC_ADDR_FMT " Seq Num: %x ssid:" QDF_SSID_FMT ", rssi: %d",
+	pBssDescr->received_time = (uint64_t)qdf_mc_timer_get_system_time();
+	pBssDescr->tsf_delta = WMA_GET_RX_TSF_DELTA(pRxPacketInfo);
+	pBssDescr->seq_ctrl = pHdr->seqControl;
+
+	pe_debug("Received %s from BSSID: "QDF_MAC_ADDR_FMT" tsf_delta = %u Seq Num: %x ssid:%.*s, rssi: %d",
 		 pBssDescr->fProbeRsp ? "Probe Rsp" : "Beacon",
 		 QDF_MAC_ADDR_REF(pHdr->bssId),
-		 ((pHdr->seqControl.seqNumHi <<	HIGH_SEQ_NUM_OFFSET) |
-		  pHdr->seqControl.seqNumLo),
-		 QDF_SSID_REF(pBPR->ssId.length, pBPR->ssId.ssId),
-		 pBssDescr->rssi_raw);
+		 pBssDescr->tsf_delta, ((pHdr->seqControl.seqNumHi <<
+		 HIGH_SEQ_NUM_OFFSET) | pHdr->seqControl.seqNumLo),
+		 pBPR->ssId.length, pBPR->ssId.ssId, pBssDescr->rssi_raw);
 
 	if (fScanning) {
 		rrm_get_start_tsf(mac, pBssDescr->startTSF);
@@ -170,6 +177,14 @@ lim_collect_bss_description(struct mac_context *mac,
 		pBssDescr->mdie[2] = pBPR->mdie[2];
 	}
 
+#ifdef FEATURE_WLAN_ESE
+	pBssDescr->QBSSLoad_present = false;
+	pBssDescr->QBSSLoad_avail = 0;
+	if (pBPR->QBSSLoad.present) {
+		pBssDescr->QBSSLoad_present = true;
+		pBssDescr->QBSSLoad_avail = pBPR->QBSSLoad.avail;
+	}
+#endif
 	/* Copy IE fields */
 	qdf_mem_copy((uint8_t *) &pBssDescr->ieFields,
 		     pBody + SIR_MAC_B_PR_SSID_OFFSET, ieLen);

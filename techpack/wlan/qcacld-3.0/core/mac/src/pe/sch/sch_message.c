@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -38,9 +38,6 @@
 
 /* / convert the CW values into a uint16_t */
 #define GET_CW(pCw) ((uint16_t) ((*(pCw) << 8) + *((pCw) + 1)))
-
-/* Max debug string size for WMM in bytes  */
-#define SCH_WMM_DEBUG_STRING_SIZE    512
 
 /* local functions */
 static QDF_STATUS
@@ -97,7 +94,7 @@ void sch_edca_profile_update_all(struct mac_context *pmac)
 
 /**
  * sch_get_params() - get the local or broadcast parameters based on the profile
- * specified in the config params are delivered in this order: BE, BK, VI, VO
+ * sepcified in the config params are delivered in this order: BE, BK, VI, VO
  */
 static QDF_STATUS
 sch_get_params(struct mac_context *mac,
@@ -268,14 +265,14 @@ void sch_qos_update_broadcast(struct mac_context *mac, struct pe_session *pe_ses
 	uint8_t i;
 	bool updated = false;
 	QDF_STATUS status;
-	uint8_t *debug_str;
-	uint32_t len = 0;
 
 	if (sch_get_params(mac, params, false) != QDF_STATUS_SUCCESS) {
 		pe_debug("QosUpdateBroadcast: failed");
 		return;
 	}
 	lim_get_phy_mode(mac, &phyMode, pe_session);
+
+	pe_debug("QosUpdBcast: mode %d", phyMode);
 
 	if (phyMode == WNI_CFG_PHY_MODE_11G) {
 		cwminidx = CFG_EDCA_PROFILE_CWMING_IDX;
@@ -291,10 +288,6 @@ void sch_qos_update_broadcast(struct mac_context *mac, struct pe_session *pe_ses
 		cwmaxidx = CFG_EDCA_PROFILE_CWMAXA_IDX;
 		txopidx = CFG_EDCA_PROFILE_TXOPA_IDX;
 	}
-
-	debug_str = qdf_mem_malloc(SCH_WMM_DEBUG_STRING_SIZE);
-	if (!debug_str)
-		return;
 
 	for (i = 0; i < QCA_WLAN_AC_ALL; i++) {
 		if (pe_session->gLimEdcaParamsBC[i].aci.acm !=
@@ -328,19 +321,14 @@ void sch_qos_update_broadcast(struct mac_context *mac, struct pe_session *pe_ses
 			updated = true;
 		}
 
-		len += qdf_scnprintf(debug_str + len,
-				     SCH_WMM_DEBUG_STRING_SIZE - len,
-				     "AC[%d]: AIFSN %d ACM %d CWmin %d CWmax %d TxOp %d, ",
-				     i, pe_session->gLimEdcaParamsBC[i].aci.aifsn,
-				     pe_session->gLimEdcaParamsBC[i].aci.acm,
-				     pe_session->gLimEdcaParamsBC[i].cw.min,
-				     pe_session->gLimEdcaParamsBC[i].cw.max,
-				     pe_session->gLimEdcaParamsBC[i].txoplimit);
+		pe_debug("QoSUpdateBCast: AC :%d: AIFSN: %d, ACM %d, CWmin %d, CWmax %d, TxOp %d",
+			       i, pe_session->gLimEdcaParamsBC[i].aci.aifsn,
+			       pe_session->gLimEdcaParamsBC[i].aci.acm,
+			       pe_session->gLimEdcaParamsBC[i].cw.min,
+			       pe_session->gLimEdcaParamsBC[i].cw.max,
+			       pe_session->gLimEdcaParamsBC[i].txoplimit);
 
 	}
-
-	pe_nofl_debug("QosUpdBcast: mode %d, %s", phyMode, debug_str);
-	qdf_mem_free(debug_str);
 
 	/*
 	 * If there exists a concurrent STA-AP session, use its WMM
@@ -423,6 +411,7 @@ set_sch_edca_params(struct mac_context *mac,
 
 	lim_get_phy_mode(mac, &phyMode, pe_session);
 
+	pe_debug("lim_get_phy_mode() = %d", phyMode);
 	/* if (mac->lim.gLimPhyMode == WNI_CFG_PHY_MODE_11G) */
 	if (phyMode == WNI_CFG_PHY_MODE_11G) {
 		cwminidx = CFG_EDCA_PROFILE_CWMING_IDX;
@@ -452,6 +441,14 @@ set_sch_edca_params(struct mac_context *mac,
 			convert_cw(GET_CW(&params[i][cwmaxidx]));
 		pe_session->gLimEdcaParams[i].txoplimit =
 			(uint16_t)params[i][txopidx];
+
+		pe_debug("AC :%d: AIFSN: %d, ACM %d, CWmin %d, CWmax %d, TxOp %d",
+			       i, pe_session->gLimEdcaParams[i].aci.aifsn,
+			       pe_session->gLimEdcaParams[i].aci.acm,
+			       pe_session->gLimEdcaParams[i].cw.min,
+			       pe_session->gLimEdcaParams[i].cw.max,
+			       pe_session->gLimEdcaParams[i].txoplimit);
+
 	}
 	return;
 }
@@ -508,18 +505,6 @@ void sch_qos_concurrency_update(void)
 	lim_send_conc_params_update();
 }
 
-static void sch_qos_update_edca_pifs_param_for_ll_sap(struct mac_context *mac,
-						      uint8_t vdev_id)
-{
-	struct wlan_edca_pifs_param_ie param = {0};
-	enum host_edca_param_type edca_param_type =
-					HOST_EDCA_PARAM_TYPE_AGGRESSIVE;
-
-	edca_param_type = mac->mlme_cfg->edca_params.edca_param_type;
-	wlan_mlme_set_edca_pifs_param(&param, edca_param_type);
-	lim_send_edca_pifs_param(mac, &param, vdev_id);
-}
-
 /**
  * sch_edca_profile_update() - This function updates the local and broadcast
  * EDCA params in the gLimEdcaParams structure. It also updates the
@@ -535,12 +520,6 @@ void sch_edca_profile_update(struct mac_context *mac, struct pe_session *pe_sess
 		sch_qos_update_local(mac, pe_session);
 		sch_qos_update_broadcast(mac, pe_session);
 		sch_qos_concurrency_update();
-
-		if (policy_mgr_is_vdev_ll_lt_sap(
-				mac->psoc, pe_session->vdev_id))
-			sch_qos_update_edca_pifs_param_for_ll_sap(
-							mac,
-							pe_session->vdev_id);
 	}
 }
 

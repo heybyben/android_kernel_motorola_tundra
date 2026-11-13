@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2015-2016 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -47,7 +46,7 @@
  * PCI-E L1 ASPPM sub-states
  * To enable clock gating in L1 state, set this to 1.
  * (less power, slightly more wakeup latency)
- * To disable clock gating in L1 state, set this to 0. (slightly more power)
+ * To disable clock gating in L1 state, set this to 0. (slighly more power)
  */
 #define CONFIG_PCIE_ENABLE_L1_CLOCK_GATE 1
 

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018,2020 The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -27,47 +27,20 @@
 #include "qdf_util.h"
 #include <linux/netdevice.h>
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0))
 QDF_STATUS
-qdf_net_if_create_dummy_if(struct qdf_net_if **nif)
-{
-	*nif = (struct qdf_net_if *)alloc_netdev_dummy(0);
-
-	if (!(*nif))
-		return QDF_STATUS_E_NOMEM;
-
-	return QDF_STATUS_SUCCESS;
-}
-#else
-QDF_STATUS
-qdf_net_if_create_dummy_if(struct qdf_net_if **nif)
+qdf_net_if_create_dummy_if(struct qdf_net_if *nif)
 {
 	int ret;
 
-	if (!(*nif))
+	if (!nif)
 		return QDF_STATUS_E_INVAL;
 
-	ret = init_dummy_netdev((struct net_device *)*nif);
+	ret = init_dummy_netdev((struct net_device *)nif);
 
 	return qdf_status_from_os_return(ret);
 }
-#endif
 
 qdf_export_symbol(qdf_net_if_create_dummy_if);
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0))
-void
-qdf_net_if_destroy_dummy_if(struct qdf_net_if *nif)
-{
-	if (nif)
-		free_netdev((struct net_device *)nif);
-}
-#else
-void
-qdf_net_if_destroy_dummy_if(struct qdf_net_if *nif)
-{
-}
-#endif
 
 /**
  * qdf_net_if_get_devname() - Retrieve netdevice name
@@ -116,14 +89,6 @@ qdf_net_if_release_dev(struct qdf_net_if  *nif)
 
 qdf_export_symbol(qdf_net_if_release_dev);
 
-QDF_STATUS
-qdf_net_if_hold_dev(struct qdf_net_if  *nif)
-{
-	return __qdf_net_if_hold_dev(nif);
-}
-
-qdf_export_symbol(qdf_net_if_hold_dev);
-
 /**
  * qdf_net_update_net_device_dev_addr() - update net_device dev_addr
  * @ndev: net_device
@@ -144,32 +109,3 @@ qdf_net_update_net_device_dev_addr(struct net_device *ndev,
 }
 
 qdf_export_symbol(qdf_net_update_net_device_dev_addr);
-
-void qdf_napi_enable(struct napi_struct *napi)
-{
-	__qdf_napi_enable(napi);
-}
-
-qdf_export_symbol(qdf_napi_enable);
-
-void qdf_napi_disable(struct napi_struct *napi)
-{
-	__qdf_napi_disable(napi);
-}
-
-qdf_export_symbol(qdf_napi_disable);
-
-void qdf_netif_napi_add(struct net_device *netdev, struct napi_struct *napi,
-			int (*poll)(struct napi_struct *, int), int weight)
-{
-	__qdf_netif_napi_add(netdev, napi, poll, weight);
-}
-
-qdf_export_symbol(qdf_netif_napi_add);
-
-void qdf_netif_napi_del(struct napi_struct *napi)
-{
-	__qdf_netif_napi_del(napi);
-}
-
-qdf_export_symbol(qdf_netif_napi_del);

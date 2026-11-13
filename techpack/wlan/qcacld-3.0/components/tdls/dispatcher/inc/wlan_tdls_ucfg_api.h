@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -66,7 +66,7 @@ QDF_STATUS ucfg_tdls_psoc_open(struct wlan_objmgr_psoc *psoc);
 QDF_STATUS ucfg_tdls_psoc_close(struct wlan_objmgr_psoc *psoc);
 
 /**
- * ucfg_tdls_update_config() - TDLS module start
+ * ucfg_tdls_psoc_start() - TDLS module start
  * @psoc: psoc object
  * @req: tdls start paramets
  *
@@ -75,31 +75,10 @@ QDF_STATUS ucfg_tdls_psoc_close(struct wlan_objmgr_psoc *psoc);
 QDF_STATUS ucfg_tdls_update_config(struct wlan_objmgr_psoc *psoc,
 				   struct tdls_start_params *req);
 
-/**
- * ucfg_tdls_update_fw_wideband_capability() - Update FW TDLS wideband
- *                                             capability in TDLS component
- *
- * @psoc: psoc object
- * @is_fw_tdls_wideband_capable: if fw is tdls wideband capable then it is true
- *
- * Return: void
- */
-void ucfg_tdls_update_fw_wideband_capability(struct wlan_objmgr_psoc *psoc,
-					     bool is_fw_tdls_wideband_capable);
-
-/**
- * ucfg_tdls_is_fw_wideband_capable() - Get FW TDLS wideband capability from
- *                                      TDLS component.
- * @psoc: psoc object
- *
- * Return: true if fw supports tdls wideband
- */
-bool ucfg_tdls_is_fw_wideband_capable(struct wlan_objmgr_psoc *psoc);
-
 #ifdef WLAN_FEATURE_11AX
 /**
- * ucfg_tdls_update_fw_11ax_capability() - Update FW TDLS 11ax capability in
- *                                      TDLS Component
+ * ucfg_tdls_update_fw_11ax_support() - Update FW TDLS 11ax capability in TLDS
+ *                                      Component
  * @psoc: psoc object
  * @is_fw_tdls_11ax_capable: bool if fw is tdls 11ax capable then it is true
  *
@@ -109,33 +88,13 @@ void ucfg_tdls_update_fw_11ax_capability(struct wlan_objmgr_psoc *psoc,
 					 bool is_fw_tdls_11ax_capable);
 
 /**
- * ucfg_update_fw_tdls_6g_capability() - Update FW TDLS 6g capability in TDLS
- *                                    Component
- * @psoc: psoc object
- * @is_fw_tdls_6g_capable: set to true if firmware supports TDLS on 6G band
- *
- * Return: void
- */
-void ucfg_update_fw_tdls_6g_capability(struct wlan_objmgr_psoc *psoc,
-				       bool is_fw_tdls_6g_capable);
-
-/**
- * ucfg_tdls_is_fw_11ax_capable() - Get FW TDLS 11ax capability from TLDS
+ * ucfg_tdls_is_fw_11ax_supported() - Get FW TDLS 11ax capability from TLDS
  *                                    component.
  * @psoc: psoc object
  *
  * Return: true if fw supports tdls 11ax
  */
 bool ucfg_tdls_is_fw_11ax_capable(struct wlan_objmgr_psoc *psoc);
-
-/**
- * ucfg_tdls_is_fw_6g_capable() - Get FW TDLS 6g capability from TLDS
- *                                component.
- * @psoc: psoc object
- *
- * Return: true if fw supports tdls on 6ghz band
- */
-bool ucfg_tdls_is_fw_6g_capable(struct wlan_objmgr_psoc *psoc);
 
 #else
 static inline
@@ -149,66 +108,7 @@ bool  ucfg_tdls_is_fw_11ax_capable(struct wlan_objmgr_psoc *psoc)
 {
 return false;
 }
-
-static inline
-void ucfg_update_fw_tdls_6g_capability(struct wlan_objmgr_psoc *psoc,
-				       bool is_fw_tdls_6g_capable)
-{
-}
-
-static inline
-bool  ucfg_tdls_is_fw_6g_capable(struct wlan_objmgr_psoc *psoc)
-{
-return false;
-}
 #endif
-
-#ifdef WLAN_FEATURE_11BE
-/**
- * ucfg_tdls_update_fw_mlo_capability() - update fw mlo capability
- * @psoc: psoc object
- * @is_fw_tdls_mlo_capable: bool value
- *
- * Return: none
- */
-void ucfg_tdls_update_fw_mlo_capability(struct wlan_objmgr_psoc *psoc,
-					bool is_fw_tdls_mlo_capable);
-#else
-static inline
-void ucfg_tdls_update_fw_mlo_capability(struct wlan_objmgr_psoc *psoc,
-					bool is_fw_tdls_mlo_capable)
-{
-}
-#endif
-
-/**
- * ucfg_tdls_link_vdev_is_matching() - check whether vdev is matching link vdev
- * @vdev: vdev object
- *
- * Return: bool
- */
-bool ucfg_tdls_link_vdev_is_matching(struct wlan_objmgr_vdev *vdev);
-
-/**
- * ucfg_tdls_get_tdls_link_vdev() - get tdls link vdev
- * @vdev: vdev object
- * @dbg_id: debug id
- *
- * Return: vdev pointer
- */
-struct wlan_objmgr_vdev *
-ucfg_tdls_get_tdls_link_vdev(struct wlan_objmgr_vdev *vdev,
-			     wlan_objmgr_ref_dbgid dbg_id);
-
-/**
- * ucfg_tdls_put_tdls_link_vdev() - put tdls link vdev
- * @vdev: vdev odject
- * @dbg_id: debug id
- *
- * Return: void
- */
-void ucfg_tdls_put_tdls_link_vdev(struct wlan_objmgr_vdev *vdev,
-				  wlan_objmgr_ref_dbgid dbg_id);
 
 /**
  * ucfg_tdls_psoc_enable() - TDLS module enable API
@@ -219,7 +119,7 @@ void ucfg_tdls_put_tdls_link_vdev(struct wlan_objmgr_vdev *vdev,
 QDF_STATUS ucfg_tdls_psoc_enable(struct wlan_objmgr_psoc *psoc);
 
 /**
- * ucfg_tdls_psoc_disable() - TDLS module disable API
+ * ucfg_tdls_psoc_disable() - TDLS moudle disable API
  * @psoc: psoc object
  *
  * Return: QDF_STATUS
@@ -298,12 +198,10 @@ QDF_STATUS ucfg_tdls_teardown_links(struct wlan_objmgr_psoc *psoc);
 /**
  * ucfg_tdls_teardown_links_sync() - teardown all TDLS links.
  * @psoc: psoc object
- * @vdev: Vdev object pointer
  *
  * Return: None
  */
-void ucfg_tdls_teardown_links_sync(struct wlan_objmgr_psoc *psoc,
-				   struct wlan_objmgr_vdev *vdev);
+void ucfg_tdls_teardown_links_sync(struct wlan_objmgr_psoc *psoc);
 
 /**
  * ucfg_tdls_notify_reset_adapter() - notify reset adapter
@@ -385,35 +283,6 @@ QDF_STATUS ucfg_set_tdls_secoffchanneloffset(struct wlan_objmgr_vdev *vdev,
 					     int offchanoffset);
 
 /**
- * ucfg_tdls_discovery_on_going() - check discovery is on going
- * @vdev: vdev object
- *
- * Return: true if tdls discovery on going else false
- */
-bool ucfg_tdls_discovery_on_going(struct wlan_objmgr_vdev *vdev);
-
-/**
- * ucfg_tdls_get_mlo_vdev() - get mlo vdev for tdls
- * @vdev: vdev object
- * @index: index of vdev in mlo list
- * @dbg_id: debug id
- *
- * Return: vdev pointer
- */
-struct wlan_objmgr_vdev *ucfg_tdls_get_mlo_vdev(struct wlan_objmgr_vdev *vdev,
-						uint8_t index,
-						wlan_objmgr_ref_dbgid dbg_id);
-
-/**
- * ucfg_tdls_release_mlo_vdev() - release mlo vdev for tdls
- * @vdev: vdev object
- * @dbg_id: debug id
- *
- * Return: void
- */
-void ucfg_tdls_release_mlo_vdev(struct wlan_objmgr_vdev *vdev,
-				wlan_objmgr_ref_dbgid dbg_id);
-/**
  * ucfg_tdls_set_rssi() - API to set TDLS RSSI on peer given by mac
  * @vdev: vdev object
  * @mac: MAC address of Peer
@@ -438,15 +307,6 @@ QDF_STATUS ucfg_tdls_set_rssi(struct wlan_objmgr_vdev *vdev,
 void ucfg_tdls_notify_connect_failure(struct wlan_objmgr_psoc *psoc);
 
 /**
- * ucfg_get_tdls_conn_peer_count() - This api is called to get number of
- *                                    connected TDLS peer
- * @vdev: vdev object
- *
- * Return: tdls connected peer count
- */
-uint16_t ucfg_get_tdls_conn_peer_count(struct wlan_objmgr_vdev *vdev);
-
-/**
  * ucfg_get_tdls_vdev() - Ucfg api to get tdls specific vdev object
  * @psoc: wlan psoc object manager
  * @dbg_id: debug id
@@ -459,47 +319,7 @@ uint16_t ucfg_get_tdls_conn_peer_count(struct wlan_objmgr_vdev *vdev);
 struct wlan_objmgr_vdev *ucfg_get_tdls_vdev(struct wlan_objmgr_psoc *psoc,
 					    wlan_objmgr_ref_dbgid dbg_id);
 
-/**
- * ucfg_tdls_check_is_tdls_allowed() - Ucfg api to check is tdls allowed or not
- * @vdev: vdev object
- *
- * Function determines the whether TDLS allowed in the system
- *
- * Return: true or false
- */
-bool ucfg_tdls_check_is_tdls_allowed(struct wlan_objmgr_vdev *vdev);
-
-/**
- * ucfg_tdls_set_user_tdls_enable() - ucfg api to set tdls is enable or not
- * from userspace
- * @vdev: vdev object
- * @is_user_tdls_enable: true if tdls is enabled from userspace
- *
- * Return: void
- */
-void ucfg_tdls_set_user_tdls_enable(struct wlan_objmgr_vdev *vdev,
-				    bool is_user_tdls_enable);
-
 #else
-static inline
-bool ucfg_tdls_link_vdev_is_matching(struct wlan_objmgr_vdev *vdev)
-{
-	return false;
-}
-
-static inline
-struct wlan_objmgr_vdev *
-ucfg_tdls_get_tdls_link_vdev(struct wlan_objmgr_vdev *vdev,
-			     wlan_objmgr_ref_dbgid dbg_id)
-{
-	return NULL;
-}
-
-static inline
-void ucfg_tdls_put_tdls_link_vdev(struct wlan_objmgr_vdev *vdev,
-				  wlan_objmgr_ref_dbgid dbg_id)
-{
-}
 
 static inline
 QDF_STATUS ucfg_tdls_init(void)
@@ -557,8 +377,7 @@ QDF_STATUS ucfg_tdls_teardown_links(struct wlan_objmgr_psoc *psoc)
 }
 
 static inline
-void ucfg_tdls_teardown_links_sync(struct wlan_objmgr_psoc *psoc,
-				   struct wlan_objmgr_vdev *vdev)
+void ucfg_tdls_teardown_links_sync(struct wlan_objmgr_psoc *psoc)
 {
 }
 
@@ -579,18 +398,6 @@ struct wlan_objmgr_vdev *ucfg_get_tdls_vdev(struct wlan_objmgr_psoc *psoc,
 					    wlan_objmgr_ref_dbgid dbg_id)
 {
 	return NULL;
-}
-
-static inline
-bool ucfg_tdls_check_is_tdls_allowed(struct wlan_objmgr_vdev *vdev)
-{
-	return false;
-}
-
-static inline
-void ucfg_tdls_set_user_tdls_enable(struct wlan_objmgr_vdev *vdev,
-				    bool is_user_tdls_enable)
-{
 }
 
 static inline

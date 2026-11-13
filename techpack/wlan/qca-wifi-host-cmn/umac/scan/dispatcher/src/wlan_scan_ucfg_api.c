@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -75,11 +75,6 @@ void ucfg_scan_filter_valid_channel(struct wlan_objmgr_pdev *pdev,
 	uint32_t *chan_freq_list, uint32_t num_chan)
 {
 	scm_filter_valid_channel(pdev, chan_freq_list, num_chan);
-}
-
-uint32_t ucfg_scan_get_entry_frame_len(struct scan_cache_entry *scan_entry)
-{
-	return util_scan_entry_frame_len(scan_entry);
 }
 
 QDF_STATUS ucfg_scan_init(void)
@@ -553,9 +548,8 @@ ucfg_scan_config_hidden_ssid_for_bssid(struct wlan_objmgr_pdev *pdev,
 	if (!scan_obj)
 		return QDF_STATUS_E_FAILURE;
 
-	scm_debug("Configure bsssid:" QDF_MAC_ADDR_FMT " ssid:" QDF_SSID_FMT,
-		  QDF_MAC_ADDR_REF(bssid),
-		  QDF_SSID_REF(ssid->length, ssid->ssid));
+	scm_debug("Configure bsssid:"QDF_MAC_ADDR_FMT" ssid:%.*s",
+		  QDF_MAC_ADDR_REF(bssid), ssid->length, ssid->ssid);
 	qdf_mem_copy(scan_obj->pdev_info[pdev_id].conf_bssid,
 		     bssid, QDF_MAC_ADDR_SIZE);
 	scan_obj->pdev_info[pdev_id].conf_ssid.length = ssid->length;
@@ -766,8 +760,6 @@ wlan_scan_global_init(struct wlan_objmgr_psoc *psoc,
 			cfg_get(psoc, CFG_MIN_REST_TIME_CONC);
 	scan_obj->scan_def.conc_idle_time =
 			cfg_get(psoc, CFG_IDLE_TIME_CONC);
-	scan_obj->scan_def.conc_chlist_trim =
-			cfg_get(psoc, CFG_CHAN_LIST_TRIM_CONC);
 	scan_obj->scan_def.repeat_probe_time =
 			cfg_get(psoc, CFG_SCAN_PROBE_REPEAT_TIME);
 	scan_obj->scan_def.probe_spacing_time = SCAN_PROBE_SPACING_TIME;
@@ -800,7 +792,7 @@ wlan_scan_global_init(struct wlan_objmgr_psoc *psoc,
 				cfg_get(psoc, CFG_GO_SCAN_BURST_DURATION);
 	scan_obj->scan_def.ap_scan_burst_duration =
 				cfg_get(psoc, CFG_AP_SCAN_BURST_DURATION);
-	/* scan control flags */
+	/* scan contrl flags */
 	scan_obj->scan_def.scan_f_passive = true;
 	scan_obj->scan_def.scan_f_ofdm_rates = true;
 	scan_obj->scan_def.scan_f_2ghz = true;
@@ -827,9 +819,6 @@ wlan_scan_global_init(struct wlan_objmgr_psoc *psoc,
 
 	scan_obj->scan_def.skip_6g_and_indoor_freq =
 		cfg_get(psoc, CFG_SKIP_6GHZ_AND_INDOOR_FREQ_SCAN);
-	scan_obj->scan_def.last_scan_ageout_time =
-		cfg_get(psoc, CFG_LAST_SCAN_AGEOUT_TIME);
-	scan_obj->aux_mac_support = false;
 
 	/* init scan id seed */
 	qdf_atomic_init(&scan_obj->scan_ids);
@@ -1008,29 +997,23 @@ ucfg_scan_init_bssid_params(struct scan_start_request *req,
 /**
  * is_chan_enabled_for_scan() - helper API to check if a frequency
  * is allowed to scan.
- * @pdev: pointer to pdev
  * @reg_chan: regulatory_channel object
- * @low_2g: lower 2.4 GHz frequency threshold
- * @high_2g: upper 2.4 GHz frequency threshold
- * @low_5g: lower 5 GHz frequency threshold
- * @high_5g: upper 5 GHz frequency threshold
+ * @low_2g: lower 2.4 GHz frequency thresold
+ * @high_2g: upper 2.4 GHz frequency thresold
+ * @low_5g: lower 5 GHz frequency thresold
+ * @high_5g: upper 5 GHz frequency thresold
  *
  * Return: true if scan is allowed. false otherwise.
  */
 static bool
-is_chan_enabled_for_scan(struct wlan_objmgr_pdev *pdev,
-		struct regulatory_channel *reg_chan,
+is_chan_enabled_for_scan(struct regulatory_channel *reg_chan,
 		qdf_freq_t low_2g, qdf_freq_t high_2g, qdf_freq_t low_5g,
 		qdf_freq_t high_5g)
 {
-	if (wlan_reg_is_disable_for_pwrmode(pdev,
-					    reg_chan->center_freq,
-					    REG_BEST_PWR_MODE))
+	if (reg_chan->state == CHANNEL_STATE_DISABLE)
 		return false;
-
 	if (reg_chan->nol_chan)
 		return false;
-
 	/* 2 GHz channel */
 	if ((util_scan_scm_freq_to_band(reg_chan->center_freq) ==
 			WLAN_BAND_2_4_GHZ) &&
@@ -1098,8 +1081,7 @@ ucfg_scan_init_chanlist_params(struct scan_start_request *req,
 
 		for (idx = 0, num_chans = 0;
 			(idx < NUM_CHANNELS && num_chans < max_chans); idx++)
-			if ((is_chan_enabled_for_scan(pdev,
-						      &reg_chan_list[idx],
+			if ((is_chan_enabled_for_scan(&reg_chan_list[idx],
 						      low_2g, high_2g,
 						      low_5g, high_5g)) &&
 			    ((req->scan_req.scan_f_2ghz &&
@@ -1224,7 +1206,7 @@ QDF_STATUS ucfg_scan_update_user_config(struct wlan_objmgr_psoc *psoc,
 	}
 
 	scan_def = &scan_obj->scan_def;
-	scan_obj->ie_allowlist = scan_cfg->ie_allowlist;
+	scan_obj->ie_whitelist = scan_cfg->ie_whitelist;
 	scan_def->sta_miracast_mcc_rest_time =
 				scan_cfg->sta_miracast_mcc_rest_time;
 
@@ -1277,9 +1259,11 @@ ucfg_scan_suspend_handler(struct wlan_objmgr_psoc *psoc, void *arg)
 		pdev = wlan_objmgr_get_pdev_by_id(psoc, i, WLAN_SCAN_ID);
 		if (!pdev)
 			continue;
-		if (wlan_get_pdev_status(pdev) != SCAN_NOT_IN_PROGRESS)
+		if (wlan_get_pdev_status(pdev) !=
+		    SCAN_NOT_IN_PROGRESS) {
 			status = scan_cancel_pdev_scan(pdev);
-		scm_disable_obss_pdev_scan(psoc, pdev);
+			scm_disable_obss_pdev_scan(psoc, pdev);
+		}
 		wlan_objmgr_pdev_release_ref(pdev, WLAN_SCAN_ID);
 		if (QDF_IS_STATUS_ERROR(status)) {
 			scm_err("failed to cancel scan for pdev_id %d", i);
@@ -1473,8 +1457,8 @@ ucfg_scan_get_max_active_scans(struct wlan_objmgr_psoc *psoc)
 	return scan_params->max_active_scans_allowed;
 }
 
-bool ucfg_copy_ie_allowlist_attrs(struct wlan_objmgr_psoc *psoc,
-				  struct probe_req_allowlist_attr *ie_allowlist)
+bool ucfg_copy_ie_whitelist_attrs(struct wlan_objmgr_psoc *psoc,
+				  struct probe_req_whitelist_attr *ie_whitelist)
 {
 	struct wlan_scan_obj *scan_obj = NULL;
 
@@ -1482,13 +1466,13 @@ bool ucfg_copy_ie_allowlist_attrs(struct wlan_objmgr_psoc *psoc,
 	if (!scan_obj)
 		return false;
 
-	qdf_mem_copy(ie_allowlist, &scan_obj->ie_allowlist,
-		     sizeof(*ie_allowlist));
+	qdf_mem_copy(ie_whitelist, &scan_obj->ie_whitelist,
+		     sizeof(*ie_whitelist));
 
 	return true;
 }
 
-bool ucfg_ie_allowlist_enabled(struct wlan_objmgr_psoc *psoc,
+bool ucfg_ie_whitelist_enabled(struct wlan_objmgr_psoc *psoc,
 			       struct wlan_objmgr_vdev *vdev)
 {
 	struct wlan_scan_obj *scan_obj = NULL;
@@ -1501,7 +1485,7 @@ bool ucfg_ie_allowlist_enabled(struct wlan_objmgr_psoc *psoc,
 	    wlan_vdev_is_up(vdev) == QDF_STATUS_SUCCESS)
 		return false;
 
-	if (!scan_obj->ie_allowlist.allow_list)
+	if (!scan_obj->ie_whitelist.white_list)
 		return false;
 
 	return true;
@@ -1609,6 +1593,16 @@ ucfg_scan_set_global_config(struct wlan_objmgr_psoc *psoc,
 		status = QDF_STATUS_E_INVAL;
 		break;
 	}
+
+	return status;
+}
+
+QDF_STATUS ucfg_scan_update_mlme_by_bssinfo(struct wlan_objmgr_pdev *pdev,
+		struct bss_info *bss_info, struct mlme_info *mlme)
+{
+	QDF_STATUS status;
+
+	status = scm_scan_update_mlme_by_bssinfo(pdev, bss_info, mlme);
 
 	return status;
 }

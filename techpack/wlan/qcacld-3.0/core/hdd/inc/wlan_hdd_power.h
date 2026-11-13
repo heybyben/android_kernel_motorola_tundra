@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2012, 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -53,7 +52,7 @@
  * @HDD_FILTER_PROTO_TYPE_IPV4: IP V4 protocol
  * @HDD_FILTER_PROTO_TYPE_IPV6: IP V6 protocol
  * @HDD_FILTER_PROTO_TYPE_UDP: UDP protocol
- * @HDD_FILTER_PROTO_TYPE_MAX: Max place holder value
+ * @HDD_FILTER_PROTO_TYPE_INVALID: Max place holder value
  */
 enum pkt_filter_protocol_layer {
 	HDD_FILTER_PROTO_TYPE_INVALID = 0,
@@ -101,7 +100,7 @@ enum pkt_filter_compare_flag {
  * struct pkt_filter_param_cfg - packet filter parameter config
  * @protocol_layer: Protocol layer
  * @compare_flag: Compare flag
- * @data_offset: Data offset
+ * @data_fffset: Data offset
  * @data_length: Data length
  * @compare_data: Compare data
  * @data_mask: Data mask
@@ -133,7 +132,7 @@ struct pkt_filter_cfg {
 
 #ifdef FEATURE_ANI_LEVEL_REQUEST
 /**
- * struct ani_priv - structure to store the priv data for get ani request
+ * ani_priv - structure to store the priv data for get ani request
  * @num_freq: number of freq received from the FW
  * @ani: data received from the FW
  */
@@ -200,25 +199,21 @@ void hdd_handle_cached_commands(void);
 /**
  * hdd_enable_arp_offload() - API to enable ARP offload
  * @adapter: Adapter context for which ARP offload is to be configured
- * @vdev: VDEV objmgr pointer
  * @trigger: trigger reason for request
  *
  * Return: None
  */
 void hdd_enable_arp_offload(struct hdd_adapter *adapter,
-			    struct wlan_objmgr_vdev *vdev,
 			    enum pmo_offload_trigger trigger);
 
 /**
  * hdd_disable_arp_offload() - API to disable ARP offload
  * @adapter: Adapter context for which ARP offload is to be configured
- * @vdev: VDEV objmgr pointer
  * @trigger: trigger reason for request
  *
  * Return: None
  */
 void hdd_disable_arp_offload(struct hdd_adapter *adapter,
-			     struct wlan_objmgr_vdev *vdev,
 			     enum pmo_offload_trigger trigger);
 
 /**
@@ -246,10 +241,10 @@ void hdd_disable_host_offloads(struct hdd_adapter *adapter,
 			       enum pmo_offload_trigger trigger);
 
 /**
- * hdd_set_grat_arp_keepalive() - Enable gratuitous ARP keepalive
+ * hdd_set_grat_arp_keepalive() - Enable grat APR keepalive
  * @adapter: the HDD adapter to configure
  *
- * This configures gratuitous ARP keepalive based on the adapter's current
+ * This configures gratuitous APR keepalive based on the adapter's current
  * connection information, specifically IPv4 address and BSSID
  *
  * return: zero for success, non-zero for failure
@@ -341,55 +336,31 @@ void hdd_ipv4_notifier_work_queue(struct work_struct *work);
 #ifdef WLAN_NS_OFFLOAD
 /**
  * hdd_enable_ns_offload() - enable NS offload
- * @adapter: pointer to the adapter
- * @vdev: VDEV objmgr pointer
- * @trigger: trigger reason to enable ns offload
+ * @adapter:   pointer to the adapter
  *
  * Return: nothing
  */
 void hdd_enable_ns_offload(struct hdd_adapter *adapter,
-			   struct wlan_objmgr_vdev *vdev,
 			   enum pmo_offload_trigger trigger);
 
 /**
  * hdd_disable_ns_offload() - disable NS offload
- * @adapter: pointer to the adapter
- * @vdev: VDEV objmgr pointer
- * @trigger: trigger reason to enable ns offload
+ * @adapter:   pointer to the adapter
  *
  * Return: nothing
  */
 void hdd_disable_ns_offload(struct hdd_adapter *adapter,
-			    struct wlan_objmgr_vdev *vdev,
-			    enum pmo_offload_trigger trigger);
-
-/**
- * hdd_send_ps_config_to_fw() - Check user pwr save config set/reset PS
- * @adapter: pointer to hdd adapter
- *
- * This function checks the power save configuration saved in MAC context
- * and sends power save config to FW.
- *
- * Return: None
- */
-void hdd_send_ps_config_to_fw(struct hdd_adapter *adapter);
+	enum pmo_offload_trigger trigger);
 #else /* WLAN_NS_OFFLOAD */
 static inline
 void hdd_enable_ns_offload(struct hdd_adapter *adapter,
-			   struct wlan_objmgr_vdev *vdev,
 			   enum pmo_offload_trigger trigger)
 {
 }
 
 static inline
 void hdd_disable_ns_offload(struct hdd_adapter *adapter,
-			    struct wlan_objmgr_vdev *vdev,
 			    enum pmo_offload_trigger trigger)
-{
-}
-
-static inline
-void hdd_send_ps_config_to_fw(struct hdd_adapter *adapter)
 {
 }
 #endif /* WLAN_NS_OFFLOAD */
@@ -406,8 +377,6 @@ void hdd_ipv6_notifier_work_queue(struct work_struct *work);
  * wlan_hdd_cfg80211_get_txpower() - cfg80211 get power handler function
  * @wiphy: Pointer to wiphy structure.
  * @wdev: Pointer to wireless_dev structure.
- * @radio_idx: Radio index
- * @link_id: Link index
  * @dbm: dbm
  *
  * This is the cfg80211 get txpower handler function which invokes
@@ -416,45 +385,23 @@ void hdd_ipv6_notifier_work_queue(struct work_struct *work);
  *
  * Return: 0 for success, error number on failure.
  */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0))
-int wlan_hdd_cfg80211_get_txpower(struct wiphy *wiphy,
-				  struct wireless_dev *wdev,
-				  int radio_idx,
-				  unsigned int link_id,
-				  int *dbm);
-#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0))
-int wlan_hdd_cfg80211_get_txpower(struct wiphy *wiphy,
-				  struct wireless_dev *wdev,
-				  unsigned int link_id,
-				  int *dbm);
-#else
 int wlan_hdd_cfg80211_get_txpower(struct wiphy *wiphy,
 				  struct wireless_dev *wdev,
 				  int *dbm);
-#endif
 
 /**
  * wlan_hdd_cfg80211_set_txpower() - set TX power
  * @wiphy: Pointer to wiphy
  * @wdev: Pointer to network device
- * @radio_idx: Radio index
  * @type: TX power setting type
  * @dbm: TX power in dbm
  *
  * Return: 0 for success, non-zero for failure
  */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0))
-int wlan_hdd_cfg80211_set_txpower(struct wiphy *wiphy,
-				  struct wireless_dev *wdev,
-				  int radio_idx,
-				  enum nl80211_tx_power_setting type,
-				  int dbm);
-#else
 int wlan_hdd_cfg80211_set_txpower(struct wiphy *wiphy,
 				  struct wireless_dev *wdev,
 				  enum nl80211_tx_power_setting type,
 				  int dbm);
-#endif
 
 /**
  * wlan_hdd_cfg80211_set_power_mgmt() - set cfg80211 power management config
@@ -510,8 +457,7 @@ int wlan_hdd_pm_qos_notify(struct notifier_block *nb, unsigned long curr_val,
  * Return: true if there is PM QoS global vote,
  *	   or an false otherwise
  */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0) && \
-	defined(__ANDROID_COMMON_KERNEL__))
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
 bool wlan_hdd_is_cpu_pm_qos_in_progress(struct hdd_context *hdd_ctx);
 #else
 static inline bool
@@ -540,26 +486,13 @@ int wlan_hdd_ipv6_changed(struct notifier_block *nb,
  * hdd_set_power_config() - set power config to firmware
  * @hddctx: HDD context
  * @adapter: HDD adapter
- * @opm_mode: pointer to vendor opm_mode
+ * @power: new power config value
  *
  * Return: 0 on success; Errno on failure
  */
 int hdd_set_power_config(struct hdd_context *hddctx,
-			 struct hdd_adapter *adapter,
-			 enum qca_wlan_vendor_opm_mode *opm_mode);
+			 struct hdd_adapter *adapter, uint8_t power);
 
-/**
- * hdd_set_power_config_params() - set power config parameters
- * @hddctx: HDD context
- * @adapter: HDD adapter
- * @ps_ito: power save inactivitiy duration in ms
- * @spec_wake: power save speculative wake duration in ms
- *
- * Return: 0 on success; Errno on failure
- */
-int hdd_set_power_config_params(struct hdd_context *hddctx,
-				struct hdd_adapter *adapter,
-				uint16_t ps_ito, uint16_t spec_wake);
 #ifdef FEATURE_WLAN_DIAG_SUPPORT
 /**
  * hdd_wlan_suspend_resume_event()- send suspend/resume state
@@ -578,13 +511,13 @@ void hdd_wlan_suspend_resume_event(uint8_t state) {}
 
 /**
  * wlan_hdd_set_powersave() - Set powersave mode
- * @link_info: Link inof pointer in HDD adapter
+ * @adapter: adapter upon which the request was received
  * @allow_power_save: is wlan allowed to go into power save mode
  * @timeout: timeout period in ms
  *
  * Return: 0 on success, non-zero on any error
  */
-int wlan_hdd_set_powersave(struct wlan_hdd_link_info *link_info,
+int wlan_hdd_set_powersave(struct hdd_adapter *adapter,
 			   bool allow_power_save, uint32_t timeout);
 
 /**
@@ -605,7 +538,7 @@ void wlan_hdd_inc_suspend_stats(struct hdd_context *hdd_ctx,
 /*
  * Unit-test suspend/resume is a testing feature that allows putting firmware
  * into WoW suspend irrespective of Apps suspend status. It emulates the chain
- * of events that occur during normal system-level suspend/resume, such as
+ * of events that occur durring normal system-level suspend/resume, such as
  * initiating all of the suspend/resume stages in the correct order, and
  * enabling/disabling appropriate copy engine irqs.
  */
@@ -659,7 +592,7 @@ hdd_wlan_fake_apps_suspend(struct wiphy *wiphy, struct net_device *dev,
 }
 #endif /* WLAN_SUSPEND_RESUME_TEST */
 
-#ifdef WLAN_DP_LEGACY_OL_RX_THREAD
+#ifdef QCA_CONFIG_SMP
 /**
  * wlan_hdd_rx_thread_resume() - Resume RX thread
  * @hdd_ctx: HDD context
@@ -688,6 +621,25 @@ static inline int wlan_hdd_rx_thread_suspend(struct hdd_context *hdd_ctx)
 }
 #endif
 
+#ifdef FEATURE_WLAN_FULL_POWER_DOWN_SUPPORT
+/**
+ * wlan_hdd_is_full_power_down_enable()- Check wlan full power down
+ * @hdd_ctx: HDD context
+ *
+ * check whether the wlan full power down is enabled or not.
+ *
+ * Return: true if wlan full power enabled else false
+ */
+bool
+wlan_hdd_is_full_power_down_enable(struct hdd_context *hdd_ctx);
+#else
+static inline bool
+wlan_hdd_is_full_power_down_enable(struct hdd_context *hdd_ctx)
+{
+	return false;
+}
+#endif
+
 #ifdef FEATURE_ANI_LEVEL_REQUEST
 /**
  * wlan_hdd_get_ani_level() - Wrapper to call API to fetch ani level
@@ -708,33 +660,17 @@ QDF_STATUS wlan_hdd_get_ani_level(struct hdd_adapter *adapter,
 /**
  * hdd_enable_icmp_offload() - API to enable ICMP offload
  * @adapter: Adapter context for which ICMP offload is to be configured
- * @vdev: VDEV ojgmgr pointer
  * @trigger: trigger reason for request
  *
  * Return: None
  */
 void hdd_enable_icmp_offload(struct hdd_adapter *adapter,
-			     struct wlan_objmgr_vdev *vdev,
 			     enum pmo_offload_trigger trigger);
 #else
 static inline
 void hdd_enable_icmp_offload(struct hdd_adapter *adapter,
-			     struct wlan_objmgr_vdev *vdev,
 			     enum pmo_offload_trigger trigger)
 {}
 #endif /* FEATURE_ICMP_OFFLOAD */
 
-#if defined(WLAN_FEATURE_11BE_MLO) && defined(CFG80211_11BE_BASIC)
-int wlan_hdd_set_mlo_ps(struct hdd_adapter *adapter,
-			bool allow_power_save, int timeout,
-			int link_id);
-#else
-static inline
-int wlan_hdd_set_mlo_ps(struct hdd_adapter *adapter,
-			bool allow_power_save, int timeout,
-			int link_id)
-{
-        return 0;
-}
-#endif
 #endif /* __WLAN_HDD_POWER_H */

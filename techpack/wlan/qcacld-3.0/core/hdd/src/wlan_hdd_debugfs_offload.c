@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -68,7 +67,7 @@ wlan_hdd_mc_addr_list_info_debugfs(struct hdd_context *hdd_ctx,
 	}
 
 	status = ucfg_pmo_get_mc_addr_list(hdd_ctx->psoc,
-					   adapter->deflink->vdev_id,
+					   adapter->vdev_id,
 					   &mc_addr_list);
 	if (!QDF_IS_STATUS_SUCCESS(status)) {
 		ret = scnprintf(buf, buf_avail_len,
@@ -100,8 +99,8 @@ wlan_hdd_mc_addr_list_info_debugfs(struct hdd_context *hdd_ctx,
 		}
 
 		ret = scnprintf(buf + length, buf_avail_len - length,
-				QDF_MAC_ADDR_FMT "\n",
-				QDF_MAC_ADDR_REF(mc_addr_list.mc_addr[i].bytes));
+				QDF_FULL_MAC_FMT "\n",
+				QDF_FULL_MAC_REF(mc_addr_list.mc_addr[i].bytes));
 		if (ret <= 0)
 			return length;
 		length += ret;
@@ -141,8 +140,7 @@ wlan_hdd_arp_offload_info_debugfs(struct hdd_context *hdd_ctx,
 	struct wlan_objmgr_vdev *vdev;
 	QDF_STATUS status;
 
-	vdev = hdd_objmgr_get_vdev_by_user(adapter->deflink,
-					   WLAN_OSIF_POWER_ID);
+	vdev = hdd_objmgr_get_vdev_by_user(adapter, WLAN_OSIF_POWER_ID);
 	if (!vdev)
 		return 0;
 
@@ -237,8 +235,7 @@ wlan_hdd_ns_offload_info_debugfs(struct hdd_context *hdd_ctx,
 	QDF_STATUS status;
 	uint32_t i;
 
-	vdev = hdd_objmgr_get_vdev_by_user(adapter->deflink,
-					   WLAN_OSIF_POWER_ID);
+	vdev = hdd_objmgr_get_vdev_by_user(adapter, WLAN_OSIF_POWER_ID);
 	if (!vdev)
 		return 0;
 
@@ -297,9 +294,9 @@ wlan_hdd_ns_offload_info_debugfs(struct hdd_context *hdd_ctx,
 
 		if (info.target_ipv6_addr_ac_type[i] ==
 		    PMO_IPV6_ADDR_AC_TYPE)
-			strscpy(cast_string, "(ANY CAST)", 12);
+			strlcpy(cast_string, "(ANY CAST)", 12);
 		else
-			strscpy(cast_string, "(UNI CAST)", 12);
+			strlcpy(cast_string, "(UNI CAST)", 12);
 
 		ret = scnprintf(buf + length, buf_avail_len - length,
 				"%u. %s %s and scope is: %s\n",
@@ -331,7 +328,6 @@ wlan_hdd_ns_offload_info_debugfs(struct hdd_context *hdd_ctx,
 }
 #endif
 
-#ifdef FEATURE_WLAN_APF
 /**
  * wlan_hdd_apf_info_debugfs() - Populate apf offload info
  * @hdd_ctx: pointer to hdd context
@@ -364,15 +360,6 @@ wlan_hdd_apf_info_debugfs(struct hdd_context *hdd_ctx,
 
 	return length;
 }
-#else
-static ssize_t
-wlan_hdd_apf_info_debugfs(struct hdd_context *hdd_ctx,
-			  struct hdd_adapter *adapter, uint8_t *buf,
-			  ssize_t buf_avail_len)
-{
-	return 0;
-}
-#endif
 
 ssize_t
 wlan_hdd_debugfs_update_filters_info(struct hdd_context *hdd_ctx,
@@ -402,8 +389,8 @@ wlan_hdd_debugfs_update_filters_info(struct hdd_context *hdd_ctx,
 		return len;
 	}
 
-	hdd_sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter->deflink);
-	if (!hdd_cm_is_vdev_associated(adapter->deflink)) {
+	hdd_sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter);
+	if (!hdd_cm_is_vdev_associated(adapter)) {
 		ret_val = scnprintf(buf + len, buf_avail_len - len,
 				    "\nSTA is not connected\n");
 		if (ret_val <= 0)

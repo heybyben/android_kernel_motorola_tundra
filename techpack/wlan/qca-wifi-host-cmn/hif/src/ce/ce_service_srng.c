@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -225,7 +225,7 @@ ce_send_nolock_srng(struct CE_handle *copyeng,
 		hal_srng_access_end(scn->hal_soc, src_ring->srng_ctx);
 
 		/* src_ring->write index hasn't been updated event though
-		 * the register has already been written to.
+		 * the register has allready been written to.
 		 */
 		hif_record_ce_srng_desc_event(scn, CE_state->id, event_type,
 					      (union ce_srng_desc *)src_desc,
@@ -344,12 +344,6 @@ ce_recv_buf_enqueue_srng(struct CE_handle *copyeng,
 		return QDF_STATUS_E_IO;
 	}
 
-	/* HP/TP update if any should happen only once per interrupt,
-	 * therefore checking for CE receive_count.
-	 */
-	hal_srng_check_and_update_hptp(scn->hal_soc, dest_ring->srng_ctx,
-				       !CE_state->receive_count);
-
 	if (hal_srng_access_start(scn->hal_soc, dest_ring->srng_ctx)) {
 		qdf_spin_unlock_bh(&CE_state->ce_index_lock);
 		return QDF_STATUS_E_FAILURE;
@@ -451,12 +445,6 @@ ce_completed_recv_next_nolock_srng(struct CE_state *CE_state,
 	struct ce_srng_dest_status_desc *dest_status = NULL;
 	int nbytes;
 	struct ce_srng_dest_status_desc dest_status_info;
-
-	/* HP/TP update if any should happen only once per interrupt,
-	 * therefore checking for CE receive_count.
-	 */
-	hal_srng_check_and_update_hptp(scn->hal_soc, status_ring->srng_ctx,
-				       !CE_state->receive_count);
 
 	if (hal_srng_access_start(scn->hal_soc, status_ring->srng_ctx))
 		return QDF_STATUS_E_FAILURE;
@@ -801,7 +789,7 @@ static void ce_srng_src_ring_setup(struct hif_softc *scn, uint32_t ce_id,
 	}
 
 	src_ring->srng_ctx = hal_srng_setup(scn->hal_soc, CE_SRC, ce_id, 0,
-					    &ring_params, 0);
+			&ring_params);
 }
 
 #ifdef WLAN_WAR_CE_DISABLE_SRNG_TIMER_IRQ
@@ -844,7 +832,7 @@ static inline bool ce_is_status_ring_timer_thresh_war_needed(void)
  * @ring_params: pointer to initialized parameters
  *
  * For Napier & Hawkeye v1, the status ring timer interrupts do not work
- * As a workaround host configures the destination rings to be a proxy for
+ * As a work arround host configures the destination rings to be a proxy for
  * work needing to be done.
  *
  * The interrupts are setup such that if the destination ring is less than fully
@@ -853,7 +841,7 @@ static inline bool ce_is_status_ring_timer_thresh_war_needed(void)
  *
  * There is a timing bug in srng based copy engines such that a fully posted
  * srng based copy engine has 2 empty entries instead of just one.  The copy
- * engine data structures work with 1 empty entry, but the software frequently
+ * engine data sturctures work with 1 empty entry, but the software frequently
  * fails to post the last entry due to the race condition.
  */
 static void ce_srng_initialize_dest_timer_interrupt_war(
@@ -897,7 +885,7 @@ static void ce_srng_dest_ring_setup(struct hif_softc *scn,
 
 	/*Dest ring is also source ring*/
 	dest_ring->srng_ctx = hal_srng_setup(scn->hal_soc, CE_DST, ce_id, 0,
-					     &ring_params, 0);
+			&ring_params);
 }
 
 #ifdef WLAN_CE_INTERRUPT_THRESHOLD_CONFIG
@@ -946,7 +934,7 @@ static void ce_srng_status_ring_setup(struct hif_softc *scn, uint32_t ce_id,
 	}
 
 	status_ring->srng_ctx = hal_srng_setup(scn->hal_soc, CE_DST_STATUS,
-					       ce_id, 0, &ring_params, 0);
+			ce_id, 0, &ring_params);
 }
 
 static int ce_ring_setup_srng(struct hif_softc *scn, uint8_t ring_type,
@@ -990,7 +978,7 @@ static void ce_ring_cleanup_srng(struct hif_softc *scn,
 	}
 
 	if (hal_srng)
-		hal_srng_cleanup(scn->hal_soc, hal_srng, 0);
+		hal_srng_cleanup(scn->hal_soc, hal_srng);
 }
 
 static void ce_construct_shadow_config_srng(struct hif_softc *scn)
@@ -1026,7 +1014,7 @@ static void ce_prepare_shadow_register_v2_cfg_srng(struct hif_softc *scn,
 			      num_shadow_registers_configured);
 
 	if (*num_shadow_registers_configured != 0) {
-		hif_err("hal shadow register configuration already constructed");
+		hif_err("hal shadow register configuration allready constructed");
 
 		/* return with original configuration*/
 		return;
@@ -1039,35 +1027,6 @@ static void ce_prepare_shadow_register_v2_cfg_srng(struct hif_softc *scn,
 	hal_get_shadow_config(scn->hal_soc, shadow_config,
 			      num_shadow_registers_configured);
 }
-
-#ifdef CONFIG_SHADOW_V3
-static void ce_prepare_shadow_register_v3_cfg_srng(struct hif_softc *scn,
-		struct pld_shadow_reg_v3_cfg **shadow_config,
-		int *num_shadow_registers_configured)
-{
-	if (!scn->hal_soc) {
-		hif_err("hal not initialized: not initializing shadow config");
-		return;
-	}
-
-	hal_get_shadow_v3_config(scn->hal_soc, shadow_config,
-				 num_shadow_registers_configured);
-
-	if (*num_shadow_registers_configured != 0) {
-		hif_err("hal shadow register configuration already constructed");
-
-		/* return with original configuration*/
-		return;
-	}
-	hal_construct_srng_shadow_regs(scn->hal_soc);
-	ce_construct_shadow_config_srng(scn);
-	hal_set_shadow_regs(scn->hal_soc);
-	hal_construct_shadow_regs(scn->hal_soc);
-	/* get updated configuration */
-	hal_get_shadow_v3_config(scn->hal_soc, shadow_config,
-				 num_shadow_registers_configured);
-}
-#endif
 
 #ifdef HIF_CE_LOG_INFO
 /**
@@ -1106,195 +1065,6 @@ int ce_get_index_info_srng(struct hif_softc *scn, void *ce_state,
 }
 #endif
 
-#ifdef FEATURE_DIRECT_LINK
-/**
- * ce_set_srng_msi_irq_config_by_ceid(): Set srng MSI irq configuration for CE
- *  given by id
- * @scn: HIF Context
- * @ce_id:
- * @addr:
- * @data:
- *
- * Return: 0 for success and non zero for failure
- */
-static QDF_STATUS
-ce_set_srng_msi_irq_config_by_ceid(struct hif_softc *scn, uint8_t ce_id,
-				   uint64_t addr, uint32_t data)
-{
-	struct CE_state *ce_state;
-	hal_ring_handle_t ring_hdl;
-	struct hal_srng_params ring_params = {0};
-
-	ce_state = scn->ce_id_to_state[ce_id];
-	if (!ce_state)
-		return QDF_STATUS_E_NOSUPPORT;
-
-	ring_params.msi_addr = addr;
-	ring_params.msi_data = data;
-
-	if (ce_state->src_ring) {
-		ring_hdl = ce_state->src_ring->srng_ctx;
-
-		ring_params.intr_timer_thres_us = 0;
-		ring_params.intr_batch_cntr_thres_entries = 1;
-		ring_params.prefetch_timer = HAL_SRNG_PREFETCH_TIMER;
-	} else if (ce_state->dest_ring) {
-		ring_hdl = ce_state->status_ring->srng_ctx;
-
-		ce_status_ring_config_int_threshold(scn, &ring_params);
-
-		hal_srng_set_msi_irq_config(scn->hal_soc, ring_hdl,
-					    &ring_params);
-
-		if (ce_is_status_ring_timer_thresh_war_needed()) {
-			ce_srng_initialize_dest_timer_interrupt_war(
-					ce_state->dest_ring, &ring_params);
-		} else {
-			ce_srng_initialize_dest_ring_thresh(ce_state->dest_ring,
-							    &ring_params);
-		}
-		ring_params.prefetch_timer = HAL_SRNG_PREFETCH_TIMER;
-		ring_hdl = ce_state->dest_ring->srng_ctx;
-	} else {
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	hal_srng_set_msi_irq_config(scn->hal_soc, ring_hdl, &ring_params);
-
-	return QDF_STATUS_SUCCESS;
-}
-
-static
-uint16_t ce_get_direct_link_dest_srng_buffers(struct hif_softc *scn,
-					      uint64_t **dma_addr,
-					      uint32_t *buf_size)
-{
-	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
-	struct CE_state *ce_state;
-	struct service_to_pipe *tgt_svc_cfg;
-	uint64_t *dma_addr_arr = NULL;
-	uint32_t i;
-	uint32_t j = 0;
-
-	tgt_svc_cfg = hif_state->tgt_svc_map;
-
-	for (i = 0; i < hif_state->sz_tgt_svc_map; i++) {
-		if (tgt_svc_cfg[i].service_id != LPASS_DATA_MSG_SVC ||
-		    tgt_svc_cfg[i].pipedir != PIPEDIR_IN)
-			continue;
-
-		ce_state = scn->ce_id_to_state[tgt_svc_cfg[i].pipenum];
-		if (!ce_state || !ce_state->dest_ring) {
-			hif_err("Direct Link CE pipe %d not initialized",
-				tgt_svc_cfg[i].pipenum);
-			return QDF_STATUS_E_FAILURE;
-		}
-
-		QDF_ASSERT(scn->dl_recv_pages.dma_pages);
-
-		dma_addr_arr = qdf_mem_malloc(sizeof(*dma_addr_arr) *
-					      scn->dl_recv_pages.num_pages);
-		if (!dma_addr_arr)
-			return 0;
-
-		for (j = 0; j < scn->dl_recv_pages.num_pages; j++)
-			dma_addr_arr[j] =
-				scn->dl_recv_pages.dma_pages[j].page_p_addr;
-
-		*buf_size = ce_state->src_sz_max;
-
-		break;
-	}
-
-	*dma_addr = dma_addr_arr;
-
-	return j;
-}
-
-/**
- * ce_save_srng_info() - Get and save srng information
- * @hif_ctx: hif context
- * @srng_info: Direct Link CE srng information
- * @srng_ctx: Direct Link CE srng context
- *
- * Return: QDF status
- */
-static void
-ce_save_srng_info(struct hif_softc *hif_ctx, struct hif_ce_ring_info *srng_info,
-		  void *srng_ctx)
-{
-	struct hal_srng_params params;
-
-	hal_get_srng_params(hif_ctx->hal_soc, srng_ctx, &params);
-
-	srng_info->ring_id = params.ring_id;
-	srng_info->ring_dir = params.ring_dir;
-	srng_info->num_entries = params.num_entries;
-	srng_info->entry_size = params.entry_size;
-	srng_info->ring_base_paddr = params.ring_base_paddr;
-	srng_info->hp_paddr =
-		      hal_srng_get_hp_addr(hif_ctx->hal_soc, srng_ctx);
-	srng_info->tp_paddr =
-		      hal_srng_get_tp_addr(hif_ctx->hal_soc, srng_ctx);
-}
-
-static
-QDF_STATUS ce_get_direct_link_srng_info(struct hif_softc *scn,
-					struct hif_direct_link_ce_info *info,
-					uint8_t max_ce_info_len)
-{
-	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
-	struct CE_state *ce_state;
-	struct service_to_pipe *tgt_svc_cfg;
-	uint8_t ce_info_idx = 0;
-	uint32_t i;
-
-	tgt_svc_cfg = hif_state->tgt_svc_map;
-
-	for (i = 0; i < hif_state->sz_tgt_svc_map; i++) {
-		if (tgt_svc_cfg[i].service_id != LPASS_DATA_MSG_SVC)
-			continue;
-
-		ce_state = scn->ce_id_to_state[tgt_svc_cfg[i].pipenum];
-		if (!ce_state) {
-			hif_err("Direct Link CE pipe %d not initialized",
-				tgt_svc_cfg[i].pipenum);
-			return QDF_STATUS_E_FAILURE;
-		}
-
-		if (ce_info_idx > max_ce_info_len)
-			return QDF_STATUS_E_FAILURE;
-
-		info[ce_info_idx].ce_id = ce_state->id;
-		info[ce_info_idx].pipe_dir = tgt_svc_cfg[i].pipedir;
-
-		if (ce_state->src_ring)
-			ce_save_srng_info(scn, &info[ce_info_idx].ring_info,
-					  ce_state->src_ring->srng_ctx);
-		else
-			ce_save_srng_info(scn, &info[ce_info_idx].ring_info,
-					  ce_state->dest_ring->srng_ctx);
-
-		ce_info_idx++;
-
-		if (!ce_state->status_ring)
-			continue;
-
-		if (ce_info_idx > max_ce_info_len)
-			return QDF_STATUS_E_FAILURE;
-
-		info[ce_info_idx].ce_id = ce_state->id;
-		info[ce_info_idx].pipe_dir = tgt_svc_cfg[i].pipedir;
-
-		ce_save_srng_info(scn, &info[ce_info_idx].ring_info,
-				  ce_state->status_ring->srng_ctx);
-		ce_info_idx++;
-	}
-
-	return QDF_STATUS_SUCCESS;
-}
-#endif
-
 static struct ce_ops ce_service_srng = {
 	.ce_get_desc_size = ce_get_desc_size_srng,
 	.ce_ring_setup = ce_ring_setup_srng,
@@ -1312,18 +1082,9 @@ static struct ce_ops ce_service_srng = {
 	.ce_send_entries_done_nolock = ce_send_entries_done_nolock_srng,
 	.ce_prepare_shadow_register_v2_cfg =
 		ce_prepare_shadow_register_v2_cfg_srng,
-#ifdef CONFIG_SHADOW_V3
-	.ce_prepare_shadow_register_v3_cfg =
-		ce_prepare_shadow_register_v3_cfg_srng,
-#endif
 #ifdef HIF_CE_LOG_INFO
 	.ce_get_index_info =
 		ce_get_index_info_srng,
-#endif
-#ifdef FEATURE_DIRECT_LINK
-	.ce_set_irq_config_by_ceid = ce_set_srng_msi_irq_config_by_ceid,
-	.ce_get_direct_link_dest_buffers = ce_get_direct_link_dest_srng_buffers,
-	.ce_get_direct_link_ring_info = ce_get_direct_link_srng_info,
 #endif
 };
 

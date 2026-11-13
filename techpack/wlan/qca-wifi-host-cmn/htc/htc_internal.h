@@ -198,7 +198,6 @@ enum ol_ath_htc_pkt_ecodes {
 	HTC_PKT_Q_EMPTY,
 	HTC_SEND_Q_EMPTY
 };
-
 /* our HTC target state */
 typedef struct _HTC_TARGET {
 	struct hif_opaque_softc *hif_dev;
@@ -252,7 +251,7 @@ typedef struct _HTC_TARGET {
 
 	/*
 	 * Number of WMI endpoints used.
-	 * Default value is 1. But it should be overridden after htc_create to
+	 * Default value is 1. But it should be overidden after htc_create to
 	 * reflect the actual count.
 	 */
 	uint8_t wmi_ep_count;
@@ -263,10 +262,8 @@ typedef struct _HTC_TARGET {
 	bool htc_pkt_dbg;
 
 #ifdef FEATURE_RUNTIME_PM
-	/* Runtime count for H2T HTT msg with response */
-	qdf_atomic_t htc_htt_runtime_cnt;
-	/* Runtime count for WMI msg*/
-	qdf_atomic_t htc_wmi_runtime_cnt;
+	/* Runtime count for H2T msg with response */
+	qdf_atomic_t htc_runtime_cnt;
 #endif
 	/* Non flow ctrl enabled endpoints nbuf map unmap count */
 	uint32_t nbuf_nfc_map_count;

@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2012-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -46,7 +45,7 @@
    11/20/08    sho    Renamed this to VosWrapper.c; remove all dependencies on
 			WM platform and allow this to work on all VOSS enabled
 			platform
-   06/24/08    tbh    Modified the file to remove the dependency on HDD files as
+   06/24/08    tbh    Modified the file to remove the dependecy on HDD files as
 			part of Gen6 bring up process.
    10/29/02 Neelay Das Created file.
 
@@ -293,7 +292,7 @@ uint32_t tx_timer_create_intern_debug(void *pMacGlobal,
 
 #ifdef WLAN_DEBUG
 	/* Store the timer name */
-	strscpy(timer_ptr->timerName, name_ptr, sizeof(timer_ptr->timerName));
+	strlcpy(timer_ptr->timerName, name_ptr, sizeof(timer_ptr->timerName));
 #endif /* Store the timer name, for Debug build only */
 
 	status =
@@ -353,7 +352,7 @@ uint32_t tx_timer_create_intern(void *pMacGlobal, TX_TIMER *timer_ptr,
 
 #ifdef WLAN_DEBUG
 	/* Store the timer name */
-	strscpy(timer_ptr->timerName, name_ptr, sizeof(timer_ptr->timerName));
+	strlcpy(timer_ptr->timerName, name_ptr, sizeof(timer_ptr->timerName));
 #endif /* Store the timer name, for Debug build only */
 
 	status = qdf_mc_timer_init(&timer_ptr->qdf_timer, QDF_TIMER_TYPE_SW,

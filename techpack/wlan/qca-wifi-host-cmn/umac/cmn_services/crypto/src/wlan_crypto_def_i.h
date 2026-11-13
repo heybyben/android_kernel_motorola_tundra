@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -17,23 +16,20 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-/**
- * DOC: Private definitions for handling crypto params
+ /**
+ * DOC: Private definations for handling crypto params
  */
 #ifndef _WLAN_CRYPTO_DEF_I_H_
 #define _WLAN_CRYPTO_DEF_I_H_
 
 #include <wlan_cmn_ieee80211.h>
-#include "wlan_objmgr_pdev_obj.h"
-#include "wlan_crypto_global_def.h"
 #ifdef WLAN_CRYPTO_AES
 #include "wlan_crypto_aes_i.h"
 #endif
 
+
 /* Number of bits per byte */
 #define CRYPTO_NBBY  8
-/* Default link id for legacy connection */
-#define CRYPTO_MAX_LINK_IDX 0xFF
 
 /* Macros for handling unaligned memory accesses */
 
@@ -107,18 +103,14 @@ static inline void wlan_crypto_put_be64(u8 *a, u64 val)
 	((tx_ops)->crypto_tx_ops.defaultkey)
 #define WLAN_CRYPTO_TX_OPS_SET_KEY(tx_ops) \
 	((tx_ops)->crypto_tx_ops.set_key)
-#define WLAN_CRYPTO_TX_OPS_SET_VDEV_PARAM(tx_ops) \
-	((tx_ops)->crypto_tx_ops.set_vdev_param)
 #define WLAN_CRYPTO_TX_OPS_GETPN(tx_ops) \
 	((tx_ops)->crypto_tx_ops.getpn)
-#define WLAN_CRYPTO_TX_OPS_SET_LTF_KEYSEED(tx_ops) \
-	((tx_ops)->crypto_tx_ops.set_ltf_keyseed)
 #define WLAN_CRYPTO_TX_OPS_REGISTER_EVENTS(tx_ops) \
 	((tx_ops)->crypto_tx_ops.register_events)
 #define WLAN_CRYPTO_TX_OPS_DEREGISTER_EVENTS(tx_ops) \
 	((tx_ops)->crypto_tx_ops.deregister_events)
 
-/* unaligned little endian access */
+/* unalligned little endian access */
 #ifndef LE_READ_2
 #define LE_READ_2(p) \
 	((uint16_t)                          \
@@ -212,8 +204,6 @@ static inline void wlan_crypto_put_be64(u8 *a, u64 val)
 #define RSN_AUTH_KEY_MGMT_OWE           WLAN_RSN_SEL(18)
 #define RSN_AUTH_KEY_MGMT_FT_PSK_SHA384 WLAN_RSN_SEL(19)
 #define RSN_AUTH_KEY_MGMT_PSK_SHA384    WLAN_RSN_SEL(20)
-#define RSN_AUTH_KEY_MGMT_SAE_EXT_KEY   WLAN_RSN_SEL(24)
-#define RSN_AUTH_KEY_MGMT_FT_SAE_EXT_KEY WLAN_RSN_SEL(25)
 
 #define RSN_AUTH_KEY_MGMT_CCKM          (WLAN_RSN_CCKM_AKM)
 #define RSN_AUTH_KEY_MGMT_OSEN          (0x019a6f50)
@@ -235,7 +225,7 @@ static inline void wlan_crypto_put_be64(u8 *a, u64 val)
 #define RESET_PARAM(__param)         ((__param) = 0)
 #define SET_PARAM(__param, __val)    ((__param) |= (1 << (__val)))
 #define HAS_PARAM(__param, __val)    ((__param) &  (1 << (__val)))
-#define CLEAR_PARAM(__param, __val)  ((__param) &= (~(1 << (__val))))
+#define CLEAR_PARAM(__param, __val)  ((__param) &= ((~1) << (__val)))
 
 
 #define RESET_AUTHMODE(_param)       ((_param)->authmodeset = 0)
@@ -397,8 +387,14 @@ typedef void (*crypto_add_key_callback)(void *context,
 /**
  * struct wlan_crypto_comp_priv - crypto component private structure
  * @crypto_params:    crypto params for the peer
- * @crypto_key: crypto keys structure for the peer
- * @fils_aead_set:    fils params for this peer
+ * @key:              key buffers for this peer
+ * @igtk_key:         igtk key buffer for this peer
+ * @bigtk_key:        bigtk key buffer for this peer
+ * @igtk_key_type:    igtk key type
+ * @def_tx_keyid:     default key used for this peer
+ * @def_igtk_tx_keyid default igtk key used for this peer
+ * @def_bigtk_tx_keyid default bigtk key used for this peer
+ * @fils_aead_set     fils params for this peer
  * @add_key_ctx: Opaque context to be used by the caller to associate the
  *  add key request with the response
  * @add_key_cb: Callback function to be called with the add key result
@@ -406,7 +402,13 @@ typedef void (*crypto_add_key_callback)(void *context,
  */
 struct wlan_crypto_comp_priv {
 	struct wlan_crypto_params crypto_params;
-	struct wlan_crypto_keys crypto_key;
+	struct wlan_crypto_key *key[WLAN_CRYPTO_MAX_VLANKEYIX];
+	struct wlan_crypto_key *igtk_key[WLAN_CRYPTO_MAXIGTKKEYIDX];
+	struct wlan_crypto_key *bigtk_key[WLAN_CRYPTO_MAXBIGTKKEYIDX];
+	enum wlan_crypto_cipher_type igtk_key_type;
+	uint8_t def_tx_keyid;
+	uint8_t def_igtk_tx_keyid;
+	uint8_t def_bigtk_tx_keyid;
 	uint8_t fils_aead_set;
 	void *add_key_ctx;
 	crypto_add_key_callback add_key_cb;
@@ -544,83 +546,4 @@ static inline int wlan_get_tid(const void *data)
 	} else
 		return WLAN_NONQOS_SEQ;
 }
-
-struct crypto_psoc_priv_obj {
-	/** @crypto_key_lock: lock for crypto key table */
-	qdf_mutex_t crypto_key_lock;
-	/** @crypto_key_lock: lock for crypto key table */
-	qdf_atomic_t crypto_key_cnt;
-	struct {
-		/** @mask: mask bits */
-		uint32_t mask;
-		/** @idx_bits: index to shift bits */
-		uint32_t idx_bits;
-		/** @bins: crypto key table */
-		TAILQ_HEAD(, wlan_crypto_key_entry) * bins;
-	} crypto_key_holder;
-};
-
-/**
- * struct pdev_crypto - pdev object structure for crypto
- * @pdev_obj: pdev object
- */
-struct pdev_crypto {
-	struct wlan_objmgr_pdev *pdev_obj;
-};
-
-/**
- * wlan_crypto_add_key_entry() - Add a filled key entry to the hashing
- * framework
- * @psoc: PSOC pointer
- * @new_entry: New entry
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS wlan_crypto_add_key_entry(struct wlan_objmgr_psoc *psoc,
-				     struct wlan_crypto_key_entry *new_entry);
-
-/**
- * crypto_add_entry - add key entry to hashing framework
- * @psoc: psoc handler
- * @link_id: link id
- * @mac_addr: mac addr
- * @crypto_key: crypto key
- * @key_index: key index
- * Return: zero on success
- */
-QDF_STATUS crypto_add_entry(struct crypto_psoc_priv_obj *psoc,
-			    uint8_t link_id,
-			    uint8_t *mac_addr,
-			    struct wlan_crypto_key *crypto_key,
-			    uint8_t key_index);
-/**
- * crypto_hash_find_by_linkid_and_macaddr - find crypto entry by link id
- * @psoc: psoc handler
- * @link_id: link id
- * @mac_addr: mac addr
- * Return: crypto key entry on success
- */
-struct
-wlan_crypto_key_entry * crypto_hash_find_by_linkid_and_macaddr(
-				struct crypto_psoc_priv_obj *psoc,
-				uint8_t link_id,
-				uint8_t *mac_addr);
-
-#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
-/**
- * wlan_crypto_free_key_by_link_id - free key by link id
- * @psoc: psoc handler
- * @link_addr: link address
- * @link_id: link id
- */
-void wlan_crypto_free_key_by_link_id(struct wlan_objmgr_psoc *psoc,
-				     struct qdf_mac_addr *link_addr,
-				     uint8_t link_id);
-#else
-static inline
-void wlan_crypto_free_key_by_link_id(struct wlan_objmgr_psoc *psoc,
-				     struct qdf_mac_addr *link_addr,
-				     uint8_t link_id)
-{}
-#endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
 #endif /* end of _WLAN_CRYPTO_DEF_I_H_ */

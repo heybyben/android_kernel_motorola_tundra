@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2011-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -57,11 +56,8 @@
 /* Special station id for transmitting broadcast frames. */
 #define STA_ENTRY_BCAST             3
 #define STA_ENTRY_PEER              STA_ENTRY_OTHER
-#define STA_ENTRY_TDLS_PEER         4
 #ifdef FEATURE_WLAN_TDLS
-#define IS_TDLS_PEER(type) ((type) == STA_ENTRY_TDLS_PEER)
-#else /* !FEATURE_WLAN_TDLS */
-#define IS_TDLS_PEER(type) false
+#define STA_ENTRY_TDLS_PEER         4
 #endif /* FEATURE_WLAN_TDLS */
 #define STA_ENTRY_NDI_PEER          5
 
@@ -124,46 +120,6 @@ struct sAniProbeRspStruct {
 } qdf_packed;
 
 /**
- * med_sync_delay - medium sync delay info
- * @med_sync_duration: medium sync duration
- * @med_sync_ofdm_ed_thresh: medium sync OFDM ED threshold
- * @med_sync_max_txop_num: medium sync max txop num
- */
-struct med_sync_delay {
-	uint16_t med_sync_duration:8;
-	uint16_t med_sync_ofdm_ed_thresh:4;
-	uint16_t med_sync_max_txop_num:4;
-};
-
-#ifdef WLAN_FEATURE_11BE_MLO
-/**
- * struct ml_partner_link_info: partner link info
- * @link_id: partner link ID
- * @link_addr: partner link address
- * @ch_freq:Channel in Mhz
- * @ch_phymode: Channel phymode
- */
-struct ml_partner_link_info {
-	uint8_t vdev_id;
-	uint8_t link_id;
-	struct qdf_mac_addr link_addr;
-	struct qdf_mac_addr self_mac_addr;
-	struct wlan_channel channel_info;
-};
-
-struct peer_ml_info {
-	uint32_t vdev_id;
-	uint32_t link_id;
-	struct qdf_mac_addr link_addr;
-	struct wlan_channel channel_info;
-	struct qdf_mac_addr self_mac_addr;
-	uint8_t num_links;
-	struct ml_partner_link_info partner_info[MLD_MAX_LINKS - 1];
-	uint8_t rec_max_simultaneous_links;
-};
-#endif
-
-/**
  * struct tAddStaParams - add sta related parameters
  * @bssId: bssid of sta
  * @assocId: associd
@@ -216,10 +172,6 @@ struct peer_ml_info {
  * @eht_op: EHT operation
  * @mld_mac_addr: mld mac address
  * @is_assoc_peer: is assoc peer or not
- * @emlsr_support: is EMLSR mode supported or not
- * @msd_caps_present: is MSD capability present in MLO IE or not
- * @link_id: per link id
- * @emlsr_trans_timeout: EMLSR transition timeout value
  *
  * This structure contains parameter required for
  * add sta request of upper layer.
@@ -306,16 +258,9 @@ typedef struct {
 	tDot11fIEeht_cap eht_config;
 	tDot11fIEeht_op eht_op;
 #endif
-	struct med_sync_delay msd_caps;
 #ifdef WLAN_FEATURE_11BE_MLO
 	uint8_t mld_mac_addr[QDF_MAC_ADDR_SIZE];
 	bool is_assoc_peer;
-	bool emlsr_support;
-	bool msd_caps_present;
-	uint8_t link_id;
-	uint16_t emlsr_trans_timeout;
-	struct ml_partner_link_info ml_partner_info[MLD_MAX_LINKS - 1];
-	struct peer_ml_info ml_info;
 #endif
 } tAddStaParams, *tpAddStaParams;
 
@@ -341,31 +286,53 @@ typedef struct {
 
 /**
  * struct tSetStaKeyParams - set key params
+ * @staIdx: station id
  * @encType: encryption type
  * @defWEPIdx: Default WEP key, valid only for static WEP, must between 0 and 3
+ * @key: valid only for non-static WEP encyrptions
  * @singleTidRc: 1=Single TID based Replay Count, 0=Per TID based RC
- * @vdev_id: vdev_id
+ * @smesessionId: sme session id
  * @peerMacAddr: peer mac address
  * @status: status
+ * @sendRsp: send response
  * @macaddr: MAC address of the peer
- * @key_len: key len
  *
  * This is used by PE to configure the key information on a given station.
  * When the secType is WEP40 or WEP104, the defWEPIdx is used to locate
- * a preconfigured key from a BSS the station associated with; otherwise
+ * a preconfigured key from a BSS the station assoicated with; otherwise
  * a new key descriptor is created based on the key field.
  */
 typedef struct {
 	tAniEdType encType;
 	uint8_t defWEPIdx;
+	tSirKeys key[SIR_MAC_MAX_NUM_OF_DEFAULT_KEYS];
 	uint8_t singleTidRc;
 	uint8_t vdev_id;
 	struct qdf_mac_addr peer_macaddr;
 	QDF_STATUS status;
 	uint8_t sendRsp;
 	struct qdf_mac_addr macaddr;
-	uint16_t key_len;
 } tSetStaKeyParams, *tpSetStaKeyParams;
+
+/**
+ * struct sLimMlmSetKeysReq - set key request parameters
+ * @peerMacAddr: peer mac address
+ * @sessionId: PE session id
+ * @vdev_id: vdev id
+ * @aid: association id
+ * @edType: Encryption/Decryption type
+ * @numKeys: number of keys
+ * @key: key data
+ */
+typedef struct sLimMlmSetKeysReq {
+	struct qdf_mac_addr peer_macaddr;
+	uint8_t sessionId;      /* Added For BT-AMP Support */
+	uint8_t vdev_id;   /* Added for drivers based on wmi interface */
+	uint16_t aid;
+	tAniEdType edType;      /* Encryption/Decryption type */
+	uint8_t numKeys;
+	tSirKeys key[SIR_MAC_MAX_NUM_OF_DEFAULT_KEYS];
+} tLimMlmSetKeysReq, *tpLimMlmSetKeysReq;
 
 /**
  * struct bss_params - parameters required for add bss params
@@ -381,7 +348,7 @@ typedef struct {
  * @updateBss: update the existing BSS entry, if this flag is set
  * @maxTxPower: max power to be used after applying the power constraint
  * @bSpectrumMgtEnabled: Spectrum Management Capability, 1:Enabled, 0:Disabled.
- * @vhtCapable: VHT capability
+ * @vhtCapable: VHT capablity
  * @ch_width: VHT tx channel width
  * @he_capable: HE Capability
  * @no_ptk_4_way: Do not need 4-way handshake
@@ -398,7 +365,7 @@ struct bss_params {
 	uint8_t rmfEnabled;
 	tAddStaParams staContext;
 	/* HAL should update the existing BSS entry, if this flag is set.
-	 * PE will set this flag in case of reassoc, where we want to reuse the
+	 * PE will set this flag in case of reassoc, where we want to resue the
 	 * the old bssID and still return success.
 	 */
 	uint8_t updateBss;
@@ -528,28 +495,32 @@ typedef struct {
  * @probeRespTemplate: probe response template
  * @probeRespTemplateLen: probe response template length
  * @ucProxyProbeReqValidIEBmap: valid IE bitmap
- * @go_ignore_non_p2p_probe_req: go ignore non-p2p probe req
  */
 typedef struct sSendProbeRespParams {
 	tSirMacAddr bssId;
 	uint8_t probeRespTemplate[SIR_MAX_PROBE_RESP_SIZE];
 	uint32_t probeRespTemplateLen;
 	uint32_t ucProxyProbeReqValidIEBmap[8];
-	bool go_ignore_non_p2p_probe_req;
 } tSendProbeRespParams, *tpSendProbeRespParams;
 
 /**
  * struct tSetBssKeyParams - BSS key parameters
+ * @encType: encryption Type
+ * @numKeys: number of keys
+ * @key: key data
+ * @singleTidRc: 1=Single TID based Replay Count, 0=Per TID based RC
  * @vdev_id: vdev id id
  * @status: return status of command
  * @macaddr: MAC address of the peer
- * @key_len: key len
  */
 typedef struct {
+	tAniEdType encType;
+	uint8_t numKeys;
+	tSirKeys key[SIR_MAC_MAX_NUM_OF_DEFAULT_KEYS];
+	uint8_t singleTidRc;
 	uint8_t vdev_id;
 	QDF_STATUS status;
 	struct qdf_mac_addr macaddr;
-	uint16_t key_len;
 } tSetBssKeyParams, *tpSetBssKeyParams;
 
 /**
@@ -612,7 +583,7 @@ typedef struct {
 } tUpdateRxNss, *tpUpdateRxNss;
 
 /**
- * struct tUpdateMembership - update membership parameters
+ * struct tUpdateMembership - update membership parmaters
  * @membership: membership value
  * @staId: station id
  * @smesessionId: SME session id
@@ -625,7 +596,7 @@ typedef struct {
 } tUpdateMembership, *tpUpdateMembership;
 
 /**
- * struct tUpdateUserPos - update user position parameters
+ * struct tUpdateUserPos - update user position parmeters
  * @userPos: user position
  * @staId: station id
  * @smesessionId: sme session id
@@ -702,6 +673,16 @@ typedef struct sMaxTxPowerPerBandParams {
 } tMaxTxPowerPerBandParams, *tpMaxTxPowerPerBandParams;
 
 /**
+ * struct vdev_create_req_param - vdev create request params
+ * @vdev_id: vdev_id
+ * @status: response status code
+ */
+struct vdev_create_req_param {
+	uint32_t vdev_id;
+	QDF_STATUS status;
+};
+
+/**
  * struct set_ie_param - set IE params structure
  * @pdev_id: pdev id
  * @ie_type: IE type
@@ -737,12 +718,14 @@ struct set_dtim_params {
  * @session_id: SME Session ID
  * @status: response status code
  * @vdev: Object to vdev
+ * @sme_ctx: pointer to context provided by SME
  */
 struct del_vdev_params {
 	tSirMacAddr self_mac_addr;
 	uint8_t vdev_id;
 	uint32_t status;
 	struct wlan_objmgr_vdev *vdev;
+	void *sme_ctx;
 };
 
 /**

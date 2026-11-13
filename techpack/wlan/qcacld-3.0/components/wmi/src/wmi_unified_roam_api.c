@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -133,48 +133,6 @@ QDF_STATUS wmi_unified_roam_synch_complete_cmd(wmi_unified_t wmi_handle,
 	return QDF_STATUS_E_FAILURE;
 }
 
-#ifdef WLAN_VENDOR_HANDOFF_CONTROL
-QDF_STATUS
-wmi_unified_roam_vendor_handoff_req_cmd(wmi_unified_t wmi_handle,
-					uint8_t vdev_id, uint32_t param_id)
-{
-	if (wmi_handle->ops->send_process_roam_vendor_handoff_req_cmd)
-	      return wmi_handle->ops->send_process_roam_vendor_handoff_req_cmd(
-				wmi_handle, vdev_id, param_id);
-
-	return QDF_STATUS_E_FAILURE;
-}
-
-QDF_STATUS
-wmi_extract_roam_vendor_control_param_event(wmi_unified_t wmi_handle,
-				uint8_t *event, uint32_t len,
-				struct roam_vendor_handoff_params **data)
-{
-	if (wmi_handle->ops->extract_roam_vendor_control_param_event)
-		return wmi_handle->ops->extract_roam_vendor_control_param_event(
-					wmi_handle, event, len, data);
-	return QDF_STATUS_E_FAILURE;
-}
-#endif
-
-#if defined(WLAN_FEATURE_ROAM_OFFLOAD) && defined(WLAN_FEATURE_11BE_MLO)
-QDF_STATUS
-wmi_extract_roam_synch_key_event(wmi_unified_t wmi_handle, uint8_t *event,
-				 uint32_t len,
-				 struct wlan_crypto_key_entry **keys,
-				 uint8_t *num_keys,
-				 struct qdf_mac_addr *mld_addr)
-{
-	if (wmi_handle->ops->extract_roam_synch_key_event)
-		return wmi_handle->ops->extract_roam_synch_key_event(
-							wmi_handle, event,
-							len, keys, num_keys,
-							mld_addr);
-
-	return QDF_STATUS_E_FAILURE;
-}
-#endif
-
 QDF_STATUS wmi_unified_roam_invoke_cmd(wmi_unified_t wmi_handle,
 				       struct roam_invoke_req *roaminvoke)
 {
@@ -225,18 +183,6 @@ QDF_STATUS wmi_unified_vdev_set_pcl_cmd(wmi_unified_t wmi_handle,
 	return QDF_STATUS_E_FAILURE;
 }
 #endif /* WLAN_FEATURE_ROAM_OFFLOAD */
-
-#ifdef WLAN_FEATURE_11BE_MLO
-QDF_STATUS
-wmi_unified_roam_mlo_config_cmd(wmi_unified_t wmi_handle,
-				struct wlan_roam_mlo_config *req)
-{
-	if (wmi_handle->ops->send_roam_mlo_config)
-		return wmi_handle->ops->send_roam_mlo_config(wmi_handle,
-							     req);
-	return QDF_STATUS_E_FAILURE;
-}
-#endif
 
 QDF_STATUS wmi_unified_roam_scan_offload_mode_cmd(
 			wmi_unified_t wmi_handle,
@@ -382,21 +328,6 @@ QDF_STATUS wmi_unified_get_roam_scan_ch_list(wmi_unified_t wmi_handle,
 	return QDF_STATUS_E_FAILURE;
 }
 
-#if defined(WLAN_FEATURE_HOST_ROAM) || defined(WLAN_FEATURE_ROAM_OFFLOAD)
-QDF_STATUS
-wmi_extract_roam_event(wmi_unified_t wmi_handle, uint8_t *event,
-		       uint32_t data_len,
-		       struct roam_offload_roam_event *roam_event)
-{
-	if (wmi_handle->ops->extract_roam_event)
-		return wmi_handle->ops->extract_roam_event(wmi_handle, event,
-							   data_len,
-							   roam_event);
-
-	return QDF_STATUS_E_FAILURE;
-}
-#endif /* WLAN_FEATURE_HOST_ROAM || WLAN_FEATURE_ROAM_OFFLOAD */
-
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 QDF_STATUS wmi_unified_set_roam_triggers(wmi_unified_t wmi_handle,
 					 struct wlan_roam_triggers *triggers)
@@ -436,13 +367,25 @@ wmi_extract_roam_sync_frame_event(wmi_unified_t wmi_handle, void *event,
 }
 
 QDF_STATUS
-wmi_extract_btm_denylist_event(wmi_unified_t wmi_handle,
-			       uint8_t *event,
-			       uint32_t data_len,
-			       struct roam_denylist_event **dst_list)
+wmi_extract_roam_event(wmi_unified_t wmi_handle, uint8_t *event,
+		       uint32_t data_len,
+		       struct roam_offload_roam_event *roam_event)
 {
-	if (wmi_handle->ops->extract_btm_dl_event)
-		return wmi_handle->ops->extract_btm_dl_event(wmi_handle,
+	if (wmi_handle->ops->extract_roam_event)
+		return wmi_handle->ops->extract_roam_event(wmi_handle, event,
+							   data_len,
+							   roam_event);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
+wmi_extract_btm_blacklist_event(wmi_unified_t wmi_handle,
+				uint8_t *event, uint32_t data_len,
+				struct roam_blacklist_event **dst_list)
+{
+	if (wmi_handle->ops->extract_btm_bl_event)
+		return wmi_handle->ops->extract_btm_bl_event(wmi_handle,
 							     event,
 							     data_len,
 							     dst_list);
@@ -516,21 +459,6 @@ wmi_unified_extract_roam_extract_frame_info(wmi_unified_t wmi, void *evt_buf,
 
 	return QDF_STATUS_E_FAILURE;
 }
-
-#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_FEATURE_ROAM_OFFLOAD)
-QDF_STATUS
-wmi_unified_extract_roam_ml_info(wmi_unified_t wmi_handle, void *event,
-				 struct roam_mlo_link_info *dst,
-				 uint64_t timestamp, uint8_t idx)
-{
-	if (wmi_handle->ops->extract_roam_stats_event)
-		return wmi_handle->ops->extract_roam_ml_info(wmi_handle, event,
-							     dst, timestamp,
-							     idx);
-
-	return QDF_STATUS_E_FAILURE;
-}
-#endif
 
 QDF_STATUS
 wmi_extract_roam_stats_event(wmi_unified_t wmi_handle,

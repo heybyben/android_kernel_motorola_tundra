@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -46,12 +46,6 @@
 /* PPDU Stats Configuration - Configure bitmask for enabling tx ppdu tlv's */
 #define DP_PPDU_TXLITE_STATS_BITMASK_CFG 0x3FFF
 
-#if defined(QCA_WIFI_QCA6750) || defined(QCA_WIFI_WCN6450)
-#define NUM_RXDMA_STATUS_RINGS_PER_PDEV 1
-#else
-#define NUM_RXDMA_STATUS_RINGS_PER_PDEV 2
-#endif
-
 #define NUM_RXDMA_RINGS_PER_PDEV 2
 
 #define DP_NUM_MACS_PER_PDEV 2
@@ -65,10 +59,9 @@
 #define WLAN_CFG_DST_RING_CACHED_DESC 1
 #endif
 #define MAX_PDEV_CNT 3
-#define WLAN_CFG_INT_NUM_CONTEXTS 16
-#define WLAN_CFG_INT_NUM_CONTEXTS_MAX 16
+#define WLAN_CFG_INT_NUM_CONTEXTS 11
+#define WLAN_CFG_INT_NUM_CONTEXTS_MAX 11
 #define NUM_RXDMA_RINGS_PER_PDEV 1
-#define NUM_RXDMA_STATUS_RINGS_PER_PDEV 1
 #define MAX_NUM_LMAC_HW	3
 #define DP_NUM_MACS_PER_PDEV 1
 
@@ -76,11 +69,14 @@
 
 /* Tx configuration */
 #define MAX_LINK_DESC_BANKS 8
+#define MAX_TXDESC_POOLS 6
+
+/* Rx configuration */
+#define MAX_RXDESC_POOLS 4
 
 #define MAX_REO_DEST_RINGS 8
 #define MAX_TCL_DATA_RINGS 5
 
 #define MAX_RX_MAC_RINGS 2
 
-#define WBM2SW_TXCOMP_RING4_NUM 4
 #endif /* __WLAN_INIT_CFG_H */

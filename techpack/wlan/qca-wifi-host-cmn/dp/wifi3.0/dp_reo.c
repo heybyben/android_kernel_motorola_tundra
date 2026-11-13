@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -64,25 +63,6 @@ void dp_reo_cmd_srng_event_record(struct dp_soc *soc,
 {
 }
 #endif /*WLAN_FEATURE_DP_EVENT_HISTORY */
-
-#ifdef DP_UMAC_HW_RESET_SUPPORT
-void dp_pause_reo_send_cmd(struct dp_soc *soc)
-{
-	hal_unregister_reo_send_cmd(soc->hal_soc);
-}
-
-void dp_resume_reo_send_cmd(struct dp_soc *soc)
-{
-	hal_register_reo_send_cmd(soc->hal_soc);
-}
-
-void
-dp_reset_rx_reo_tid_queue(struct dp_soc *soc, void *hw_qdesc_vaddr,
-			  uint32_t size)
-{
-	hal_reset_rx_reo_tid_queue(soc->hal_soc, hw_qdesc_vaddr, size);
-}
-#endif
 
 QDF_STATUS dp_reo_send_cmd(struct dp_soc *soc, enum hal_reo_cmd_type type,
 		     struct hal_reo_cmd_params *params,
@@ -175,6 +155,11 @@ next:
 	return processed_count;
 }
 
+/**
+ * dp_reo_cmdlist_destroy - Free REO commands in the queue
+ * @soc: DP SoC hanle
+ *
+ */
 void dp_reo_cmdlist_destroy(struct dp_soc *soc)
 {
 	struct dp_reo_cmd_info *reo_cmd = NULL;
@@ -194,11 +179,3 @@ void dp_reo_cmdlist_destroy(struct dp_soc *soc)
 	}
 	qdf_spin_unlock_bh(&soc->rx.reo_cmd_lock);
 }
-
-#ifdef DP_UMAC_HW_RESET_SUPPORT
-void dp_cleanup_reo_cmd_module(struct dp_soc *soc)
-{
-	dp_reo_cmdlist_destroy(soc);
-	dp_reo_desc_freelist_destroy(soc);
-}
-#endif

@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -22,39 +21,6 @@
 #ifndef __CFG_MLME_ROAM_SCORING_H
 #define __CFG_MLME_ROAM_SCORING_H
 
-#ifdef CONNECTION_ROAMING_CFG
-#define RoamCommon_Delta_min 0
-#define RoamCommon_Delta_max 30
-#define RoamCommon_Delta_default 20
-#define RoamIdle_Delta_min 0
-#define RoamIdle_Delta_max 20
-#define RoamIdle_Delta_default 0
-#define RoamBeaconLoss_TargetMinRSSI_min -127
-#define RoamBeaconLoss_TargetMinRSSI_max -70
-#define RoamBeaconLoss_TargetMinRSSI_default -75
-#define RoamBTM_Delta_min 0
-#define RoamBTM_Delta_max 20
-#define RoamBTM_Delta_default 0
-#define RoamEmergency_TargetMinRSSI_min -127
-#define RoamEmergency_TargetMinRSSI_max 0
-#define RoamEmergency_TargetMinRSSI_default -70
-#else
-#define RoamCommon_Delta_min 0
-#define RoamCommon_Delta_max 100
-#define RoamCommon_Delta_default 0
-#define RoamIdle_Delta_min 0
-#define RoamIdle_Delta_max 100
-#define RoamIdle_Delta_default 0
-#define RoamBeaconLoss_TargetMinRSSI_min -120
-#define RoamBeaconLoss_TargetMinRSSI_max 0
-#define RoamBeaconLoss_TargetMinRSSI_default -75
-#define RoamBTM_Delta_min 0
-#define RoamBTM_Delta_max 100
-#define RoamBTM_Delta_default 0
-#define RoamEmergency_TargetMinRSSI_min -120
-#define RoamEmergency_TargetMinRSSI_max 0
-#define RoamEmergency_TargetMinRSSI_default -75
-#endif
 /*
  * <ini>
  * roam_score_delta_bitmap - bitmap to enable roam triggers on
@@ -123,9 +89,9 @@
  */
 #define CFG_ROAM_SCORE_DELTA CFG_INI_UINT( \
 			"roam_score_delta RoamCommon_Delta", \
-			RoamCommon_Delta_min,\
-			RoamCommon_Delta_max, \
-			RoamCommon_Delta_default, \
+			0, \
+			100, \
+			0, \
 			CFG_VALUE_OR_DEFAULT, \
 			"candidate AP's percentage roam score delta")
 
@@ -162,41 +128,6 @@
 			0, \
 			CFG_VALUE_OR_DEFAULT, \
 			"Diff between connected AP's and candidate AP's roam score")
-
-/*
- * <ini>
- * RoamCommon_MinRoamDelta - Difference of roam score values between connected
- * AP and roam candidate AP.
- * @Min: 0
- * @Max: 100
- * @Default: 15
- *
- * This ini is used during CU and low rssi based roam triggers, consider
- * AP as roam candidate only if its roam score is better than connected
- * AP score by at least RoamCommon_MinRoamDelta.
- * If user configured "RoamCommon_Delta" and "RoamCommon_MinRoamDelta" both,
- * then firmware selects roam candidate AP by considering values of both
- * INIs.
- * Example: If DUT is connected with AP1 and roam candidate AP2 has roam
- * score greater than RoamCommon_Delta and RoamCommon_MinRoamDelta then only
- * firmware will trigger roaming to AP2.
- * This value needs to be given in percentage
- *
- * Related: RoamCommon_Delta
- *
- * Supported Feature: Roaming
- *
- * Usage: Internal
- *
- * </ini>
- */
-#define CFG_ROAM_COMMON_MIN_ROAM_DELTA CFG_INI_UINT( \
-			"RoamCommon_MinRoamDelta", \
-			0, \
-			100, \
-			15, \
-			CFG_VALUE_OR_DEFAULT, \
-			"Diff bet connected AP's and candidate AP's roam score")
 
 /*
  * <ini>
@@ -263,9 +194,9 @@
  */
 #define CFG_DISCONNECT_ROAM_TRIGGER_MIN_RSSI CFG_INI_INT( \
 		"candidate_min_rssi_for_disconnect RoamEmergency_TargetMinRSSI", \
-		RoamEmergency_TargetMinRSSI_min, \
-		RoamEmergency_TargetMinRSSI_max, \
-		RoamEmergency_TargetMinRSSI_default, \
+		-120, \
+		0, \
+		-75, \
 		CFG_VALUE_OR_DEFAULT, \
 		"Minimum RSSI of candidate AP for Disconnect roam trigger")
 
@@ -292,9 +223,9 @@
  */
 #define CFG_BMISS_ROAM_MIN_RSSI CFG_INI_INT( \
 	"candidate_min_rssi_for_beacon_miss RoamBeaconLoss_TargetMinRSSI", \
-	RoamBeaconLoss_TargetMinRSSI_min, \
-	RoamBeaconLoss_TargetMinRSSI_max, \
-	RoamBeaconLoss_TargetMinRSSI_default, \
+	-120, \
+	0, \
+	-75, \
 	CFG_VALUE_OR_DEFAULT, \
 	"Minimum RSSI of candidate AP for Bmiss roam trigger")
 
@@ -348,9 +279,9 @@
  */
 #define CFG_IDLE_ROAM_SCORE_DELTA CFG_INI_UINT( \
 		"idle_roam_score_delta RoamIdle_Delta", \
-		RoamIdle_Delta_min, \
-		RoamIdle_Delta_max, \
-		RoamIdle_Delta_default, \
+		0, \
+		100, \
+		0, \
 		CFG_VALUE_OR_DEFAULT, \
 		"Roam score delta for Idle roam trigger")
 
@@ -378,9 +309,9 @@
  */
 #define CFG_BTM_ROAM_SCORE_DELTA CFG_INI_UINT( \
 	"btm_roam_score_delta RoamBTM_Delta", \
-	RoamBTM_Delta_min, \
-	RoamBTM_Delta_max, \
-	RoamBTM_Delta_default, \
+	0, \
+	100, \
+	0, \
 	CFG_VALUE_OR_DEFAULT, \
 	"Roam score delta for BTM roam trigger")
 
@@ -388,7 +319,6 @@
 	CFG(CFG_ROAM_SCORE_DELTA_TRIGGER_BITMAP) \
 	CFG(CFG_ROAM_SCORE_DELTA) \
 	CFG(CFG_CAND_MIN_ROAM_SCORE_DELTA) \
-	CFG(CFG_ROAM_COMMON_MIN_ROAM_DELTA) \
 	CFG(CFG_ENABLE_SCORING_FOR_ROAM) \
 	CFG(CFG_APSD_ENABLED) \
 	CFG(CFG_DISCONNECT_ROAM_TRIGGER_MIN_RSSI) \

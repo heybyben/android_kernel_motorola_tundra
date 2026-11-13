@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2011-2019, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -131,6 +130,27 @@
 
 /*
  * <ini>
+ * probe_after_hb_fail_timeout - Probe after HB failure timeout value
+ * @Min: 10
+ * @Max: 10000
+ * @Default: 70
+ *
+ * This cfg is used to configure the Probe after HB failure timeout.
+ *
+ * Usage: Internal
+ *
+ * </ini>
+ */
+#define CFG_PROBE_AFTER_HB_FAIL_TIMEOUT CFG_INI_UINT( \
+		"probe_after_hb_fail_timeout", \
+		10, \
+		10000, \
+		70, \
+		CFG_VALUE_OR_DEFAULT, \
+		"probe after HB fail timeout")
+
+/*
+ * <ini>
  * olbc_detect_timeout - olbc detect timeout value
  * @Min: 1000
  * @Max: 30000
@@ -173,12 +193,12 @@
 
 /*
  * <ini>
- * gHeartbeat24 - Heart beat threshold value
+ * gHeartbeat24 - Heart beat threashold value
  * @Min: 0
  * @Max: 65535
  * @Default: 40
  *
- * This cfg is used to configure the Heart beat threshold.
+ * This cfg is used to configure the Heart beat threashold.
  *
  * Usage: Internal/External
  *
@@ -190,7 +210,7 @@
 		65535, \
 		40, \
 		CFG_VALUE_OR_DEFAULT, \
-		"Heart beat threshold")
+		"Heart beat threashold")
 
 /*
  * <ini>
@@ -271,7 +291,7 @@
 /*
  * <ini>
  * sae_auth_failure_timeout - SAE Auth failure timeout value in msec
- * @Min: 100
+ * @Min: 500
  * @Max: 1000
  * @Default: 1000
  *
@@ -283,7 +303,7 @@
  */
 #define CFG_SAE_AUTH_FAILURE_TIMEOUT CFG_INI_UINT( \
 		"sae_auth_failure_timeout", \
-		100, \
+		500, \
 		1000, \
 		1000, \
 		CFG_VALUE_OR_DEFAULT, \
@@ -295,6 +315,7 @@
 	CFG(CFG_AUTH_RSP_TIMEOUT) \
 	CFG(CFG_ASSOC_FAILURE_TIMEOUT) \
 	CFG(CFG_REASSOC_FAILURE_TIMEOUT) \
+	CFG(CFG_PROBE_AFTER_HB_FAIL_TIMEOUT) \
 	CFG(CFG_OLBC_DETECT_TIMEOUT) \
 	CFG(CFG_ADDTS_RSP_TIMEOUT) \
 	CFG(CFG_HEART_BEAT_THRESHOLD) \

@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -17,8 +16,6 @@
 
 #ifndef _QDF_IPA_H
 #define _QDF_IPA_H
-
-#include <linux/types.h>
 
 #ifdef IPA_OFFLOAD
 
@@ -59,7 +56,7 @@ typedef enum {
 /**
  * qdf_ipa_wdi_meter_evt_type_t - type of event client callback is
  * for AP+STA mode metering
- * @IPA_GET_WDI_SAP_STATS: get IPA_stats between SAP and STA -
+ * @IPA_GET_WDI_SAP_STATS: get IPA_stats betwen SAP and STA -
  *			use ipa_get_wdi_sap_stats structure
  * @IPA_SET_WIFI_QUOTA: set quota limit on STA -
  *			use ipa_set_wifi_quota structure
@@ -258,13 +255,6 @@ typedef __qdf_ipa_ioc_rx_intf_prop_t qdf_ipa_ioc_rx_intf_prop_t;
 typedef __qdf_ipa_wlan_hdr_attrib_val_t qdf_ipa_wlan_hdr_attrib_val_t;
 typedef int (*qdf_ipa_msg_pull_fn)(void *buff, u32 len, u32 type);
 typedef void (*qdf_ipa_ready_cb)(void *user_data);
-
-#ifdef IPA_WDS_EASYMESH_FEATURE
-/**
- * __qdf_ipa_ast_info_type_t - AST entry create/update information
- */
-typedef __qdf_ipa_ast_info_type_t qdf_ipa_ast_info_type_t;
-#endif
 
 #define QDF_IPA_SET_META_MSG_TYPE(meta, msg_type) \
 	__QDF_IPA_SET_META_MSG_TYPE(meta, msg_type)
@@ -714,12 +704,5 @@ static inline bool qdf_ipa_get_lan_rx_napi(void)
 	return false;
 }
 #endif /* IPA_LAN_RX_NAPI_SUPPORT */
-#else
-#ifdef ENABLE_SMMU_S1_TRANSLATION
-static inline bool qdf_get_ipa_smmu_enabled(void)
-{
-	return false;
-}
-#endif
 #endif /* IPA_OFFLOAD */
 #endif /* _QDF_IPA_H */

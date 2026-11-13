@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -19,7 +18,7 @@
 
 /**
  * DOC: qld_priv.h
- * QLD: This file provides Private functions for qld
+ * QLD: This file provies Private functions for qld
  */
 
 #ifndef _QLD_PRIV_H_

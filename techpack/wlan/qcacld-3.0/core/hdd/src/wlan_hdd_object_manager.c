@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -27,6 +26,18 @@
 #include <wlan_reg_ucfg_api.h>
 #include <target_if.h>
 #include <os_if_spectral_netlink.h>
+
+#define LOW_2GHZ_FREQ 2312
+#define HIGH_2GHZ_FREQ 2732
+#define LOW_5GHZ_FREQ  4912
+
+#ifdef CONFIG_BAND_6GHZ
+#define HIGH_5GHZ_FREQ 7200
+#else
+#define HIGH_5GHZ_FREQ 5920
+#endif
+
+#define HIGH_5GHZ_FREQ_NO_6GHZ 5920
 
 static void hdd_init_pdev_os_priv(struct hdd_context *hdd_ctx,
 	struct pdev_osif_priv *os_priv)
@@ -114,26 +125,6 @@ void hdd_objmgr_update_tgt_max_vdev_psoc(struct hdd_context *hdd_ctx,
 	wlan_psoc_set_max_vdev_count(psoc, max_vdev);
 }
 
-static int hdd_check_internal_netdev_state(struct net_device *netdev)
-{
-	struct hdd_adapter *adapter;
-
-	if (!netdev)
-		return false;
-
-	adapter = netdev_priv(netdev);
-	if (!adapter)
-		return false;
-
-	hdd_debug("netdev name %s, netdev flags 0x%x, event_flags %lu",
-		  netdev->name, netdev->flags, adapter->event_flags);
-	if (test_bit(DEVICE_IFACE_OPENED, &adapter->event_flags) &&
-	    (netdev->flags & IFF_UP))
-		return true;
-	else
-		return false;
-}
-
 int hdd_objmgr_create_and_store_pdev(struct hdd_context *hdd_ctx)
 {
 	QDF_STATUS status;
@@ -141,10 +132,6 @@ int hdd_objmgr_create_and_store_pdev(struct hdd_context *hdd_ctx)
 	struct wlan_objmgr_pdev *pdev;
 	struct pdev_osif_priv *priv;
 	struct wlan_psoc_host_hal_reg_capabilities_ext *reg_cap_ptr;
-	uint32_t low_2ghz_chan = 0;
-	uint32_t high_2ghz_chan = 0;
-	uint32_t low_5ghz_chan = 0;
-	uint32_t high_5ghz_chan = 0;
 
 	if (!psoc) {
 		hdd_err("Psoc NULL");
@@ -161,18 +148,17 @@ int hdd_objmgr_create_and_store_pdev(struct hdd_context *hdd_ctx)
 		status = QDF_STATUS_E_INVAL;
 		goto free_priv;
 	}
-	ucfg_mlme_get_phy_max_freq_range(psoc, &low_2ghz_chan,
-					 &high_2ghz_chan, &low_5ghz_chan,
-					 &high_5ghz_chan);
 	reg_cap_ptr->phy_id = 0;
-	reg_cap_ptr->low_2ghz_chan = low_2ghz_chan;
-	reg_cap_ptr->high_2ghz_chan = high_2ghz_chan;
-	reg_cap_ptr->low_5ghz_chan = low_5ghz_chan;
-	reg_cap_ptr->high_5ghz_chan = high_5ghz_chan;
-	hdd_debug("pdev freq range %d %d %d %d", reg_cap_ptr->low_2ghz_chan,
-		  reg_cap_ptr->high_2ghz_chan, reg_cap_ptr->low_5ghz_chan,
-		  reg_cap_ptr->high_5ghz_chan);
-	priv->osif_check_netdev_state = hdd_check_internal_netdev_state;
+	reg_cap_ptr->low_2ghz_chan = LOW_2GHZ_FREQ;
+	reg_cap_ptr->high_2ghz_chan = HIGH_2GHZ_FREQ;
+	reg_cap_ptr->low_5ghz_chan = LOW_5GHZ_FREQ;
+	reg_cap_ptr->high_5ghz_chan = HIGH_5GHZ_FREQ;
+
+	if (!wlan_reg_is_6ghz_supported(psoc)) {
+		hdd_debug("disabling 6ghz channels");
+		reg_cap_ptr->high_5ghz_chan = HIGH_5GHZ_FREQ_NO_6GHZ;
+	}
+
 	pdev = wlan_objmgr_pdev_obj_create(psoc, priv);
 	if (!pdev) {
 		hdd_err("pdev obj create failed");
@@ -272,22 +258,27 @@ int hdd_objmgr_set_peer_mlme_state(struct wlan_objmgr_vdev *vdev,
 
 #ifdef WLAN_OBJMGR_REF_ID_TRACE
 struct wlan_objmgr_vdev *
-__hdd_objmgr_get_vdev_by_user(struct wlan_hdd_link_info *link_info,
+__hdd_objmgr_get_vdev_by_user(struct hdd_adapter *adapter,
 			      wlan_objmgr_ref_dbgid id,
 			      const char *func, int line)
 {
 	struct wlan_objmgr_vdev *vdev;
 	QDF_STATUS status;
 
-	qdf_spin_lock_bh(&link_info->vdev_lock);
-	vdev = link_info->vdev;
+	if (!adapter) {
+		hdd_err("Adapter is NULL (via %s, id %d)", func, id);
+		return NULL;
+	}
+
+	qdf_spin_lock_bh(&adapter->vdev_lock);
+	vdev = adapter->vdev;
 	if (vdev) {
 		status = wlan_objmgr_vdev_try_get_ref_debug(vdev, id, func,
 							    line);
 		if (QDF_IS_STATUS_ERROR(status))
 			vdev = NULL;
 	}
-	qdf_spin_unlock_bh(&link_info->vdev_lock);
+	qdf_spin_unlock_bh(&adapter->vdev_lock);
 
 	if (!vdev)
 		hdd_debug("VDEV is NULL (via %s, id %d)", func, id);
@@ -296,21 +287,26 @@ __hdd_objmgr_get_vdev_by_user(struct wlan_hdd_link_info *link_info,
 }
 #else
 struct wlan_objmgr_vdev *
-__hdd_objmgr_get_vdev_by_user(struct wlan_hdd_link_info *link_info,
+__hdd_objmgr_get_vdev_by_user(struct hdd_adapter *adapter,
 			      wlan_objmgr_ref_dbgid id,
 			      const char *func)
 {
 	struct wlan_objmgr_vdev *vdev;
 	QDF_STATUS status;
 
-	qdf_spin_lock_bh(&link_info->vdev_lock);
-	vdev = link_info->vdev;
+	if (!adapter) {
+		hdd_err("Adapter is NULL (via %s, id %d)", func, id);
+		return NULL;
+	}
+
+	qdf_spin_lock_bh(&adapter->vdev_lock);
+	vdev = adapter->vdev;
 	if (vdev) {
 		status = wlan_objmgr_vdev_try_get_ref(vdev, id);
 		if (QDF_IS_STATUS_ERROR(status))
 			vdev = NULL;
 	}
-	qdf_spin_unlock_bh(&link_info->vdev_lock);
+	qdf_spin_unlock_bh(&adapter->vdev_lock);
 
 	if (!vdev)
 		hdd_debug("VDEV is NULL (via %s, id %d)", func, id);

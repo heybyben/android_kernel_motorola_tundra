@@ -22,35 +22,6 @@
 #include "wlan_policy_mgr_api.h"
 #include "wlan_nan_api.h"
 
-#ifdef WLAN_FEATURE_SR
-/**
- * policy_mgr_init_same_mac_conc_sr_status() - Function initializes default
- * value to sr_in_same_mac_conc based on INI g_enable_sr_in_same_mac_conc
- *
- * @psoc: Pointer to PSOC
- *
- * Return: void
- */
-static void
-policy_mgr_init_same_mac_conc_sr_status(struct wlan_objmgr_psoc *psoc)
-{
-	struct policy_mgr_psoc_priv_obj *pm_ctx;
-
-	pm_ctx = policy_mgr_get_context(psoc);
-	if (!pm_ctx) {
-		policy_mgr_err("Invalid Context");
-		return;
-	}
-
-	pm_ctx->cfg.sr_in_same_mac_conc =
-		cfg_get(psoc, CFG_ENABLE_SR_IN_SAME_MAC_CONC);
-}
-#else
-static void
-policy_mgr_init_same_mac_conc_sr_status(struct wlan_objmgr_psoc *psoc)
-{}
-#endif
-
 static QDF_STATUS policy_mgr_init_cfg(struct wlan_objmgr_psoc *psoc)
 {
 	struct policy_mgr_psoc_priv_obj *pm_ctx;
@@ -64,27 +35,13 @@ static QDF_STATUS policy_mgr_init_cfg(struct wlan_objmgr_psoc *psoc)
 	cfg = &pm_ctx->cfg;
 
 	cfg->mcc_to_scc_switch = cfg_get(psoc, CFG_MCC_TO_SCC_SWITCH);
-	if (cfg->mcc_to_scc_switch != QDF_MCC_TO_SCC_SWITCH_DISABLE &&
-	    cfg->mcc_to_scc_switch <
-			QDF_MCC_TO_SCC_SWITCH_FORCE_WITHOUT_DISCONNECTION) {
-		policy_mgr_info("User configured mcc_to_scc_switch: %d, overwrite it to: %d",
-			cfg->mcc_to_scc_switch,
-			QDF_MCC_TO_SCC_SWITCH_FORCE_WITHOUT_DISCONNECTION);
-		cfg->mcc_to_scc_switch =
-			QDF_MCC_TO_SCC_SWITCH_FORCE_WITHOUT_DISCONNECTION;
-	}
-
 	cfg->sys_pref = cfg_get(psoc, CFG_CONC_SYS_PREF);
 
-	if (wlan_is_mlo_sta_nan_ndi_allowed(psoc)) {
+	if (wlan_is_mlo_sta_nan_ndi_allowed(psoc))
 		cfg->max_conc_cxns = cfg_get(psoc, CFG_MAX_CONC_CXNS) + 1;
-		 policy_mgr_err("max_conc_cxns %d nan", cfg->max_conc_cxns);
-	} else {
+	else
 		cfg->max_conc_cxns = cfg_get(psoc, CFG_MAX_CONC_CXNS);
-		policy_mgr_err("max_conc_cxns %d non-nan", cfg->max_conc_cxns);
-	}
-	cfg->max_conc_cxns = QDF_MIN(cfg->max_conc_cxns,
-				     MAX_NUMBER_OF_CONC_CONNECTIONS);
+
 	cfg->conc_rule1 = cfg_get(psoc, CFG_ENABLE_CONC_RULE1);
 	cfg->conc_rule2 = cfg_get(psoc, CFG_ENABLE_CONC_RULE2);
 	cfg->pcl_band_priority = cfg_get(psoc, CFG_PCL_BAND_PRIORITY);
@@ -132,13 +89,6 @@ static QDF_STATUS policy_mgr_init_cfg(struct wlan_objmgr_psoc *psoc)
 	cfg->mark_indoor_chnl_disable =
 		cfg_get(psoc, CFG_MARK_INDOOR_AS_DISABLE_FEATURE);
 	cfg->go_force_scc = cfg_get(psoc, CFG_P2P_GO_ENABLE_FORCE_SCC);
-	cfg->multi_sap_allowed_on_same_band =
-		cfg_get(psoc, CFG_MULTI_SAP_ALLOWED_ON_SAME_BAND);
-	policy_mgr_init_same_mac_conc_sr_status(psoc);
-	cfg->use_sap_original_bw =
-		cfg_get(psoc, CFG_SAP_DEFAULT_BW_FOR_RESTART);
-	cfg->move_sap_go_1st_on_dfs_sta_csa =
-		cfg_get(psoc, CFG_MOVE_SAP_GO_1ST_ON_DFS_STA_CSA);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -260,36 +210,10 @@ QDF_STATUS ucfg_policy_mgr_get_dual_mac_feature(struct wlan_objmgr_psoc *psoc,
 	return policy_mgr_get_dual_mac_feature(psoc, dual_mac_feature);
 }
 
-bool ucfg_policy_mgr_get_dual_sta_feature(struct wlan_objmgr_psoc *psoc)
-{
-	return policy_mgr_allow_multiple_sta_connections(psoc);
-}
-
 QDF_STATUS ucfg_policy_mgr_get_force_1x1(struct wlan_objmgr_psoc *psoc,
 					 uint8_t *force_1x1)
 {
 	return policy_mgr_get_force_1x1(psoc, force_1x1);
-}
-
-uint32_t ucfg_policy_mgr_get_max_conc_cxns(struct wlan_objmgr_psoc *psoc)
-{
-	return policy_mgr_get_max_conc_cxns(psoc);
-}
-
-QDF_STATUS ucfg_policy_mgr_set_max_conc_cxns(struct wlan_objmgr_psoc *psoc,
-					     uint32_t max_conc_cxns)
-{
-	return policy_mgr_set_max_conc_cxns(psoc, max_conc_cxns);
-}
-
-QDF_STATUS
-ucfg_policy_mgr_get_radio_combinations(struct wlan_objmgr_psoc *psoc,
-				       struct radio_combination *comb,
-				       uint32_t comb_max,
-				       uint32_t *comb_num)
-{
-	return policy_mgr_get_radio_combinations(psoc, comb,
-						 comb_max, comb_num);
 }
 
 QDF_STATUS
@@ -346,30 +270,6 @@ ucfg_policy_mgr_get_sta_sap_scc_on_indoor_chnl(struct wlan_objmgr_psoc *psoc)
 bool ucfg_policy_mgr_is_fw_supports_dbs(struct wlan_objmgr_psoc *psoc)
 {
 	return policy_mgr_find_if_fw_supports_dbs(psoc);
-}
-
-uint32_t ucfg_policy_mgr_get_connection_count(struct wlan_objmgr_psoc *psoc)
-{
-	return policy_mgr_get_connection_count(psoc);
-}
-
-bool ucfg_policy_mgr_is_hw_sbs_capable(struct wlan_objmgr_psoc *psoc)
-{
-	return policy_mgr_is_hw_dbs_capable(psoc);
-}
-
-bool ucfg_policy_mgr_get_vdev_same_freq_new_conn(struct wlan_objmgr_psoc *psoc,
-						 uint32_t new_freq,
-						 uint8_t *vdev_id)
-{
-	return policy_mgr_get_vdev_same_freq_new_conn(psoc, new_freq, vdev_id);
-}
-
-bool ucfg_policy_mgr_get_vdev_diff_freq_new_conn(struct wlan_objmgr_psoc *psoc,
-						 uint32_t new_freq,
-						 uint8_t *vdev_id)
-{
-	return policy_mgr_get_vdev_diff_freq_new_conn(psoc, new_freq, vdev_id);
 }
 
 QDF_STATUS ucfg_policy_mgr_get_dbs_hw_modes(struct wlan_objmgr_psoc *psoc,

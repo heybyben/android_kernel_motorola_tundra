@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -19,6 +18,10 @@
 
 #include "dp_rx_buffer_pool.h"
 #include "dp_ipa.h"
+#ifdef WLAN_FEATURE_RX_PREALLOC_BUFFER_POOL
+#include "dp_mon.h"
+#include "dp_rx_mon.h"
+#endif
 
 #ifndef DP_RX_BUFFER_POOL_SIZE
 #define DP_RX_BUFFER_POOL_SIZE 128
@@ -41,7 +44,8 @@ bool dp_rx_buffer_pool_refill(struct dp_soc *soc, qdf_nbuf_t nbuf, u8 mac_id)
 		return consumed;
 
 	/* process only buffers of RXDMA ring */
-	if (soc->wlan_cfg_ctx->rxdma1_enable)
+	if (qdf_unlikely(rx_desc_pool !=
+			 dp_rx_get_mon_desc_pool(soc, mac_id, pdev->pdev_id)))
 		return consumed;
 
 	first_nbuf = nbuf;
@@ -138,7 +142,7 @@ void dp_rx_refill_buff_pool_enqueue(struct dp_soc *soc)
 	if (tail > head)
 		total_num_refill = (tail - head - 1);
 	else
-		total_num_refill = (buff_pool->max_bufq_len - head +
+		total_num_refill = (DP_RX_REFILL_BUFF_POOL_SIZE - head +
 				    tail - 1);
 
 	while (total_num_refill) {
@@ -164,14 +168,8 @@ void dp_rx_refill_buff_pool_enqueue(struct dp_soc *soc)
 				continue;
 			}
 
-			dp_audio_smmu_map(dev,
-					  qdf_mem_paddr_from_dmaaddr(dev,
-								     QDF_NBUF_CB_PADDR(nbuf)),
-					  QDF_NBUF_CB_PADDR(nbuf),
-					  rx_desc_pool->buf_size);
-
 			buff_pool->buf_elem[head++] = nbuf;
-			head &= (buff_pool->max_bufq_len - 1);
+			head &= (DP_RX_REFILL_BUFF_POOL_SIZE - 1);
 			count++;
 		}
 
@@ -200,7 +198,7 @@ static inline qdf_nbuf_t dp_rx_refill_buff_pool_dequeue_nbuf(struct dp_soc *soc)
 		return NULL;
 
 	nbuf = buff_pool->buf_elem[tail++];
-	tail &= (buff_pool->max_bufq_len - 1);
+	tail &= (DP_RX_REFILL_BUFF_POOL_SIZE - 1);
 	buff_pool->tail = tail;
 
 	return nbuf;
@@ -263,19 +261,11 @@ dp_rx_buffer_pool_nbuf_map(struct dp_soc *soc,
 {
 	QDF_STATUS ret = QDF_STATUS_SUCCESS;
 
-	if (!QDF_NBUF_CB_PADDR((nbuf_frag_info_t->virt_addr).nbuf)) {
+	if (!QDF_NBUF_CB_PADDR((nbuf_frag_info_t->virt_addr).nbuf))
 		ret = qdf_nbuf_map_nbytes_single(soc->osdev,
 						 (nbuf_frag_info_t->virt_addr).nbuf,
 						 QDF_DMA_FROM_DEVICE,
 						 rx_desc_pool->buf_size);
-		if (QDF_IS_STATUS_SUCCESS(ret))
-			dp_audio_smmu_map(soc->osdev,
-					  qdf_mem_paddr_from_dmaaddr(soc->osdev,
-								     QDF_NBUF_CB_PADDR((nbuf_frag_info_t->virt_addr).nbuf)),
-					  QDF_NBUF_CB_PADDR((nbuf_frag_info_t->virt_addr).nbuf),
-					  rx_desc_pool->buf_size);
-	}
-
 
 	return ret;
 }
@@ -295,17 +285,7 @@ static void dp_rx_refill_buff_pool_init(struct dp_soc *soc, u8 mac_id)
 		return;
 	}
 
-	buff_pool->max_bufq_len =
-		wlan_cfg_get_rx_refill_buf_pool_size(soc->wlan_cfg_ctx);
-
-	buff_pool->buf_elem = qdf_mem_malloc(buff_pool->max_bufq_len *
-					     sizeof(qdf_nbuf_t));
-	if (!buff_pool->buf_elem) {
-		dp_err("Failed to allocate memory for RX refill buf element");
-		buff_pool->is_initialized = false;
-		return;
-	}
-
+	buff_pool->max_bufq_len = DP_RX_REFILL_BUFF_POOL_SIZE;
 	buff_pool->dp_pdev = dp_get_pdev_for_lmac_id(soc, 0);
 	buff_pool->tail = 0;
 
@@ -323,12 +303,6 @@ static void dp_rx_refill_buff_pool_init(struct dp_soc *soc, u8 mac_id)
 			qdf_nbuf_free(nbuf);
 			continue;
 		}
-
-		dp_audio_smmu_map(soc->osdev,
-				  qdf_mem_paddr_from_dmaaddr(soc->osdev,
-							     QDF_NBUF_CB_PADDR(nbuf)),
-				  QDF_NBUF_CB_PADDR(nbuf),
-				  rx_desc_pool->buf_size);
 
 		buff_pool->buf_elem[head] = nbuf;
 		head++;
@@ -353,7 +327,7 @@ void dp_rx_buffer_pool_init(struct dp_soc *soc, u8 mac_id)
 	dp_rx_refill_buff_pool_init(soc, mac_id);
 
 	if (!wlan_cfg_is_rx_buffer_pool_enabled(soc->wlan_cfg_ctx)) {
-		dp_info("RX buffer pool support is disabled");
+		dp_err("RX buffer pool support is disabled");
 		buff_pool->is_initialized = false;
 		return;
 	}
@@ -391,9 +365,6 @@ static void dp_rx_refill_buff_pool_deinit(struct dp_soc *soc, u8 mac_id)
 		return;
 
 	while ((nbuf = dp_rx_refill_buff_pool_dequeue_nbuf(soc))) {
-		dp_audio_smmu_unmap(soc->osdev,
-				    QDF_NBUF_CB_PADDR(nbuf),
-				    rx_desc_pool->buf_size);
 		qdf_nbuf_unmap_nbytes_single(soc->osdev, nbuf,
 					     QDF_DMA_BIDIRECTIONAL,
 					     rx_desc_pool->buf_size);
@@ -404,7 +375,6 @@ static void dp_rx_refill_buff_pool_deinit(struct dp_soc *soc, u8 mac_id)
 	dp_info("Rx refill buffers freed during deinit %u head: %u, tail: %u",
 		count, buff_pool->head, buff_pool->tail);
 
-	qdf_mem_free(buff_pool->buf_elem);
 	buff_pool->is_initialized = false;
 }
 

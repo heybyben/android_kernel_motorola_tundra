@@ -53,18 +53,13 @@
 
 #ifdef WIFI_POS_CONVERGED
 #include "target_if_wifi_pos.h"
-#include "target_if_wifi_pos_rx_ops.h"
-#include "target_if_wifi_pos_tx_ops.h"
 #endif
 
 #ifdef FEATURE_WLAN_TDLS
 #include "target_if_tdls.h"
 #endif
-#if defined(QCA_SUPPORT_SON) || defined(WLAN_FEATURE_SON)
+#ifdef QCA_SUPPORT_SON
 #include <target_if_son.h>
-#endif
-#if defined WLAN_FEATURE_11AX
-#include <target_if_spatial_reuse.h>
 #endif
 #ifdef WLAN_OFFCHAN_TXRX_ENABLE
 #include <target_if_offchan_txrx_api.h>
@@ -100,9 +95,6 @@
 #endif
 
 #include <target_if_gpio.h>
-#ifdef IPA_OFFLOAD
-#include <target_if_ipa.h>
-#endif
 
 #ifdef WLAN_MGMT_RX_REO_SUPPORT
 #include <target_if_mgmt_txrx.h>
@@ -111,7 +103,9 @@
 #include "wmi_unified_api.h"
 #include <target_if_twt.h>
 
+#ifdef WLAN_FEATURE_11BE_MLO
 #include <target_if_mlo_mgr.h>
+#endif
 
 #ifdef WLAN_FEATURE_COAP
 #include <target_if_coap.h>
@@ -273,19 +267,18 @@ static void target_if_fd_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
 #endif
 
 #ifdef WIFI_POS_CONVERGED
-static void
-target_if_wifi_pos_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
+static void target_if_wifi_pos_tx_ops_register(
+			struct wlan_lmac_if_tx_ops *tx_ops)
 {
 	target_if_wifi_pos_register_tx_ops(tx_ops);
 }
 #else
-static void
-target_if_wifi_pos_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
+static void target_if_wifi_pos_tx_ops_register(
+			struct wlan_lmac_if_tx_ops *tx_ops)
 {
 }
 #endif
-
-#if defined(QCA_SUPPORT_SON) || defined(WLAN_FEATURE_SON)
+#ifdef QCA_SUPPORT_SON
 static void target_if_son_tx_ops_register(
 			struct wlan_lmac_if_tx_ops *tx_ops)
 {
@@ -298,21 +291,6 @@ static void target_if_son_tx_ops_register(
 {
 	return;
 }
-#endif
-
-#if defined WLAN_FEATURE_SR
-static void target_if_spatial_reuse_tx_ops_register(
-			struct wlan_lmac_if_tx_ops *tx_ops)
-{
-	target_if_spatial_reuse_register_tx_ops(tx_ops);
-}
-
-#else
-static void target_if_spatial_reuse_tx_ops_register(
-			struct wlan_lmac_if_tx_ops *tx_ops)
-{
-}
-
 #endif
 
 #ifdef FEATURE_WLAN_TDLS
@@ -418,20 +396,6 @@ target_if_coex_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
 }
 #endif
 
-#ifdef WLAN_FEATURE_DBAM_CONFIG
-static QDF_STATUS
-target_if_dbam_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
-{
-	return target_if_dbam_register_tx_ops(tx_ops);
-}
-#else
-static inline QDF_STATUS
-target_if_dbam_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
-{
-	return QDF_STATUS_SUCCESS;
-}
-#endif
-
 #ifdef WLAN_FEATURE_COAP
 static QDF_STATUS
 target_if_coap_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
@@ -461,6 +425,9 @@ static void target_if_target_tx_ops_register(
 	target_tx_ops->tgt_is_tgt_type_ar900b =
 		target_is_tgt_type_ar900b;
 
+	target_tx_ops->tgt_is_tgt_type_ipq4019 =
+		target_is_tgt_type_ipq4019;
+
 	target_tx_ops->tgt_is_tgt_type_qca9984 =
 		target_is_tgt_type_qca9984;
 
@@ -475,12 +442,6 @@ static void target_if_target_tx_ops_register(
 
 	target_tx_ops->tgt_is_tgt_type_qcn6122 =
 		target_is_tgt_type_qcn6122;
-
-	target_tx_ops->tgt_is_tgt_type_qcn9160 =
-		target_is_tgt_type_qcn9160;
-
-	target_tx_ops->tgt_is_tgt_type_qcn6432 =
-		target_is_tgt_type_qcn6432;
 
 	target_tx_ops->tgt_is_tgt_type_qcn7605 =
 		target_is_tgt_type_qcn7605;
@@ -574,16 +535,6 @@ target_if_mlo_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
 }
 #endif
 
-#ifdef IPA_OFFLOAD
-static void target_if_ipa_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
-{
-	target_if_ipa_register_tx_ops(tx_ops);
-}
-#else
-static void target_if_ipa_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
-{ }
-#endif
-
 #if defined(WLAN_SUPPORT_TWT) && defined(WLAN_TWT_CONV_SUPPORTED)
 static
 void target_if_twt_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
@@ -621,8 +572,6 @@ QDF_STATUS target_if_register_umac_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 
 	target_if_son_tx_ops_register(tx_ops);
 
-	target_if_spatial_reuse_tx_ops_register(tx_ops);
-
 	target_if_tdls_tx_ops_register(tx_ops);
 
 	target_if_fd_tx_ops_register(tx_ops);
@@ -651,11 +600,7 @@ QDF_STATUS target_if_register_umac_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 
 	target_if_mlo_tx_ops_register(tx_ops);
 
-	target_if_ipa_tx_ops_register(tx_ops);
-
 	target_if_twt_tx_ops_register(tx_ops);
-
-	target_if_dbam_tx_ops_register(tx_ops);
 
 	target_if_coap_tx_ops_register(tx_ops);
 
@@ -774,34 +719,10 @@ QDF_STATUS target_if_alloc_psoc_tgt_info(struct wlan_objmgr_psoc *psoc)
 	return QDF_STATUS_SUCCESS;
 }
 
-QDF_STATUS target_if_psoc_tgt_info_mem_free(
-		struct target_psoc_info *tgt_psoc_info)
-{
-	struct wlan_psoc_host_service_ext_param *ext_param;
-
-	if (!tgt_psoc_info) {
-		target_if_err("tgt_psoc_info is NULL");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	/* reminder to move this into init_deinit_chainmask_table_free */
-	ext_param = target_psoc_get_service_ext_param(tgt_psoc_info);
-	if (ext_param)
-		init_deinit_chainmask_table_free(ext_param);
-
-	init_deinit_dbr_ring_cap_free(tgt_psoc_info);
-	init_deinit_spectral_scaling_params_free(tgt_psoc_info);
-	init_deinit_scan_radio_cap_free(tgt_psoc_info);
-	init_deinit_msdu_idx_qtype_map_free(tgt_psoc_info);
-	init_deinit_aux_dev_cap_free(tgt_psoc_info);
-	init_deinit_rcc_aoa_cap_ext2_free(tgt_psoc_info);
-
-	return QDF_STATUS_SUCCESS;
-}
-
 QDF_STATUS target_if_free_psoc_tgt_info(struct wlan_objmgr_psoc *psoc)
 {
 	struct target_psoc_info *tgt_psoc_info;
+	struct wlan_psoc_host_service_ext_param *ext_param;
 
 	if (!psoc) {
 		target_if_err("psoc is null");
@@ -810,7 +731,16 @@ QDF_STATUS target_if_free_psoc_tgt_info(struct wlan_objmgr_psoc *psoc)
 
 	tgt_psoc_info = wlan_psoc_get_tgt_if_handle(psoc);
 
-	target_if_psoc_tgt_info_mem_free(tgt_psoc_info);
+	ext_param = target_psoc_get_service_ext_param(tgt_psoc_info);
+	if (!ext_param) {
+		target_if_err("tgt_psoc_info is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+	init_deinit_chainmask_table_free(ext_param);
+	init_deinit_dbr_ring_cap_free(tgt_psoc_info);
+	init_deinit_spectral_scaling_params_free(tgt_psoc_info);
+	init_deinit_scan_radio_cap_free(tgt_psoc_info);
+
 	qdf_event_destroy(&tgt_psoc_info->info.event);
 
 	wlan_psoc_set_tgt_if_handle(psoc, NULL);
@@ -826,6 +756,11 @@ QDF_STATUS target_if_free_psoc_tgt_info(struct wlan_objmgr_psoc *psoc)
 bool target_is_tgt_type_ar900b(uint32_t target_type)
 {
 	return target_type == TARGET_TYPE_AR900B;
+}
+
+bool target_is_tgt_type_ipq4019(uint32_t target_type)
+{
+	return target_type == TARGET_TYPE_IPQ4019;
 }
 
 bool target_is_tgt_type_qca9984(uint32_t target_type)
@@ -853,16 +788,6 @@ bool target_is_tgt_type_qcn6122(uint32_t target_type)
 	return target_type == TARGET_TYPE_QCN6122;
 }
 
-bool target_is_tgt_type_qcn9160(uint32_t target_type)
-{
-	return target_type == TARGET_TYPE_QCN9160;
-}
-
-bool target_is_tgt_type_qcn6432(uint32_t target_type)
-{
-	return target_type == TARGET_TYPE_QCN6432;
-}
-
 bool target_is_tgt_type_qcn7605(uint32_t target_type)
 {
 	return target_type == TARGET_TYPE_QCN7605;
@@ -879,9 +804,6 @@ target_pdev_is_scan_radio_supported(struct wlan_objmgr_pdev *pdev,
 	int32_t phy_id;
 	struct target_psoc_info *tgt_psoc_info;
 	struct target_pdev_info *tgt_pdev;
-	uint32_t target_type = TARGET_TYPE_UNKNOWN;
-	struct wlan_lmac_if_target_tx_ops *target_type_tx_ops;
-	struct wlan_lmac_if_tx_ops *tx_ops;
 
 	if (!is_scan_radio_supported) {
 		target_if_err("input argument is null");
@@ -904,21 +826,6 @@ target_pdev_is_scan_radio_supported(struct wlan_objmgr_pdev *pdev,
 	if (!tgt_psoc_info) {
 		target_if_err("target_psoc_info is null");
 		return QDF_STATUS_E_INVAL;
-	}
-
-	tx_ops = wlan_psoc_get_lmac_if_txops(psoc);
-	if (!tx_ops) {
-		target_if_err("tx_ops is null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	target_type_tx_ops = &tx_ops->target_tx_ops;
-	if (target_type_tx_ops->tgt_get_tgt_type)
-		target_type = target_type_tx_ops->tgt_get_tgt_type(psoc);
-
-	if (target_type == TARGET_TYPE_AR9888) {
-		*is_scan_radio_supported = true;
-		return QDF_STATUS_SUCCESS;
 	}
 
 	num_scan_radio_caps =
@@ -963,9 +870,6 @@ target_pdev_scan_radio_is_dfs_enabled(struct wlan_objmgr_pdev *pdev,
 	int32_t phy_id;
 	struct target_psoc_info *tgt_psoc_info;
 	struct target_pdev_info *tgt_pdev;
-	uint32_t target_type = TARGET_TYPE_UNKNOWN;
-	struct wlan_lmac_if_target_tx_ops *target_type_tx_ops;
-	struct wlan_lmac_if_tx_ops *tx_ops;
 
 	if (!is_dfs_en) {
 		target_if_err("input argument is null");
@@ -988,20 +892,6 @@ target_pdev_scan_radio_is_dfs_enabled(struct wlan_objmgr_pdev *pdev,
 	if (!tgt_psoc_info) {
 		target_if_err("target_psoc_info is null");
 		return QDF_STATUS_E_INVAL;
-	}
-
-	tx_ops = wlan_psoc_get_lmac_if_txops(psoc);
-	if (!tx_ops) {
-		target_if_err("tx_ops is null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-	target_type_tx_ops = &tx_ops->target_tx_ops;
-	if (target_type_tx_ops->tgt_get_tgt_type)
-		target_type = target_type_tx_ops->tgt_get_tgt_type(psoc);
-
-	if (target_type == TARGET_TYPE_AR9888) {
-		*is_dfs_en = false;
-		return QDF_STATUS_SUCCESS;
 	}
 
 	num_scan_radio_caps =
@@ -1033,97 +923,6 @@ target_pdev_scan_radio_is_dfs_enabled(struct wlan_objmgr_pdev *pdev,
 	for (cap_idx = 0; cap_idx < num_scan_radio_caps; cap_idx++)
 		if (scan_radio_caps[cap_idx].phy_id == phy_id) {
 			*is_dfs_en = scan_radio_caps[cap_idx].dfs_en;
-			return QDF_STATUS_SUCCESS;
-		}
-
-	target_if_err("No scan radio cap found in pdev %d", pdev_id);
-
-	return QDF_STATUS_E_INVAL;
-}
-
-QDF_STATUS
-target_is_scan_blanking_enabled(struct wlan_objmgr_pdev *pdev,
-				bool *blanking_en)
-{
-	struct wlan_objmgr_psoc *psoc;
-	struct wlan_psoc_host_scan_radio_caps *scan_radio_caps;
-	uint8_t cap_idx;
-	uint32_t num_scan_radio_caps, pdev_id;
-	int32_t phy_id;
-	struct target_psoc_info *tgt_psoc_info;
-	struct target_pdev_info *tgt_pdev;
-	uint32_t target_type = TARGET_TYPE_UNKNOWN;
-	struct wlan_lmac_if_target_tx_ops *target_type_tx_ops;
-	struct wlan_lmac_if_tx_ops *tx_ops;
-
-
-	if (!blanking_en) {
-		target_if_err("input argument is null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-	*blanking_en = false;
-
-	if (!pdev) {
-		target_if_err("pdev is null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	psoc = wlan_pdev_get_psoc(pdev);
-	if (!psoc) {
-		target_if_err("psoc is null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	tgt_psoc_info = wlan_psoc_get_tgt_if_handle(psoc);
-	if (!tgt_psoc_info) {
-		target_if_err("target_psoc_info is null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	tx_ops = wlan_psoc_get_lmac_if_txops(psoc);
-	if (!tx_ops) {
-		target_if_err("tx_ops is null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	target_type_tx_ops = &tx_ops->target_tx_ops;
-	if (target_type_tx_ops->tgt_get_tgt_type)
-		target_type = target_type_tx_ops->tgt_get_tgt_type(psoc);
-
-	if (target_type == TARGET_TYPE_AR9888) {
-		*blanking_en = false;
-		return QDF_STATUS_SUCCESS;
-	}
-
-	num_scan_radio_caps =
-		target_psoc_get_num_scan_radio_caps(tgt_psoc_info);
-	if (!num_scan_radio_caps) {
-		target_if_err("scan radio not supported for psoc");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	scan_radio_caps = target_psoc_get_scan_radio_caps(tgt_psoc_info);
-	if (!scan_radio_caps) {
-		target_if_err("scan radio capabilities is null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	tgt_pdev = (struct target_pdev_info *)wlan_pdev_get_tgt_if_handle(pdev);
-	if (!tgt_pdev) {
-		target_if_err("target_pdev_info is null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
-	phy_id = target_pdev_get_phy_idx(tgt_pdev);
-	if (phy_id < 0) {
-		target_if_err("phy_id is invalid");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	for (cap_idx = 0; cap_idx < num_scan_radio_caps; cap_idx++)
-		if (scan_radio_caps[cap_idx].phy_id == phy_id) {
-			*blanking_en = scan_radio_caps[cap_idx].blanking_en;
 			return QDF_STATUS_SUCCESS;
 		}
 
@@ -1238,25 +1037,5 @@ QDF_STATUS target_if_mlo_ready(struct wlan_objmgr_pdev **pdev,
 		target_if_mlo_ready_send(pdev[idx]);
 
 	return QDF_STATUS_SUCCESS;
-}
-
-QDF_STATUS
-target_if_mlo_teardown_req(struct wlan_objmgr_pdev *pdev,
-			   enum wmi_mlo_teardown_reason reason,
-			   bool reset, bool standby_active)
-{
-	wmi_unified_t wmi_handle;
-	struct wmi_mlo_teardown_params params = {0};
-
-	wmi_handle = lmac_get_pdev_wmi_handle(pdev);
-	if (!wmi_handle)
-		return QDF_STATUS_E_INVAL;
-
-	params.pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
-	params.reason = reason;
-	params.umac_reset = reset;
-	params.standby_active = standby_active;
-
-	return wmi_mlo_teardown_cmd_send(wmi_handle, &params);
 }
 #endif /*WLAN_FEATURE_11BE_MLO && WLAN_MLO_MULTI_CHIP*/

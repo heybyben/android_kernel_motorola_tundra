@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -17,8 +17,8 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-/**
- * DOC: Public definitions  for crypto service
+ /**
+ * DOC: Public definations  for crypto service
  */
 
 #ifndef _WLAN_CRYPTO_GLOBAL_DEF_H_
@@ -55,9 +55,7 @@
 #define WLAN_CRYPTO_MAX_VLANKEYIX    WLAN_CRYPTO_MAXKEYIDX
 #endif
 #define WLAN_CRYPTO_MAX_PMKID        (16)
-#define WLAN_CRYPTO_TOTAL_KEYIDX     (WLAN_CRYPTO_MAXKEYIDX + \
-					WLAN_CRYPTO_MAXIGTKKEYIDX + \
-					WLAN_CRYPTO_MAXBIGTKKEYIDX)
+
 /* 40 bit wep key len */
 #define WLAN_CRYPTO_KEY_WEP40_LEN    (5)
 /* 104 bit wep key len */
@@ -191,64 +189,10 @@ typedef enum wlan_crypto_rsn_cap {
 	WLAN_CRYPTO_RSN_CAP_OCV_SUPPORTED  = 0x4000,
 } wlan_crypto_rsn_cap;
 
-/**
- * enum wlan_crypto_rsnx_cap - RSNXE capabilities
- * @WLAN_CRYPTO_RSNX_CAP_PROTECTED_TWT: Protected TWT
- * @WLAN_CRYPTO_RSNX_CAP_SAE_H2E: SAE Hash to Element
- * @WLAN_CRYPTO_RSNX_CAP_SAE_PK: SAE PK
- * @WLAN_CRYPTO_RSNX_CAP_SECURE_LTF: Secure LTF
- * @WLAN_CRYPTO_RSNX_CAP_SECURE_RTT: Secure RTT
- * @WLAN_CRYPTO_RSNX_CAP_URNM_MFPR_X20: Unassociated Range
- * Negotiation and Measurement MFP Required Exempt 20MHz
- * @WLAN_CRYPTO_RSNX_CAP_URNM_MFPR: Unassociated Range
- * Negotiation and Measurement MFP Required
- *
- * Definition: (IEEE Std 802.11-2020, 9.4.2.241, Table 9-780)
- * The Extended RSN Capabilities field, except its first 4 bits, is a
- * bit field indicating the extended RSN capabilities being advertised
- * by the STA transmitting the element. The length of the Extended
- * RSN Capabilities field is a variable n, in octets, as indicated by
- * the first 4 bits in the field.
- */
 enum wlan_crypto_rsnx_cap {
 	WLAN_CRYPTO_RSNX_CAP_PROTECTED_TWT = 0x10,
 	WLAN_CRYPTO_RSNX_CAP_SAE_H2E = 0x20,
 	WLAN_CRYPTO_RSNX_CAP_SAE_PK = 0x40,
-	WLAN_CRYPTO_RSNX_CAP_SECURE_LTF = 0x100,
-	WLAN_CRYPTO_RSNX_CAP_SECURE_RTT = 0x200,
-	WLAN_CRYPTO_RSNX_CAP_URNM_MFPR_X20 = 0x400,
-	WLAN_CRYPTO_RSNX_CAP_URNM_MFPR = 0x8000,
-};
-
-/**
- * enum wlan_crypto_vdev_11az_security_capab  - 11az related vdev
- * security capabilities
- * @WLAN_CRYPTO_RSNX_URNM_MFPR: URNM MFP required bit from RSNXE
- * @WLAN_CRYPTO_RSN_MFPC: MFP capable bit from RSN IE
- * @WLAN_CRYPTO_RSN_MFPR: MFP required bit from RSN IE
- * @WLAN_CRYPTO_RSNX_URNM_MFPR_X20: URNM_MFPR_X20 bit from RSNXE
- * @WLAN_CRYPTO_RSNX_RSTA_EXTCAP_I2R_LMR_FB: I2R LMR FB Policy from
- * Extended Capabilities
- */
-enum wlan_crypto_vdev_11az_security_capab {
-	WLAN_CRYPTO_RSNX_URNM_MFPR,
-	WLAN_CRYPTO_RSN_MFPC,
-	WLAN_CRYPTO_RSN_MFPR,
-	WLAN_CRYPTO_RSNX_URNM_MFPR_X20,
-	WLAN_CRYPTO_RSNX_RSTA_EXTCAP_I2R_LMR_FB,
-};
-
-/**
- * enum wlan_crypto_vdev_pasn_caps  - PASN peer related vdev
- * crypto parameters
- * @WLAN_CRYPTO_URNM_MFPR: URNM MFP required in RSNXE
- * @WLAN_CRYPTO_MFPC: MFP capable bit from RSN IE
- * @WLAN_CRYPTO_MFPR: MFP required from RSNIE
- */
-enum wlan_crypto_vdev_pasn_caps {
-	WLAN_CRYPTO_URNM_MFPR = BIT(0),
-	WLAN_CRYPTO_MFPC = BIT(1),
-	WLAN_CRYPTO_MFPR = BIT(2),
 };
 
 typedef enum wlan_crypto_key_mgmt {
@@ -279,8 +223,6 @@ typedef enum wlan_crypto_key_mgmt {
 	WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X_SHA384   = 24,
 	WLAN_CRYPTO_KEY_MGMT_FT_PSK_SHA384         = 25,
 	WLAN_CRYPTO_KEY_MGMT_PSK_SHA384            = 26,
-	WLAN_CRYPTO_KEY_MGMT_SAE_EXT_KEY           = 27,
-	WLAN_CRYPTO_KEY_MGMT_FT_SAE_EXT_KEY        = 28,
 	/** Keep WLAN_CRYPTO_KEY_MGMT_MAX at the end. */
 	WLAN_CRYPTO_KEY_MGMT_MAX,
 } wlan_crypto_key_mgmt;
@@ -297,7 +239,7 @@ enum wlan_crypto_key_type {
 #define DEFAULT_KEYMGMT_6G_MASK 0xFFFFFFFF
 
 /* AKM wlan_crypto_key_mgmt 1, 6, 8, 25 and 26 are not allowed. */
-#define ALLOWED_KEYMGMT_6G_MASK 0x19FFFEBD
+#define ALLOWED_KEYMGMT_6G_MASK 0x01FFFEBD
 
 /*
  * enum fils_erp_cryptosuite: this enum defines the cryptosuites used
@@ -312,62 +254,6 @@ enum fils_erp_cryptosuite {
 	HMAC_SHA256_128,
 	HMAC_SHA256_256,
 };
-
-/*
- * enum wlan_crypto_oem_eht_mlo_config - ENUM for different OEM configurable
- * crypto params to allow EHT/MLO in WPA2/WPA3 security.
- *
- * @WLAN_HOST_CRYPTO_WPA2_ALLOW_NON_MLO_EHT: Allows connecting to WPA2 with PMF
- * capability set to false in EHT only mode. If the AP is MLO, the connection
- * will still be in EHT without MLO.
- *
- * @WLAN_HOST_CRYPTO_WPA2_ALLOW_MLO: Allows connecting to WPA2 with PMF
- * capability set to false in MLO mode.
- *    -If set along with WLAN_HOST_CRYPTO_WPA2_ALLOW_NON_MLO_EHT,
- *     this mode supersedes.
- *
- * @WLAN_HOST_CRYPTO_WPA2_ALLOW_NON_MLO_EHT_MFPC_SET: Allows connecting to WPA2
- * with PMF capability set to true in EHT only mode. If the AP is MLO,
- * the connection will still be in EHT without MLO.
- *
- * @WLAN_HOST_CRYPTO_WPA2_ALLOW_MLO_MFPC_SET: Allows connecting to WPA2 with PMF
- * capability set to true in MLO mode.
- *    -If set along with WLAN_HOST_CRYPTO_WPA2_ALLOW_NON_MLO_EHT_MFPC_SET,
- *     this mode supersedes.
- *
- * @WLAN_HOST_CRYPTO_WPA3_SAE_ALLOW_NON_MLO_EHT_HnP: Connect to non-MLO/MLO
- * WPA3-SAE without support for H2E (or no RSNXE IE in beacon) in non-MLO EHT.
- * This bit results in connecting to both H2E and HnP APs in EHT only mode.
- *
- * @WLAN_HOST_CRYPTO_WPA3_SAE_ALLOW_MLO_HnP: Connect to MLO WPA3-SAE without
- * support for H2E (or no RSNXE IE in beacon) in MLO.
- * This bit result in connecting to both H2E and HnP APs in MLO mode.
- *    -If set along with WLAN_HOST_CRYPTO_WPA3_SAE_ALLOW_NON_MLO_EHT_HnP,
- *     this mode supersedes.
- */
-enum wlan_crypto_oem_eht_mlo_config {
-	WLAN_HOST_CRYPTO_WPA2_ALLOW_NON_MLO_EHT           = BIT(0),
-	WLAN_HOST_CRYPTO_WPA2_ALLOW_MLO                   = BIT(1),
-	WLAN_HOST_CRYPTO_WPA2_ALLOW_NON_MLO_EHT_MFPC_SET  = BIT(2),
-	WLAN_HOST_CRYPTO_WPA2_ALLOW_MLO_MFPC_SET          = BIT(3),
-	/* Bits 4-15 are reserved for future WPA2 security configs */
-
-	WLAN_HOST_CRYPTO_WPA3_SAE_ALLOW_NON_MLO_EHT_HnP   = BIT(16),
-	WLAN_HOST_CRYPTO_WPA3_SAE_ALLOW_MLO_HnP           = BIT(17),
-	/* Bits 18-31 are reserved for future WPA3 security configs */
-};
-
-#define WLAN_CRYPTO_WPA2_OEM_EHT_CFG_NO_PMF_ALLOWED(_cfg) \
-	((_cfg) & WLAN_HOST_CRYPTO_WPA2_ALLOW_NON_MLO_EHT || \
-	 (_cfg) & WLAN_HOST_CRYPTO_WPA2_ALLOW_MLO)
-
-#define WLAN_CRYPTO_WPA2_OEM_EHT_CFG_PMF_ALLOWED(_cfg) \
-	 ((_cfg) & WLAN_HOST_CRYPTO_WPA2_ALLOW_NON_MLO_EHT_MFPC_SET || \
-	  (_cfg) & WLAN_HOST_CRYPTO_WPA2_ALLOW_MLO_MFPC_SET)
-
-#define WLAN_CRYPTO_WPA3_SAE_OEM_EHT_CFG_IS_STRICT_H2E(_cfg) \
-	(((_cfg) & WLAN_HOST_CRYPTO_WPA3_SAE_ALLOW_NON_MLO_EHT_HnP || \
-	  (_cfg) & WLAN_HOST_CRYPTO_WPA3_SAE_ALLOW_MLO_HnP) == 0)
 
 /**
  * struct mobility_domain_params - structure containing
@@ -390,7 +276,7 @@ struct mobility_domain_params {
  * @ssid: ssid information
  * @cache_id: cache id
  * @pmk_lifetime: Duration in seconds for which the pmk is valid
- * @pmk_lifetime_threshold: Percentage of pmk lifetime within which
+ * @pmk_lifetime_threshold: Percentage of pmk liftime within which
  * full authentication is expected to avoid disconnection.
  * @pmk_entry_ts: System timestamp at which the PMK entry was created.
  * @single_pmk_supported: SAE single pmk supported BSS
@@ -413,17 +299,6 @@ struct wlan_crypto_pmksa {
 	struct mobility_domain_params mdid;
 };
 
-#ifdef WLAN_ADAPTIVE_11R
-/**
- * struct key_mgmt_list - structure to store AKM(s) present in RSN IE of
- * Beacon/Probe response
- * @key_mgmt: AKM(s) present in RSN IE of Beacon/Probe response
- */
-struct key_mgmt_list {
-	uint32_t key_mgmt;
-};
-#endif
-
 /**
  * struct wlan_crypto_params - holds crypto params
  * @authmodeset:        authentication mode
@@ -434,8 +309,6 @@ struct key_mgmt_list {
  * @key_mgmt:           key mgmt
  * @pmksa:              pmksa
  * @rsn_caps:           rsn_capability
- * @rsnx_caps:          rsnx capability
- * @akm_list:           order of AKM present in RSN IE of Beacon/Probe response
  *
  * This structure holds crypto params for peer or vdev
  */
@@ -448,28 +321,6 @@ struct wlan_crypto_params {
 	uint32_t key_mgmt;
 	struct   wlan_crypto_pmksa *pmksa[WLAN_CRYPTO_MAX_PMKID];
 	uint16_t rsn_caps;
-	uint32_t rsnx_caps;
-#ifdef WLAN_ADAPTIVE_11R
-	struct key_mgmt_list akm_list[WLAN_CRYPTO_KEY_MGMT_MAX];
-#endif
-};
-
-/**
- * struct wlan_crypto_ltf_keyseed_data - LTF keyseed parameters
- * @vdev_id: Vdev id
- * @peer_mac_addr: Peer mac address
- * @src_mac_addr: Source mac address
- * @rsn_authmode: Cipher suite
- * @key_seed: Secure LTF key seed
- * @key_seed_len: Key seed length
- */
-struct wlan_crypto_ltf_keyseed_data {
-	uint8_t vdev_id;
-	struct qdf_mac_addr peer_mac_addr;
-	struct qdf_mac_addr src_mac_addr;
-	uint8_t rsn_authmode;
-	uint8_t key_seed[WLAN_MAX_SECURE_LTF_KEYSEED_LEN];
-	uint16_t key_seed_len;
 };
 
 typedef enum wlan_crypto_param_type {
@@ -479,7 +330,6 @@ typedef enum wlan_crypto_param_type {
 	WLAN_CRYPTO_PARAM_MGMT_CIPHER,
 	WLAN_CRYPTO_PARAM_CIPHER_CAP,
 	WLAN_CRYPTO_PARAM_RSN_CAP,
-	WLAN_CRYPTO_PARAM_RSNX_CAP,
 	WLAN_CRYPTO_PARAM_KEY_MGMT,
 	WLAN_CRYPTO_PARAM_PMKSA,
 } wlan_crypto_param_type;
@@ -491,9 +341,7 @@ typedef enum wlan_crypto_param_type {
  * @flags:          key flags
  * @keyix:          key id
  * @cipher_type:    cipher type being used for this key
- * @key_type:       unicast or broadcast key
- * @macaddr:        MAC address of the peer
- * @src_addr:       Source mac address associated with the key
+ * @mac_addr:       MAC address of the peer
  * @cipher_table:   table which stores cipher related info
  * @private:        private pointer to save cipher context
  * @keylock:        spin lock
@@ -514,9 +362,7 @@ struct wlan_crypto_key {
 	uint16_t    flags;
 	uint16_t    keyix;
 	enum wlan_crypto_cipher_type cipher_type;
-	enum wlan_crypto_key_type key_type;
 	uint8_t     macaddr[QDF_MAC_ADDR_SIZE];
-	struct qdf_mac_addr src_addr;
 	void        *cipher_table;
 	void        *private;
 	qdf_spinlock_t	keylock;
@@ -535,64 +381,6 @@ struct wlan_crypto_key {
 };
 
 /**
- * struct wlan_crypto_keys - crypto keys structure
- * @key:              key buffers for this peer
- * @igtk_key:         igtk key buffer for this peer
- * @bigtk_key:        bigtk key buffer for this peer
- * @ltf_key_seed:     LTF Key Seed buffer
- * @igtk_key_type:    igtk key type
- * @def_tx_keyid:     default key used for this peer
- * @def_igtk_tx_keyid: default igtk key used for this peer
- * @def_bigtk_tx_keyid: default bigtk key used for this peer
- */
-struct wlan_crypto_keys {
-	struct wlan_crypto_key *key[WLAN_CRYPTO_MAX_VLANKEYIX];
-	struct wlan_crypto_key *igtk_key[WLAN_CRYPTO_MAXIGTKKEYIDX];
-	struct wlan_crypto_key *bigtk_key[WLAN_CRYPTO_MAXBIGTKKEYIDX];
-	struct wlan_crypto_ltf_keyseed_data ltf_key_seed;
-	enum wlan_crypto_cipher_type igtk_key_type;
-	uint8_t def_tx_keyid;
-	uint8_t def_igtk_tx_keyid;
-	uint8_t def_bigtk_tx_keyid;
-};
-
-union crypto_align_mac_addr {
-	uint8_t raw[QDF_MAC_ADDR_SIZE];
-	struct {
-		uint16_t bytes_ab;
-		uint16_t bytes_cd;
-		uint16_t bytes_ef;
-	} align2;
-	struct {
-		uint32_t bytes_abcd;
-		uint16_t bytes_ef;
-	} align4;
-	struct __packed {
-		uint16_t bytes_ab;
-		uint32_t bytes_cdef;
-	} align4_2;
-};
-
-/**
- * struct wlan_crypto_key_entry - crypto key entry structure
- * @mac_addr: mac addr
- * @is_active: active key entry
- * @link_id: link id
- * @vdev_id: vdev id
- * @keys: crypto keys
- * @hash_list_elem: hash list element
- */
-struct wlan_crypto_key_entry {
-	union crypto_align_mac_addr mac_addr;
-	bool is_active;
-	uint8_t link_id;
-	uint8_t vdev_id;
-	struct wlan_crypto_keys keys;
-
-	TAILQ_ENTRY(wlan_crypto_key_entry) hash_list_elem;
-};
-
-/**
  * struct wlan_crypto_req_key - key request structure
  * @type:                       key/cipher type
  * @pad:                        padding member
@@ -604,7 +392,7 @@ struct wlan_crypto_key_entry {
  * @keytsc:                     key transmit sequence counter
  * @keydata:                    key value
  * @txiv:                       wapi key tx iv
- * @recviv:                     wapi key rx iv
+ * @rxiv:                       wapi key rx iv
  * @filsaad:                    FILS AEAD data
  *
  * Key request structure used for setkey, getkey or delkey
@@ -635,11 +423,10 @@ struct wlan_crypto_req_key {
  * @defaultkey: function pointer to set default key
  * @set_key: converged function pointer to set key in hw
  * @getpn: function pointer to get current pn value of peer
- * @set_ltf_keyseed: Set LTF keyseed
- * @set_vdev_param: Set the vdev crypto parameter
  * @register_events: function pointer to register wmi event handler
  * @deregister_events: function pointer to deregister wmi event handler
  */
+
 struct wlan_lmac_if_crypto_tx_ops {
 	QDF_STATUS (*allockey)(struct wlan_objmgr_vdev *vdev,
 			       struct wlan_crypto_key *key,
@@ -656,12 +443,7 @@ struct wlan_lmac_if_crypto_tx_ops {
 			      struct wlan_crypto_key *key,
 			      enum wlan_crypto_key_type key_type);
 	QDF_STATUS(*getpn)(struct wlan_objmgr_vdev *vdev,
-			   uint8_t *macaddr, uint8_t keyix, uint32_t key_type);
-	QDF_STATUS (*set_ltf_keyseed)(struct wlan_objmgr_psoc *psoc,
-				      struct wlan_crypto_ltf_keyseed_data *ks);
-	QDF_STATUS (*set_vdev_param)(struct wlan_objmgr_psoc *psoc,
-				     uint32_t vdev_id, uint32_t param_id,
-				     uint32_t param_value);
+			   uint8_t *macaddr, uint32_t key_type);
 	QDF_STATUS (*register_events)(struct wlan_objmgr_psoc *psoc);
 	QDF_STATUS (*deregister_events)(struct wlan_objmgr_psoc *psoc);
 };
@@ -669,12 +451,10 @@ struct wlan_lmac_if_crypto_tx_ops {
 /**
  * struct wlan_lmac_if_crypto_rx_ops - structure of crypto rx  function
  *                  pointers
- * @crypto_encap: function pointer to encap tx frame
- * @crypto_decap:  function pointer to decap rx frame in hw
- * @crypto_enmic: function pointer to enmic tx frame
- * @crypto_demic: function pointer to demic rx frame
- * @set_peer_wep_keys: function pointer to set WEP keys
- * @get_rxpn: function pointer to get current Rx pn value of peer
+ * @encap: function pointer to encap tx frame
+ * @decap:  function pointer to decap rx frame in hw
+ * @enmic: function pointer to enmic tx frame
+ * @demic: function pointer to demic rx frame
  */
 
 struct wlan_lmac_if_crypto_rx_ops {
@@ -692,8 +472,6 @@ struct wlan_lmac_if_crypto_rx_ops {
 					uint8_t tid, uint8_t keyid);
 	QDF_STATUS(*set_peer_wep_keys)(struct wlan_objmgr_vdev *vdev,
 					struct wlan_objmgr_peer *peer);
-	QDF_STATUS (*get_rxpn)(struct wlan_objmgr_vdev *vdev,
-			       uint8_t *macaddr, uint16_t keyix);
 };
 
 #define WLAN_CRYPTO_RX_OPS_ENCAP(crypto_rx_ops) \
@@ -706,61 +484,5 @@ struct wlan_lmac_if_crypto_rx_ops {
 				(crypto_rx_ops->crypto_demic)
 #define WLAN_CRYPTO_RX_OPS_SET_PEER_WEP_KEYS(crypto_rx_ops) \
 				(crypto_rx_ops->set_peer_wep_keys)
-#define WLAN_CRYPTO_RX_OPS_GET_RXPN(crypto_rx_ops) \
-				((crypto_rx_ops)->get_rxpn)
 
-#define WLAN_CRYPTO_IS_WPA_WPA2(akm) \
-	(QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_IEEE8021X) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_PSK) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_PSK) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SHA256) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_PSK_SHA256) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_WPS) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_WAPI_PSK) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_WAPI_CERT) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_CCKM) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_OSEN) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SUITE_B) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FILS_SHA256) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FILS_SHA384) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_FILS_SHA256) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_FILS_SHA384) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_PSK_SHA384) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_PSK_SHA384))
-
-#define WLAN_CRYPTO_IS_WPA2(akm) \
-	(QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_PSK) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_PSK) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_PSK_SHA256) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_PSK_SHA384) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_PSK_SHA384))
-
-#define WLAN_CRYPTO_IS_WPA3(akm) \
-	(QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_SAE) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_SAE) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SUITE_B_192) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_OWE) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_DPP) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X_SHA384) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_SAE_EXT_KEY) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_SAE_EXT_KEY))
-
-#define WLAN_CRYPTO_IS_AKM_ENTERPRISE(akm) \
-	(QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_IEEE8021X) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SHA256) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SUITE_B) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X_SHA384) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SUITE_B_192) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FILS_SHA256) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FILS_SHA384) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_FILS_SHA256) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_FILS_SHA384))
-
-#define WLAN_CRYPTO_IS_AKM_SAE(akm) \
-	(QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_SAE) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_SAE) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_SAE_EXT_KEY) || \
-	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_SAE_EXT_KEY))
 #endif /* end of _WLAN_CRYPTO_GLOBAL_DEF_H_ */

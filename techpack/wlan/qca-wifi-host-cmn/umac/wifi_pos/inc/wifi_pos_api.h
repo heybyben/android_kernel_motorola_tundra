@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -26,15 +26,11 @@
 
 /* Include files */
 #include "wifi_pos_utils_pub.h"
-#include "wifi_pos_utils_i.h"
+#include "../src/wifi_pos_utils_i.h"
 
 /* forward reference */
 struct wlan_objmgr_psoc;
 struct wifi_pos_driver_caps;
-
-#ifdef WIFI_POS_CONVERGED
-struct wifi_pos_osif_ops;
-#endif
 
 /**
  * enum RTT_FIELD_ID - identifies which field is being specified
@@ -67,7 +63,7 @@ struct wifi_pos_field {
  */
 struct wifi_pos_field_info {
 	uint32_t count;
-	QDF_FLEX_ARRAY(struct wifi_pos_field, fields);
+	struct wifi_pos_field fields[1];
 };
 
 /* Length of interface name */
@@ -119,10 +115,10 @@ struct wifi_pos_ch_info {
 };
 
 /**
- * struct wifi_pos_ch_info_rsp - Channel information
+ * typedef wifi_pos_ch_info_rsp - Channel information
  * @chan_id: channel id
  * @reserved0: reserved for padding and future use
- * @mhz: primary 20 MHz channel frequency in Mhz
+ * @mhz: primary 20 MHz channel frequency in mhz
  * @band_center_freq1: Center frequency 1 in MHz
  * @band_center_freq2: Center frequency 2 in MHz, valid only for 11ac
  *      VHT 80+80 mode
@@ -131,7 +127,7 @@ struct wifi_pos_ch_info {
  *      max power, reg power and reg class id
  * @reg_info_2: regulatory information field 2 which contains antennamax
  */
-struct wifi_pos_ch_info_rsp {
+struct qdf_packed wifi_pos_ch_info_rsp {
 	uint32_t chan_id;
 	uint32_t reserved0;
 	uint32_t mhz;
@@ -140,7 +136,7 @@ struct wifi_pos_ch_info_rsp {
 	uint32_t info;
 	uint32_t reg_info_1;
 	uint32_t reg_info_2;
-} qdf_packed;
+};
 
 /**
  * struct wifi_pos_peer_status_info - Status information for a given peer
@@ -151,14 +147,14 @@ struct wifi_pos_ch_info_rsp {
  * @reserved0: reserved0
  * @peer_chan_info: channel info on which peer is connected
  */
-struct wifi_pos_peer_status_info {
+struct qdf_packed wifi_pos_peer_status_info {
 	uint8_t peer_mac_addr[ETH_ALEN];
 	uint8_t peer_status;
 	uint8_t vdev_id;
 	uint32_t peer_capability;
 	uint32_t reserved0;
 	struct wifi_pos_ch_info_rsp peer_chan_info;
-} qdf_packed;
+};
 
 /**
  * struct wifi_pos_req_msg - wifi pos request struct
@@ -347,24 +343,6 @@ struct wlan_lmac_if_rx_ops;
 void wifi_pos_register_rx_ops(struct wlan_lmac_if_rx_ops *rx_ops);
 
 /**
- * wifi_pos_get_tx_ops: api to get tx ops
- * @psoc: pointer to psoc object
- *
- * Return: tx ops
- */
-struct wlan_lmac_if_wifi_pos_tx_ops *
-wifi_pos_get_tx_ops(struct wlan_objmgr_psoc *psoc);
-
-/**
- * wifi_pos_get_rx_ops: api to get rx ops
- * @psoc: pointer to psoc object
- *
- * Return: rx ops
- */
-struct wlan_lmac_if_wifi_pos_rx_ops *
-wifi_pos_get_rx_ops(struct wlan_objmgr_psoc *psoc);
-
-/**
  * ucfg_wifi_pos_get_ftm_cap: API to get fine timing measurement caps
  * @psoc: psoc object
  *
@@ -424,23 +402,6 @@ bool wifi_pos_is_app_registered(struct wlan_objmgr_psoc *psoc);
  */
 struct wlan_objmgr_psoc *wifi_pos_get_psoc(void);
 
-/**
- * wifi_pos_get_legacy_ops() - Get wifi pos legacy ops
- *
- * Return: Pointer to legacy ops
- */
-struct wifi_pos_legacy_ops *wifi_pos_get_legacy_ops(void);
-
-/**
- * wifi_pos_set_legacy_ops() - Set Wifi Pos legacy ops
- * @psoc: PSOC pointer
- * @legacy_ops: Legacy ops
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS
-wifi_pos_set_legacy_ops(struct wlan_objmgr_psoc *psoc,
-			struct wifi_pos_legacy_ops *legacy_ops);
 #else
 static inline QDF_STATUS wifi_pos_init(void)
 {
@@ -552,20 +513,6 @@ QDF_STATUS wifi_pos_register_get_pdev_id_by_dev_name(
 		struct wlan_objmgr_psoc *psoc,
 		QDF_STATUS (*handler)(char *dev_name, uint8_t *pdev_id,
 				      struct wlan_objmgr_psoc **psoc));
-
-/**
- * wifi_pos_register_get_max_fw_phymode_for_channels: API to register callback
- * to get FW phymode for the given channels.
- * @psoc:  pointer to global psoc object
- * @handler: callback to be registered
- *
- * Return: QDF_STATUS_SUCCESS in case of success, error codes in case of failure
- */
-QDF_STATUS wifi_pos_register_get_max_fw_phymode_for_channels(
-		struct wlan_objmgr_psoc *psoc,
-		QDF_STATUS (*handler)(struct wlan_objmgr_pdev *pdev,
-				      struct wifi_pos_channel_power *chan_list,
-				      uint16_t wifi_pos_num_chans));
 #endif /* CNSS_GENL */
 
 #if !defined(CNSS_GENL) && defined(WLAN_RTT_MEASUREMENT_NOTIFICATION)
@@ -640,67 +587,4 @@ QDF_STATUS wifi_pos_send_report_resp(struct wlan_objmgr_psoc *psoc,
 QDF_STATUS wifi_pos_convert_host_pdev_id_to_target(
 	struct wlan_objmgr_psoc *psoc, uint32_t host_pdev_id,
 	uint32_t *target_pdev_id);
-
-#ifdef WIFI_POS_CONVERGED
-/**
- * wifi_pos_get_peer_private_object() - Wifi Pos get peer private object
- * @peer: Peer object pointer
- *
- * Return: Peer private object pointer
- */
-struct wlan_wifi_pos_peer_priv_obj *
-wifi_pos_get_peer_private_object(struct wlan_objmgr_peer *peer);
-
-/**
- * wifi_pos_register_osif_callbacks() - Register OSIF callbacks
- * @ops: Osif callbacks pointer
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS wifi_pos_register_osif_callbacks(struct wifi_pos_osif_ops *ops);
-
-/**
- * wifi_pos_get_osif_callbacks() - Get OS IF callbacks
- *
- * Return: struct wifi_pos_osif_ops pointer
- */
-struct wifi_pos_osif_ops *wifi_pos_get_osif_callbacks(void);
-#endif /* WIFI_POS_CONVERGED */
-
-#if defined(WIFI_POS_CONVERGED) && defined(WLAN_FEATURE_RTT_11AZ_SUPPORT)
-/**
- * wifi_pos_set_rsta_sec_ltf_cap() - Set RSTA secure LTF capability
- * @val: Value
- *
- * Return: None
- **/
-void
-wifi_pos_set_rsta_sec_ltf_cap(bool val);
-
-/**
- * wifi_pos_get_rsta_sec_ltf_cap  - Get RSTA secure LTF capability
- *
- * Return: True or false
- */
-bool wifi_pos_get_rsta_sec_ltf_cap(void);
-
-/**
- * wifi_pos_set_rsta_11az_ranging_cap() - Enable/Disable R-STA 11az ranging
- * @val: Value to set
- */
-void wifi_pos_set_rsta_11az_ranging_cap(uint32_t val);
-
-/**
- * wifi_pos_get_rsta_11az_ranging_cap() - Get if RSTA 11az ranging is enabled
- *
- * Return: value if 11az TB/NTB ranging is enabled
- */
-uint32_t wifi_pos_get_rsta_11az_ranging_cap(void);
-#else
-static inline
-uint32_t wifi_pos_get_rsta_11az_ranging_cap(void)
-{
-	return 0;
-}
 #endif
-#endif /* _WIFI_POS_API_H_ */

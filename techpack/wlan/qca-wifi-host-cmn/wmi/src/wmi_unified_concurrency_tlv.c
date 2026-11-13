@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -21,16 +20,12 @@
 #include <wmi.h>
 #include <wmi_unified_priv.h>
 #include <wmi_unified_concurrency_api.h>
-#ifdef WLAN_FEATURE_MCC_QUOTA
-#include <wlan_p2p_mcc_quota_public_struct.h>
-#endif
 
 /**
  * send_set_enable_disable_mcc_adaptive_scheduler_cmd_tlv() -enable/disable
  *							     mcc scheduler
  * @wmi_handle: wmi handle
  * @mcc_adaptive_scheduler: enable/disable
- * @pdev_id: pdev identifier
  *
  * This function enable/disable mcc adaptive scheduler in fw.
  *
@@ -76,15 +71,15 @@ static QDF_STATUS send_set_enable_disable_mcc_adaptive_scheduler_cmd_tlv(
 
 /**
  * send_set_mcc_channel_time_latency_cmd_tlv() -set MCC channel time latency
- * @wmi_handle: wmi handle
- * @mcc_channel_freq: mcc channel frequency in MHz
+ * @wmi: wmi handle
+ * @mcc_channel: mcc channel
  * @mcc_channel_time_latency: MCC channel time latency.
  *
  * Currently used to set time latency for an MCC vdev/adapter using operating
  * channel of it and channel number. The info is provided run time using
  * iwpriv command: iwpriv <wlan0 | p2p0> setMccLatency <latency in ms>.
  *
- * Return: QDF status
+ * Return: CDF status
  */
 static QDF_STATUS send_set_mcc_channel_time_latency_cmd_tlv(
 					wmi_unified_t wmi_handle,
@@ -151,12 +146,12 @@ static QDF_STATUS send_set_mcc_channel_time_latency_cmd_tlv(
 
 /**
  * send_set_mcc_channel_time_quota_cmd_tlv() -set MCC channel time quota
- * @wmi_handle: wmi handle
- * @adapter_1_chan_freq: adapter 1 channel frequency in MHz
+ * @wmi: wmi handle
+ * @adapter_1_chan_number: adapter 1 channel number
  * @adapter_1_quota: adapter 1 quota
- * @adapter_2_chan_freq: adapter 2 channel frequency in MHz
+ * @adapter_2_chan_number: adapter 2 channel number
  *
- * Return: QDF status
+ * Return: CDF status
  */
 static QDF_STATUS send_set_mcc_channel_time_quota_cmd_tlv(
 					wmi_unified_t wmi_handle,
@@ -186,9 +181,8 @@ static QDF_STATUS send_set_mcc_channel_time_quota_cmd_tlv(
 	 */
 	if (quota_chan1 < WMI_MCC_MIN_CHANNEL_QUOTA ||
 	    quota_chan1 > WMI_MCC_MAX_CHANNEL_QUOTA) {
-		wmi_err("Invalid time quota for Chan #1=%dms. Min: %dms, Max: %dms",
-			quota_chan1, WMI_MCC_MIN_CHANNEL_QUOTA,
-			WMI_MCC_MAX_CHANNEL_QUOTA);
+		wmi_err("Invalid time quota for Channel #1=%dms. Minimum "
+			 "is 20ms & maximum is 80ms", quota_chan1);
 		return QDF_STATUS_E_INVAL;
 	}
 	/* Set WMI CMD for channel time quota here */
@@ -234,101 +228,6 @@ static QDF_STATUS send_set_mcc_channel_time_quota_cmd_tlv(
 	return ret;
 }
 
-#ifdef WLAN_FEATURE_MCC_QUOTA
-/**
- * convert_to_host_quota_type() - convert wmi quota type to host quota type
- * @quota_type: wmi target quota type
- *
- * Return: enum mcc_quota_type
- */
-static enum mcc_quota_type convert_to_host_quota_type(uint32_t quota_type)
-{
-	switch (quota_type) {
-	case WMI_RESMGR_QUOTA_TYPE_CLEAR:
-		return QUOTA_TYPE_CLEAR;
-	case WMI_RESMGR_QUOTA_TYPE_FIXED:
-		return QUOTA_TYPE_FIXED;
-	case WMI_RESMGR_QUOTA_TYPE_DYNAMIC:
-		return QUOTA_TYPE_DYNAMIC;
-	default:
-		wmi_err("mcc quota unknown quota type %d", quota_type);
-		return QUOTA_TYPE_UNKNOWN;
-	}
-}
-
-/**
- * extract_mcc_quota_ev_param_tlv() - extract mcc quota information from wmi
- *    event
- * @wmi_handle: wmi handle
- * @evt_buf: pointer to event buffer
- * @param: Pointer to hold mcc quota info
- *
- * Return: QDF_STATUS_SUCCESS for success or error code
- */
-static QDF_STATUS
-extract_mcc_quota_ev_param_tlv(wmi_unified_t wmi_handle,
-			       void *evt_buf, struct mcc_quota_info *param)
-{
-	WMI_RESMGR_CHAN_TIME_QUOTA_CHANGED_EVENTID_param_tlvs *param_tlvs;
-	wmi_resmgr_chan_time_quota_changed_event_fixed_param *fixed_param;
-	uint8_t i;
-	wmi_resmgr_chan_time_quota_tlv *wmi_mcc_quota_info;
-
-	if (!param) {
-		wmi_err("mcc quota information param is null");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	param_tlvs = evt_buf;
-	if (!param_tlvs || !param_tlvs->fixed_param) {
-		wmi_err("Invalid mcc quota event buffer");
-		return QDF_STATUS_E_INVAL;
-	}
-	fixed_param = param_tlvs->fixed_param;
-
-	wmi_debug("mcc quota type %d, num %d",
-		  fixed_param->quota_type, param_tlvs->num_chan_quota);
-
-	param->type = convert_to_host_quota_type(fixed_param->quota_type);
-	if (param->type == QUOTA_TYPE_UNKNOWN)
-		return QDF_STATUS_E_INVAL;
-
-	if (!param_tlvs->chan_quota) {
-		param->num_chan_quota = 0;
-		return QDF_STATUS_SUCCESS;
-	}
-
-	if (param_tlvs->num_chan_quota > MAX_MCC_QUOTA_CH_NUM)
-		wmi_warn("mcc quota num %d unexpected",
-			 param_tlvs->num_chan_quota);
-	param->num_chan_quota = qdf_min(param_tlvs->num_chan_quota,
-					(uint32_t)MAX_MCC_QUOTA_CH_NUM);
-	wmi_mcc_quota_info = param_tlvs->chan_quota;
-	for (i = 0; i < param->num_chan_quota; i++) {
-		param->chan_quota[i].chan_mhz =
-			wmi_mcc_quota_info[i].chan_time_quota.chan_mhz;
-		param->chan_quota[i].channel_time_quota =
-			wmi_mcc_quota_info[i].chan_time_quota.channel_time_quota;
-		wmi_debug("mcc quota [%d] chan %d, quota %d",
-			  i, param->chan_quota[i].chan_mhz,
-			  param->chan_quota[i].channel_time_quota);
-	}
-
-	return QDF_STATUS_SUCCESS;
-}
-
-static void wmi_mcc_quota_evt_attach_tlv(wmi_unified_t wmi_handle)
-{
-	struct wmi_ops *ops = wmi_handle->ops;
-
-	ops->extract_mcc_quota_ev_param = extract_mcc_quota_ev_param_tlv;
-}
-#else
-static inline void wmi_mcc_quota_evt_attach_tlv(wmi_unified_t wmi_handle)
-{
-}
-#endif
-
 void wmi_concurrency_attach_tlv(wmi_unified_t wmi_handle)
 {
 	struct wmi_ops *ops = wmi_handle->ops;
@@ -339,5 +238,4 @@ void wmi_concurrency_attach_tlv(wmi_unified_t wmi_handle)
 		send_set_mcc_channel_time_latency_cmd_tlv;
 	ops->send_set_mcc_channel_time_quota_cmd =
 		send_set_mcc_channel_time_quota_cmd_tlv;
-	wmi_mcc_quota_evt_attach_tlv(wmi_handle);
 }

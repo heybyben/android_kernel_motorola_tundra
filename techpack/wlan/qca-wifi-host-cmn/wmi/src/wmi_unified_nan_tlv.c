@@ -1,6 +1,7 @@
+
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -75,21 +76,18 @@ extract_nan_event_rsp_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	}
 	nan_msg_hdr = (nan_msg_header_t *)event->data;
 
+	if (!wmi_service_enabled(wmi_handle, wmi_service_nan_dbs_support) &&
+	    !wmi_service_enabled(wmi_handle, wmi_service_nan_disable_support)) {
+		evt_params->evt_type = nan_event_id_generic_rsp;
+		return QDF_STATUS_SUCCESS;
+	}
+
 	switch (nan_msg_hdr->msg_id) {
 	case NAN_MSG_ID_ENABLE_RSP:
 		nan_evt_info = event->event_info;
 		if (!nan_evt_info) {
-			if (!wmi_service_enabled(wmi_handle,
-						 wmi_service_nan_dbs_support) &&
-			    !wmi_service_enabled(wmi_handle,
-						 wmi_service_nan_disable_support
-						 )) {
-				evt_params->evt_type = nan_event_id_generic_rsp;
-				break;
-			} else {
-				wmi_err("Fail: NAN enable rsp event info Null");
-				return QDF_STATUS_E_INVAL;
-			}
+			wmi_err("Fail: NAN enable rsp event info Null");
+			return QDF_STATUS_E_INVAL;
 		}
 		evt_params->evt_type = nan_event_id_enable_rsp;
 		evt_params->mac_id = nan_evt_info->mac_id;
@@ -115,7 +113,7 @@ extract_nan_event_rsp_tlv(wmi_unified_t wmi_handle, void *evt_buf,
  * @wmi_handle: wmi handle
  * @nan_msg: request data which will be non-null
  *
- * Return: QDF status
+ * Return: CDF status
  */
 static QDF_STATUS send_nan_disable_req_cmd_tlv(wmi_unified_t wmi_handle,
 					       struct nan_disable_req *nan_msg)
@@ -228,7 +226,7 @@ static QDF_STATUS send_nan_disable_req_cmd_tlv(wmi_unified_t wmi_handle,
  * @wmi_handle: wmi handle
  * @nan_msg: request data which will be non-null
  *
- * Return: QDF status
+ * Return: CDF status
  */
 static QDF_STATUS send_nan_req_cmd_tlv(wmi_unified_t wmi_handle,
 				       struct nan_msg_params *nan_msg)
@@ -366,7 +364,7 @@ static QDF_STATUS nan_ndp_initiator_req_tlv(wmi_unified_t wmi_handle,
 	wmi_ndp_transport_ip_param *tcp_ip_param;
 
 	/*
-	 * WMI command expects 4 byte aligned len:
+	 * WMI command expects 4 byte alligned len:
 	 * round up ndp_cfg_len and ndp_app_info_len to 4 bytes
 	 */
 	ndp_cfg_len = qdf_roundup(ndp_req->ndp_config.ndp_cfg_len, 4);
@@ -406,8 +404,6 @@ static QDF_STATUS nan_ndp_initiator_req_tlv(wmi_unified_t wmi_handle,
 	cmd->nan_csid = ndp_req->ncs_sk_type;
 	cmd->nan_passphrase_len = ndp_req->passphrase.passphrase_len;
 	cmd->nan_servicename_len = ndp_req->service_name.service_name_len;
-	cmd->nan_csid_cap = ndp_req->ndp_add_params.csid_cap;
-	cmd->nan_gtk_required = ndp_req->ndp_add_params.gtk;
 
 	ch_tlv = (wmi_channel *)&cmd[1];
 	WMITLV_SET_HDR(ch_tlv, WMITLV_TAG_STRUC_wmi_channel,
@@ -464,9 +460,6 @@ static QDF_STATUS nan_ndp_initiator_req_tlv(wmi_unified_t wmi_handle,
 		 cmd->ndp_cfg_len, cmd->ndp_app_info_len, cmd->nan_pmk_len,
 		 cmd->nan_passphrase_len, cmd->nan_servicename_len);
 
-	wmi_debug("ndp_csid_cap %d, ndp_gtk_required %d", cmd->nan_csid_cap,
-		  cmd->nan_gtk_required);
-
 	wmi_mtrace(WMI_NDP_INITIATOR_REQ_CMDID, cmd->vdev_id, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf, len,
 				      WMI_NDP_INITIATOR_REQ_CMDID);
@@ -498,7 +491,7 @@ static QDF_STATUS nan_ndp_responder_req_tlv(wmi_unified_t wmi_handle,
 		 req->ndp_info.ndp_app_info_len);
 
 	/*
-	 * WMI command expects 4 byte aligned len:
+	 * WMI command expects 4 byte alligned len:
 	 * round up ndp_cfg_len and ndp_app_info_len to 4 bytes
 	 */
 	ndp_cfg_len = qdf_roundup(req->ndp_config.ndp_cfg_len, 4);
@@ -535,8 +528,6 @@ static QDF_STATUS nan_ndp_responder_req_tlv(wmi_unified_t wmi_handle,
 	cmd->nan_csid = req->ncs_sk_type;
 	cmd->nan_passphrase_len = req->passphrase.passphrase_len;
 	cmd->nan_servicename_len = req->service_name.service_name_len;
-	cmd->nan_csid_cap = req->ndp_add_params.csid_cap;
-	cmd->nan_gtk_required = req->ndp_add_params.gtk;
 
 	tlv_ptr = (uint8_t *)&cmd[1];
 	WMITLV_SET_HDR(tlv_ptr, WMITLV_TAG_ARRAY_BYTE, ndp_cfg_len);
@@ -591,9 +582,6 @@ static QDF_STATUS nan_ndp_responder_req_tlv(wmi_unified_t wmi_handle,
 		 cmd->nan_pmk_len, cmd->nan_passphrase_len,
 		 cmd->nan_servicename_len);
 
-	wmi_debug("ndp_csid_cap %d, ndp_gtk_required %d", cmd->nan_csid_cap,
-		  cmd->nan_gtk_required);
-
 	wmi_mtrace(WMI_NDP_RESPONDER_REQ_CMDID, cmd->vdev_id, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf, len,
 				      WMI_NDP_RESPONDER_REQ_CMDID);
@@ -616,7 +604,7 @@ static QDF_STATUS nan_ndp_end_req_tlv(wmi_unified_t wmi_handle,
 
 	/* len of tlv following fixed param  */
 	ndp_end_req_len = sizeof(wmi_ndp_end_req) * req->num_ndp_instances;
-	/* above comes out to 4 byte aligned already, no need of padding */
+	/* above comes out to 4 byte alligned already, no need of padding */
 	len = sizeof(*cmd) + ndp_end_req_len + WMI_TLV_HDR_SIZE;
 	buf = wmi_buf_alloc(wmi_handle, len);
 	if (!buf) {
@@ -642,16 +630,6 @@ static QDF_STATUS nan_ndp_end_req_tlv(wmi_unified_t wmi_handle,
 			       (sizeof(*ndp_end_req_lst) - WMI_TLV_HDR_SIZE));
 
 		ndp_end_req_lst[i].ndp_instance_id = req->ndp_ids[i];
-
-		/*
-		 * vdev_id is added in NDP END TLV to facilitate fw to give it
-		 * back in the NDP END indication.
-		 */
-		if (req->vdev) {
-			ndp_end_req_lst[i].vdev_id =
-						wlan_vdev_get_id(req->vdev);
-			ndp_end_req_lst[i].vdev_id_valid = 1;
-		}
 	}
 
 	wmi_mtrace(WMI_NDP_END_REQ_CMDID, NO_SESSION, 0);
@@ -823,15 +801,13 @@ static QDF_STATUS extract_ndp_ind_tlv(wmi_unified_t wmi_handle,
 	rsp->ndp_instance_id = fixed_params->ndp_instance_id;
 	rsp->role = fixed_params->self_ndp_role;
 	rsp->policy = fixed_params->accept_policy;
-	rsp->ndp_add_params.csid_cap = fixed_params->nan_csid_cap;
-	rsp->ndp_add_params.gtk = fixed_params->nan_gtk_required;
 
 	WMI_MAC_ADDR_TO_CHAR_ARRAY(&fixed_params->peer_ndi_mac_addr,
 				rsp->peer_mac_addr.bytes);
 	WMI_MAC_ADDR_TO_CHAR_ARRAY(&fixed_params->peer_discovery_mac_addr,
 				rsp->peer_discovery_mac_addr.bytes);
 
-	wmi_debug("WMI_NDP_INDICATION_EVENTID(0x%X) received. vdev %d service_instance %d, ndp_instance %d, role %d, policy %d csid: %d, scid_len: %d, peer_addr: "QDF_MAC_ADDR_FMT", peer_disc_addr: "QDF_MAC_ADDR_FMT" ndp_cfg - %d bytes ndp_app_info - %d bytes ndp_csid_caps %d, ndp_gtk_required %d",
+	wmi_debug("WMI_NDP_INDICATION_EVENTID(0x%X) received. vdev %d service_instance %d, ndp_instance %d, role %d, policy %d csid: %d, scid_len: %d, peer_addr: "QDF_MAC_ADDR_FMT", peer_disc_addr: "QDF_MAC_ADDR_FMT" ndp_cfg - %d bytes ndp_app_info - %d bytes",
 		 WMI_NDP_INDICATION_EVENTID, fixed_params->vdev_id,
 		 fixed_params->service_instance_id,
 		 fixed_params->ndp_instance_id, fixed_params->self_ndp_role,
@@ -840,8 +816,7 @@ static QDF_STATUS extract_ndp_ind_tlv(wmi_unified_t wmi_handle,
 		 QDF_MAC_ADDR_REF(rsp->peer_mac_addr.bytes),
 		 QDF_MAC_ADDR_REF(rsp->peer_discovery_mac_addr.bytes),
 		 fixed_params->ndp_cfg_len,
-		 fixed_params->ndp_app_info_len, rsp->ndp_add_params.csid_cap,
-		 rsp->ndp_add_params.gtk);
+		 fixed_params->ndp_app_info_len);
 
 	rsp->ncs_sk_type = fixed_params->nan_csid;
 	if (event->ndp_cfg) {

@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "bus.h"
 #include "debug.h"
 #include "pci.h"
-#include "pci_platform.h"
 
 enum cnss_dev_bus_type cnss_get_dev_bus_type(struct device *dev)
 {
@@ -54,6 +53,7 @@ enum cnss_dev_bus_type cnss_get_bus_type(struct cnss_plat_data *plat_priv)
 	case KIWI_DEVICE_ID:
 	case MANGO_DEVICE_ID:
 	case PEACH_DEVICE_ID:
+	case COLOGNE_DEVICE_ID:
 		return CNSS_BUS_PCI;
 	default:
 		cnss_pr_err("Unknown device_id: 0x%lx\n", plat_priv->device_id);
@@ -155,6 +155,21 @@ int cnss_bus_load_tme_patch(struct cnss_plat_data *plat_priv)
 	}
 }
 
+int cnss_bus_load_sku_license(struct cnss_plat_data *plat_priv)
+{
+	if (!plat_priv)
+		return -ENODEV;
+
+	switch (plat_priv->bus_type) {
+	case CNSS_BUS_PCI:
+		return cnss_pci_load_sku_license(plat_priv->bus_priv);
+	default:
+		cnss_pr_err("Unsupported bus type: %d\n",
+			    plat_priv->bus_type);
+		return -EINVAL;
+	}
+}
+
 int cnss_bus_load_tme_opt_file(struct cnss_plat_data *plat_priv,
 				enum wlfw_tme_lite_file_type_v01 file)
 {
@@ -228,22 +243,6 @@ int cnss_bus_alloc_fw_mem(struct cnss_plat_data *plat_priv)
 		cnss_pr_err("Unsupported bus type: %d\n",
 			    plat_priv->bus_type);
 		return -EINVAL;
-	}
-}
-
-void cnss_bus_free_fw_mem(struct cnss_plat_data *plat_priv, int k)
-{
-	if (!plat_priv)
-		return;
-
-	switch (plat_priv->bus_type) {
-	case CNSS_BUS_PCI:
-		cnss_pci_free_fw_mem(plat_priv->bus_priv, k);
-		return;
-	default:
-		cnss_pr_err("Unsupported bus type: %d\n",
-			    plat_priv->bus_type);
-		return;
 	}
 }
 
@@ -356,10 +355,10 @@ void cnss_bus_fw_boot_timeout_hdlr(struct timer_list *t)
 	}
 }
 
-void cnss_bus_collect_dump_info(struct cnss_plat_data *plat_priv, bool in_panic)
+int cnss_bus_collect_dump_info(struct cnss_plat_data *plat_priv, bool in_panic)
 {
 	if (!plat_priv)
-		return;
+		return 0;
 
 	switch (plat_priv->bus_type) {
 	case CNSS_BUS_PCI:
@@ -368,7 +367,7 @@ void cnss_bus_collect_dump_info(struct cnss_plat_data *plat_priv, bool in_panic)
 	default:
 		cnss_pr_err("Unsupported bus type: %d\n",
 			    plat_priv->bus_type);
-		return;
+		return 0;
 	}
 }
 
@@ -548,6 +547,23 @@ int cnss_bus_call_driver_modem_status(struct cnss_plat_data *plat_priv,
 	case CNSS_BUS_PCI:
 		return cnss_pci_call_driver_modem_status(plat_priv->bus_priv,
 							 modem_current_status);
+	default:
+		cnss_pr_err("Unsupported bus type: %d\n",
+			    plat_priv->bus_type);
+		return -EINVAL;
+	}
+}
+
+int cnss_bus_fmd_status(struct cnss_plat_data *plat_priv,
+			int fmd_status)
+{
+	if (!plat_priv)
+		return -ENODEV;
+
+	switch (plat_priv->bus_type) {
+	case CNSS_BUS_PCI:
+		return cnss_pci_fmd_status(plat_priv->bus_priv,
+					   fmd_status);
 	default:
 		cnss_pr_err("Unsupported bus type: %d\n",
 			    plat_priv->bus_type);
@@ -742,68 +758,6 @@ bool cnss_bus_is_smmu_s1_enabled(struct cnss_plat_data *plat_priv)
 	}
 }
 
-int cnss_bus_dsp_link_control(struct cnss_plat_data *plat_priv,
-			      bool link_enable)
-{
-	if (!plat_priv || plat_priv->pcie_switch_type != PCIE_SWITCH_NTN3)
-		return -ENODEV;
-
-	switch (plat_priv->bus_type) {
-	case CNSS_BUS_PCI:
-		return cnss_pci_dsp_link_control(plat_priv->bus_priv, link_enable);
-	default:
-		cnss_pr_err("Unsupported bus type: %d\n",
-			    plat_priv->bus_type);
-		return -EINVAL;
-	}
-}
-
-int cnss_bus_set_dsp_link_status(struct cnss_plat_data *plat_priv,
-				 bool link_enable)
-{
-	if (!plat_priv || plat_priv->pcie_switch_type != PCIE_SWITCH_NTN3)
-		return -ENODEV;
-
-	switch (plat_priv->bus_type) {
-	case CNSS_BUS_PCI:
-		return cnss_pci_set_dsp_link_status(plat_priv->bus_priv, link_enable);
-	default:
-		cnss_pr_err("Unsupported bus type: %d\n",
-			    plat_priv->bus_type);
-		return -EINVAL;
-	}
-}
-
-int cnss_bus_get_dsp_link_status(struct cnss_plat_data *plat_priv)
-{
-	if (!plat_priv || plat_priv->pcie_switch_type != PCIE_SWITCH_NTN3)
-		return -ENODEV;
-
-	switch (plat_priv->bus_type) {
-	case CNSS_BUS_PCI:
-		return cnss_pci_get_dsp_link_status(plat_priv->bus_priv);
-	default:
-		cnss_pr_err("Unsupported bus type: %d\n",
-			    plat_priv->bus_type);
-		return -EINVAL;
-	}
-}
-
-int cnss_bus_dsp_link_enable(struct cnss_plat_data *plat_priv)
-{
-	if (!plat_priv || plat_priv->pcie_switch_type != PCIE_SWITCH_NTN3)
-		return -ENODEV;
-
-	switch (plat_priv->bus_type) {
-	case CNSS_BUS_PCI:
-		return cnss_pci_dsp_link_enable(plat_priv->bus_priv);
-	default:
-		cnss_pr_err("Unsupported bus type: %d\n",
-			    plat_priv->bus_type);
-		return -EINVAL;
-	}
-}
-
 int cnss_bus_update_time_sync_period(struct cnss_plat_data *plat_priv,
 				     unsigned int time_sync_period)
 {
@@ -861,38 +815,16 @@ int cnss_bus_get_msi_assignment(struct cnss_plat_data *plat_priv,
 	}
 }
 
-#if IS_ENABLED(CONFIG_MHI_BUS_MISC)
 void cnss_bus_disable_mhi_satellite_cfg(struct cnss_plat_data *plat_priv)
 {
-	struct cnss_pci_data *pci_priv;
-
-	pci_priv = plat_priv->bus_priv;
-	if (!pci_priv) {
-		cnss_pr_err("mhi satellite could not be disabled since pci_priv is NULL\n");
+	if (!plat_priv)
 		return;
-	}
 
 	switch (plat_priv->bus_type) {
 	case CNSS_BUS_PCI:
-		/* MHI satellite configuration is only for KIWI V2 and
-		 * that too only in DRV mode.
-		 */
-		if (plat_priv->device_id == KIWI_DEVICE_ID &&
-		    plat_priv->device_version.major_version == FW_V2_NUMBER) {
-			cnss_pr_dbg("Remove MHI satellite configuration\n");
-			return cnss_mhi_controller_set_base(pci_priv, 0);
-		}
+		cnss_pci_controller_set_base(plat_priv->bus_priv);
 		break;
 	default:
-		cnss_pr_dbg("Unsupported bus type: %d, ignore disable mhi satellite cfg\n",
-			    plat_priv->bus_type);
-		return;
+		cnss_pr_dbg("Unsupported bus type: %d\n", plat_priv->bus_type);
 	}
-
-	return;
 }
-#else
-void cnss_bus_disable_mhi_satellite_cfg(struct cnss_plat_data *pci_priv)
-{
-}
-#endif

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -94,14 +94,12 @@ struct ath_pktlog_hdr {
 
 /**
  * enum - Pktlog flag field details
- * @PKTLOG_FLG_FRM_TYPE_LOCAL_S: local-generated frame (tx)
- * @PKTLOG_FLG_FRM_TYPE_REMOTE_S: remote-generated frame (rx)
- * @PKTLOG_FLG_FRM_TYPE_CLONE_S: cloned frame
- * @PKTLOG_FLG_FRM_TYPE_CBF_S: CBF remote frame
- * @PKTLOG_FLG_FRM_TYPE_UNKNOWN_S: Unknown
- *
- * struct ath_pktlog_hdr flags field bit definitions,
- * (use 1 << [enum] to assign)
+ * packet origin [1:0]
+ * 00 - Local
+ * 01 - Remote
+ * 10 - Unknown/Not applicable
+ * 11 - Reserved
+ * reserved [15:2]
  */
 enum {
 	PKTLOG_FLG_FRM_TYPE_LOCAL_S = 0,
@@ -207,7 +205,7 @@ struct ath_pktlog_txctl {
 struct ath_pktlog_tx_status {
 	struct ath_pktlog_hdr pl_hdr;
 	void *ds_status;
-	int32_t misc[];	/* Can be used for HT specific or other misc info */
+	int32_t misc[0];        /* Can be used for HT specific or other misc info */
 } __ATTRIB_PACK;
 
 struct ath_pktlog_msdu_info {
@@ -282,7 +280,7 @@ struct ath_pktlog_buf {
 	uint32_t msg_index;
 	/* Offset for read */
 	loff_t offset;
-	char log_data[];
+	char log_data[0];
 };
 
 #define PKTLOG_MOV_RD_IDX(_rd_offset, _log_buf, _log_size)  \

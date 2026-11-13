@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -58,7 +57,7 @@ static bool logger_initialized;
  *
  * The cnss_logger_device_register() use to register the driver with the
  * wiphy structure and the module name (debug purpose) and then return the
- * radio_index depending on the availability.
+ * radio_index depending on the availibility.
  *
  * Return: radio index for success and -EINVAL for failure
  */
@@ -259,7 +258,7 @@ qdf_export_symbol(nl_srv_is_initialized);
  * If MULTI_IF_NAME is not defined, then this is the primary instance of the
  * driver and the diagnostics netlink socket will be available. If
  * MULTI_IF_NAME is defined then this is not the primary instance of the driver
- * and the diagnostics netlink socket will not be available since this
+ * and the diagnotics netlink socket will not be available since this
  * diagnostics netlink socket can only be exposed by one instance of the driver.
  */
 #elif defined(CNSS_GENL)
@@ -721,9 +720,9 @@ static void nl_srv_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 
 	/* Only requests are handled by kernel now */
 	if (!(nlh->nlmsg_flags & NLM_F_REQUEST)) {
-		QDF_TRACE_DEBUG_RL(QDF_MODULE_ID_HDD,
-				   "NLINK: Received Invalid NL Req type [%x]",
-				   nlh->nlmsg_flags);
+		QDF_TRACE(QDF_MODULE_ID_HDD, QDF_TRACE_LEVEL_WARN,
+			  "NLINK: Received Invalid NL Req type [%x]",
+			  nlh->nlmsg_flags);
 		return;
 	}
 
@@ -731,9 +730,8 @@ static void nl_srv_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 
 	/* Unknown message */
 	if (type < WLAN_NL_MSG_BASE || type >= WLAN_NL_MSG_MAX) {
-		QDF_TRACE_DEBUG_RL(QDF_MODULE_ID_HDD,
-				   "NLINK: Received Invalid NL Msg type [%x]",
-				   type);
+		QDF_TRACE(QDF_MODULE_ID_HDD, QDF_TRACE_LEVEL_WARN,
+			  "NLINK: Received Invalid NL Msg type [%x]", type);
 		return;
 	}
 
@@ -742,9 +740,9 @@ static void nl_srv_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 	 * Drop any message with invalid length
 	 */
 	if (nlh->nlmsg_len < NLMSG_LENGTH(sizeof(tAniMsgHdr))) {
-		QDF_TRACE_DEBUG_RL(QDF_MODULE_ID_HDD,
-				   "NLINK: Received NL Msg with invalid len[%x]",
-				   nlh->nlmsg_len);
+		QDF_TRACE(QDF_MODULE_ID_HDD, QDF_TRACE_LEVEL_WARN,
+			  "NLINK: Received NL Msg with invalid len[%x]",
+			  nlh->nlmsg_len);
 		return;
 	}
 
@@ -755,8 +753,8 @@ static void nl_srv_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 	if (nl_srv_msg_handler[type]) {
 		(nl_srv_msg_handler[type])(skb);
 	} else {
-		QDF_TRACE_DEBUG_RL(QDF_MODULE_ID_HDD,
-				   "NLINK: No handler for msg [0x%X]", type);
+		QDF_TRACE(QDF_MODULE_ID_HDD, QDF_TRACE_LEVEL_WARN,
+			  "NLINK: No handler for Netlink Msg [0x%X]", type);
 	}
 }
 

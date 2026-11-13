@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -34,9 +34,6 @@
 #include "wlan_mlme_main.h"
 
 #define CSR_INVALID_SCANRESULT_HANDLE       (NULL)
-
-/* Length to print MAC 12 char + 5 ":" + 2 space + mld string */
-#define MAC_ADDR_DUMP_LEN 26
 
 enum csr_akm_type {
 	/* never used */
@@ -75,8 +72,6 @@ enum csr_akm_type {
 	eCSR_AUTH_TYPE_OSEN,
 	eCSR_AUTH_TYPE_FT_SAE,
 	eCSR_AUTH_TYPE_FT_SUITEB_EAP_SHA384,
-	eCSR_AUTH_TYPE_SAE_EXT_KEY,
-	eCSR_AUTH_TYPE_FT_SAE_EXT_KEY,
 	eCSR_NUM_OF_SUPPORT_AUTH_TYPE,
 	eCSR_AUTH_TYPE_FAILED = 0xff,
 	eCSR_AUTH_TYPE_UNKNOWN = eCSR_AUTH_TYPE_FAILED,
@@ -188,6 +183,8 @@ typedef enum {
 	eCSR_INI_CHANNEL_BONDING_STATE_MAX = 11
 } eIniChanBondState;
 
+#define CSR_RSN_MAX_PMK_LEN         48
+
 typedef struct tagCsrChannelInfo {
 	uint8_t numOfChannels;
 	uint32_t *freq_list;
@@ -288,7 +285,6 @@ typedef enum {
 	eCSR_ROAM_CHANNEL_COMPLETE_IND = 47,
 	eCSR_ROAM_CAC_COMPLETE_IND = 48,
 	eCSR_ROAM_SAE_COMPUTE = 49,
-	eCSR_ROAM_CHANNEL_INFO_EVENT_IND = 50,
 } eRoamCmdStatus;
 
 /* comment inside indicates what roaming callback gets */
@@ -448,8 +444,12 @@ struct csr_roam_profile {
 	uint32_t nRSNReqIELength; /* The byte count in the pRSNReqIE */
 	uint8_t *pRSNReqIE;       /* If not null,it's IE byte stream for RSN */
 	uint8_t privacy;
+	bool fwdWPSPBCProbeReq;
 	tAniAuthType csr80211AuthType;
 	uint32_t dtimPeriod;
+	bool ApUapsdEnable;
+	bool protEnabled;
+	bool obssProtEnabled;
 	bool chan_switch_hostapd_rate_enabled;
 	uint16_t cfg_protection;
 	uint8_t wps_state;
@@ -569,7 +569,6 @@ struct csr_roam_info {
 	tDot11fIEHTCaps ht_caps;
 	tDot11fIEVHTCaps vht_caps;
 	bool he_caps_present;
-	bool eht_caps_present;
 	bool ampdu;
 	bool sgi_enable;
 	bool tx_stbc;
@@ -578,14 +577,11 @@ struct csr_roam_info {
 	enum sir_sme_phy_mode mode;
 	uint8_t max_supp_idx;
 	uint8_t max_ext_idx;
-	uint8_t max_real_mcs_idx;
 	uint8_t max_mcs_idx;
 	uint8_t rx_mcs_map;
 	uint8_t tx_mcs_map;
 	/* Extended capabilities of STA */
 	uint8_t ecsa_capable;
-	uint32_t ext_cap;
-	uint8_t supported_band;
 	int rssi;
 	int tx_rate;
 	int rx_rate;
@@ -596,12 +592,7 @@ struct csr_roam_info {
 	struct sir_sae_info *sae_info;
 #endif
 	struct assoc_ind *owe_pending_assoc_ind;
-	struct assoc_ind *ft_pending_assoc_ind;
-
 	struct qdf_mac_addr peer_mld;
-#ifdef WLAN_FEATURE_SAP_ACS_OPTIMIZE
-	uint32_t chan_info_freq;
-#endif
 };
 
 typedef struct sSirSmeAssocIndToUpperLayerCnf {
@@ -630,13 +621,10 @@ typedef struct sSirSmeAssocIndToUpperLayerCnf {
 	uint8_t max_supp_idx;
 	uint8_t max_ext_idx;
 	uint8_t max_mcs_idx;
-	uint8_t max_real_mcs_idx;
 	uint8_t rx_mcs_map;
 	uint8_t tx_mcs_map;
 	/* Extended capabilities of STA */
 	uint8_t              ecsa_capable;
-	uint32_t ext_cap;
-	uint8_t supported_band;
 
 	uint32_t ies_len;
 	uint8_t *ies;
@@ -644,7 +632,6 @@ typedef struct sSirSmeAssocIndToUpperLayerCnf {
 	tDot11fIEVHTCaps vht_caps;
 	tSirMacCapabilityInfo capability_info;
 	bool he_caps_present;
-	bool eht_caps_present;
 #ifdef WLAN_FEATURE_11BE_MLO
 	tSirMacAddr peer_mld_addr;
 #endif
@@ -673,8 +660,6 @@ typedef struct tagCsrSummaryStatsInfo {
 typedef struct tagCsrGlobalClassAStatsInfo {
 	uint8_t tx_nss;
 	uint8_t rx_nss;
-	uint8_t rx_preamble;
-	uint8_t rx_bw;
 	uint32_t max_pwr;
 	uint32_t tx_rate;
 	uint32_t rx_rate;
@@ -751,40 +736,18 @@ typedef struct tagCsrEseBeaconReq {
 
 struct csr_del_sta_params {
 	struct qdf_mac_addr peerMacAddr;
-	struct qdf_mac_addr peer_mld_addr;
 	uint16_t reason_code;
 	uint8_t subtype;
-};
-
-/* Struct bss_dot11_config - Dot11 parameters for
- * SAP operation
- * @vdev_id: vdev id
- * @privacy: privacy config
- * @phy_mode: phy mode
- * @bss_op_ch_freq: operational frequency
- * @dot11_mode: dot11 mode
- * @nw_type: network type
- * @p_band: operating band
- * @opr_rates: operational rates
- * @ext_rates: extended rates
- */
-struct bss_dot11_config {
-	uint8_t vdev_id;
-	uint8_t privacy;
-	eCsrPhyMode phy_mode;
-	uint32_t bss_op_ch_freq;
-	uint8_t dot11_mode;
-	tSirNwType nw_type;
-	enum reg_wifi_band p_band;
-	tSirMacRateSet opr_rates;
-	tSirMacRateSet ext_rates;
 };
 
 typedef QDF_STATUS (*csr_roam_complete_cb)(struct wlan_objmgr_psoc *psoc,
 					   uint8_t session_id,
 					   struct csr_roam_info *param,
+					   uint32_t roam_id,
 					   eRoamCmdStatus roam_status,
 					   eCsrRoamResult roam_result);
+typedef QDF_STATUS (*csr_session_open_cb)(uint8_t session_id,
+					  QDF_STATUS qdf_status);
 typedef QDF_STATUS (*csr_session_close_cb)(uint8_t session_id);
 
 #define CSR_IS_ANY_BSS_TYPE(pProfile) (eCSR_BSS_TYPE_ANY == \
@@ -855,6 +818,24 @@ static inline void csr_packetdump_timer_start(void) {}
 #endif
 
 /**
+ * csr_get_channel_status() - get chan info via channel number
+ * @mac: Pointer to Global MAC structure
+ * @chan_freq: channel frequency
+ *
+ * Return: chan status info
+ */
+struct lim_channel_status *
+csr_get_channel_status(struct mac_context *mac, uint32_t chan_freq);
+
+/**
+ * csr_clear_channel_status() - clear chan info
+ * @mac: Pointer to Global MAC structure
+ *
+ * Return: none
+ */
+void csr_clear_channel_status(struct mac_context *mac);
+
+/**
  * csr_update_owe_info() - Update OWE info
  * @mac: mac context
  * @assoc_ind: assoc ind
@@ -863,17 +844,6 @@ static inline void csr_packetdump_timer_start(void) {}
  */
 QDF_STATUS csr_update_owe_info(struct mac_context *mac,
 			       struct assoc_ind *assoc_ind);
-
-/**
- * csr_update_ft_info() - Update FT info
- * @mac: mac context
- * @assoc_ind: assoc ind
- *
- * Return: QDF_STATUS
- */
-
-QDF_STATUS csr_update_ft_info(struct mac_context *mac,
-			      struct assoc_ind *assoc_ind);
 
 typedef void (*csr_ani_callback)(int8_t *ani, void *context);
 
@@ -966,28 +936,4 @@ QDF_STATUS csr_mlme_vdev_stop_bss(uint8_t vdev_id);
  * Return: concurrent frequency
  */
 qdf_freq_t csr_mlme_get_concurrent_operation_freq(void);
-
-/* csr_convert_mode_to_nw_type() - CSR API to convert dot11 mode
- * to network type.
- *
- * @dot11_mode: dot11 mode
- * @band: reg band
- *
- * Return: network type
- */
-tSirNwType
-csr_convert_mode_to_nw_type(enum csr_cfgdot11mode dot11_mode,
-			    enum reg_wifi_band band);
-
-/*
- * csr_roam_get_phy_mode_band_for_bss() - CSR API to get phy mode and
- * band for particular dot11 config
- * @mac : mac context
- * @dot11_cfg : pointer to the dot11 config
- *
- * Return : Void
- */
-enum csr_cfgdot11mode
-csr_roam_get_phy_mode_band_for_bss(struct mac_context *mac,
-				   struct bss_dot11_config *dot11_cfg);
 #endif

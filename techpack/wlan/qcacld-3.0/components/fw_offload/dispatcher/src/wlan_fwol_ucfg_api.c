@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -276,7 +276,7 @@ ucfg_fwol_is_neighbor_report_req_supported(struct wlan_objmgr_psoc *psoc,
 }
 
 QDF_STATUS
-ucfg_fwol_get_ie_allowlist(struct wlan_objmgr_psoc *psoc, bool *ie_allowlist)
+ucfg_fwol_get_ie_whitelist(struct wlan_objmgr_psoc *psoc, bool *ie_whitelist)
 {
 	struct wlan_fwol_psoc_obj *fwol_obj;
 
@@ -286,13 +286,13 @@ ucfg_fwol_get_ie_allowlist(struct wlan_objmgr_psoc *psoc, bool *ie_allowlist)
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	*ie_allowlist = fwol_obj->cfg.ie_allowlist_cfg.ie_allowlist;
+	*ie_whitelist = fwol_obj->cfg.ie_whitelist_cfg.ie_whitelist;
 
 	return QDF_STATUS_SUCCESS;
 }
 
 QDF_STATUS
-ucfg_fwol_set_ie_allowlist(struct wlan_objmgr_psoc *psoc, bool ie_allowlist)
+ucfg_fwol_set_ie_whitelist(struct wlan_objmgr_psoc *psoc, bool ie_whitelist)
 {
 	struct wlan_fwol_psoc_obj *fwol_obj;
 
@@ -302,7 +302,7 @@ ucfg_fwol_set_ie_allowlist(struct wlan_objmgr_psoc *psoc, bool ie_allowlist)
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	fwol_obj->cfg.ie_allowlist_cfg.ie_allowlist = ie_allowlist;
+	fwol_obj->cfg.ie_whitelist_cfg.ie_whitelist = ie_whitelist;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -319,21 +319,6 @@ QDF_STATUS ucfg_fwol_get_ani_enabled(struct wlan_objmgr_psoc *psoc,
 	}
 
 	*ani_enabled = fwol_obj->cfg.ani_enabled;
-	return QDF_STATUS_SUCCESS;
-}
-
-QDF_STATUS ucfg_fwol_get_pcie_config(struct wlan_objmgr_psoc *psoc,
-				     uint8_t *pcie_config)
-{
-	struct wlan_fwol_psoc_obj *fwol_obj;
-
-	fwol_obj = fwol_get_psoc_obj(psoc);
-	if (!fwol_obj) {
-		fwol_err("Failed to get FWOL obj");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	*pcie_config = fwol_obj->cfg.pcie_config;
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -443,8 +428,8 @@ QDF_STATUS ucfg_get_enable_phy_reg_retention(struct wlan_objmgr_psoc *psoc,
 }
 
 QDF_STATUS
-ucfg_fwol_get_all_allowlist_params(struct wlan_objmgr_psoc *psoc,
-				   struct wlan_fwol_ie_allowlist *allowlist)
+ucfg_fwol_get_all_whitelist_params(struct wlan_objmgr_psoc *psoc,
+				   struct wlan_fwol_ie_whitelist *whitelist)
 {
 	struct wlan_fwol_psoc_obj *fwol_obj;
 
@@ -454,7 +439,7 @@ ucfg_fwol_get_all_allowlist_params(struct wlan_objmgr_psoc *psoc,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	*allowlist = fwol_obj->cfg.ie_allowlist_cfg;
+	*whitelist = fwol_obj->cfg.ie_whitelist_cfg;
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -716,23 +701,6 @@ QDF_STATUS ucfg_fwol_get_tsf_sync_enable(struct wlan_objmgr_psoc *psoc,
 	*tsf_sync_enable = fwol_obj->cfg.tsf_sync_enable;
 	return QDF_STATUS_SUCCESS;
 }
-
-#ifdef WLAN_FEATURE_TSF_ACCURACY
-QDF_STATUS ucfg_fwol_get_tsf_accuracy_configs(struct wlan_objmgr_psoc *psoc,
-					      struct wlan_fwol_tsf_accuracy_configs **config)
-{
-	struct wlan_fwol_psoc_obj *fwol_obj;
-
-	fwol_obj = fwol_get_psoc_obj(psoc);
-	if (!fwol_obj) {
-		fwol_err("Failed to get FWOL obj");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	*config = &fwol_obj->cfg.tsf_accuracy_configs;
-	return QDF_STATUS_SUCCESS;
-}
-#endif
 
 #ifdef WLAN_FEATURE_TSF_PLUS_EXT_GPIO_IRQ
 QDF_STATUS
@@ -1241,35 +1209,22 @@ QDF_STATUS ucfg_fwol_configure_global_params(struct wlan_objmgr_psoc *psoc,
 	return status;
 }
 
-QDF_STATUS ucfg_fwol_set_ilp_config(struct wlan_objmgr_psoc *psoc,
-				    struct wlan_objmgr_pdev *pdev,
-				    uint32_t enable_ilp)
-{
-	return fwol_set_ilp_config(pdev, enable_ilp);
-}
-
 QDF_STATUS ucfg_fwol_configure_vdev_params(struct wlan_objmgr_psoc *psoc,
-					   struct wlan_objmgr_vdev *vdev)
+					   struct wlan_objmgr_pdev *pdev,
+					   enum QDF_OPMODE device_mode,
+					   uint8_t vdev_id)
 {
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	uint32_t value;
-	QDF_STATUS status;
-	uint8_t vdev_id = wlan_vdev_get_id(vdev);
 
-	switch (wlan_vdev_mlme_get_opmode(vdev)) {
-	case QDF_SAP_MODE:
+	if (device_mode == QDF_SAP_MODE) {
 		status = ucfg_fwol_get_sap_sho(psoc, &value);
 		if (QDF_IS_STATUS_ERROR(status))
-			break;
+			return status;
 
 		status = fwol_set_sap_sho(psoc, vdev_id, value);
 		if (QDF_IS_STATUS_ERROR(status))
-			break;
-
-		status = fwol_set_sap_wds_config(psoc, vdev_id);
-		break;
-	default:
-		status = QDF_STATUS_SUCCESS;
-		break;
+			return status;
 	}
 
 	return status;

@@ -1,7 +1,6 @@
 /*
  * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
- *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -121,7 +120,6 @@ struct sap_avoid_channels_info {
 };
 #endif /* FEATURE_AP_MCC_CH_AVOIDANCE */
 
-#define MAX_VLAN 4
 struct sap_context {
 
 	/* Include the current channel frequency of AP */
@@ -131,10 +129,9 @@ struct sap_context {
 #ifdef DCS_INTERFERENCE_DETECTION
 	qdf_freq_t dcs_ch_freq;
 #endif
-	union {
-		uint8_t sessionId;
-		uint8_t vdev_id;
-	};
+
+	/* Include the SME(CSR) sessionId here */
+	uint8_t sessionId;
 	uint8_t sap_radar_found_status;
 
 	/* vdev object corresponding to sessionId */
@@ -142,7 +139,10 @@ struct sap_context {
 
 	/* Include the associations MAC addresses */
 	uint8_t self_mac_addr[CDS_MAC_ADDRESS_LEN];
-	struct start_bss_config sap_bss_cfg;
+
+	/* Include the SME(CSR) context here */
+	struct csr_roam_profile csr_roamProfile;
+	uint32_t csr_roamId;
 
 	/* SAP event Callback to hdd */
 	sap_event_cb sap_event_cb;
@@ -215,28 +215,25 @@ struct sap_context {
 	/*
 	 * sap_state, sap_status are created
 	 * to inform upper layers about ACS scan status.
-	 * Don't use these members for any other purposes.
+	 * Don't use these members for anyother purposes.
 	 */
 	eSapHddEvent sap_state;
 	eSapStatus sap_status;
 	uint32_t roc_ind_scan_id;
+	bool is_pre_cac_on;
+	bool pre_cac_complete;
 	bool vendor_acs_dfs_lte_enabled;
 	uint8_t dfs_vendor_channel;
 	uint8_t dfs_vendor_chan_bw;
+	qdf_freq_t freq_before_pre_cac;
 	uint16_t beacon_tx_rate;
 	enum sap_acs_dfs_mode dfs_mode;
 	wlan_scan_requester req_id;
 	uint8_t sap_sta_id;
 	bool dfs_cac_offload;
 	bool is_chan_change_inprogress;
-	/* Disabled mcs13 by sap or not */
-	bool disabled_mcs13;
 	qdf_list_t owe_pending_assoc_ind_list;
-	qdf_list_t ft_pending_assoc_ind_list;
-	qdf_event_t ft_pending_event;
 	uint32_t freq_before_ch_switch;
-	struct ch_params ch_params_before_ch_switch;
-	bool is_dfs_wakelock_held;
 #ifdef WLAN_FEATURE_P2P_P2P_STA
 /*
  *This param is used for GO+GO force scc logic where after
@@ -247,19 +244,6 @@ struct sap_context {
 	qdf_freq_t candidate_freq;
 #ifdef FEATURE_WLAN_CH_AVOID_EXT
 	uint32_t restriction_mask;
-#endif
-	bool require_h2e;
-	bool partial_acs_scan;
-	bool optimize_acs_chan_selected;
-#ifdef WLAN_FEATURE_SAP_ACS_OPTIMIZE
-/*
- * This param is used to track clean channels where there
- * is no AP found on these channels
- */
-	bool clean_channel_array[NUM_CHANNELS];
-#endif
-#ifdef QCA_MULTIPASS_SUPPORT
-	uint16_t vlan_map[2 * MAX_VLAN];
 #endif
 };
 
@@ -319,31 +303,6 @@ QDF_STATUS wlansap_pre_start_bss_acs_scan_callback(mac_handle_t mac_handle,
 						   eCsrScanStatus scan_status);
 
 /**
- * sap_chan_sel_exit() - Exit function for free out the allocated memory,
- * @ch_info_params: Pointer to sap_sel_ch_info structure
- *
- * Return: None
- */
-void sap_chan_sel_exit(struct sap_sel_ch_info *ch_info_params);
-
-/**
- * sap_sort_channel_list() - Sort channel list based on channel weight
- * @mac_ctx: Pointer to mac_context
- * @vdev_id: Vdev ID
- * @ch_list: Pointer to qdf_list_t
- * @ch_info: Pointer to sap_sel_ch_info structure
- * @domain: Regulatory Domain
- * @operating_band: Operating band
- *
- * Return: None
- *
- */
-void
-sap_sort_channel_list(struct mac_context *mac_ctx, uint8_t vdev_id,
-		      qdf_list_t *ch_list, struct sap_sel_ch_info *ch_info,
-		      v_REGDOMAIN_t *domain, uint32_t *operating_band);
-
-/**
  * sap_select_channel() - select SAP channel
  * @mac_handle: Opaque handle to the global MAC context
  * @sap_ctx: Sap context
@@ -363,6 +322,13 @@ sap_signal_hdd_event(struct sap_context *sap_ctx,
 		  eSapHddEvent sapHddevent, void *);
 
 QDF_STATUS sap_fsm(struct sap_context *sap_ctx, struct sap_sm_event *sap_event);
+
+eSapStatus
+sapconvert_to_csr_profile(struct sap_config *config,
+			  eCsrRoamBssType bssType,
+			  struct csr_roam_profile *profile);
+
+void sap_free_roam_profile(struct csr_roam_profile *profile);
 
 QDF_STATUS
 sap_is_peer_mac_allowed(struct sap_context *sap_ctx, uint8_t *peerMac);
@@ -417,7 +383,7 @@ uint8_t sap_get_total_number_sap_intf(mac_handle_t mac_handle);
  *
  * Return: The QDF_STATUS code associated with performing the operation.
  */
-QDF_STATUS sap_channel_sel(struct sap_context *sap_context);
+QDF_STATUS sap_channel_sel(struct sap_context *sap_ctx);
 
 /**
  * sap_validate_chan - Function validate the channel and forces SCC
@@ -535,28 +501,4 @@ bool
 sap_chan_bond_dfs_sub_chan(struct sap_context *sap_context,
 			   qdf_freq_t channel_freq,
 			   ePhyChanBondState bond_state);
-
-/**
- * sap_plus_sap_cac_skip() - Check current sap can skip CAC or not
- *  in SAP+SAP concurrency
- * @mac: mac ctx
- * @sap_ctx: SAP context
- * @chan_freq: SAP channel frequency
- *
- * All APs are done with CAC timer, all APs should start beaconing.
- * Lets assume AP1 and AP2 started beaconing on DFS channel, Now lets
- * say AP1 goes down and comes back on same DFS channel. In this case
- * AP1 shouldn't start CAC timer and start beacon immediately because
- * AP2 is already beaconing on this channel. This case will be handled
- * by checking CAC completion on AP2.
- *
- * Return: true if current SAP can skip CAC
- */
-bool sap_plus_sap_cac_skip(struct mac_context *mac,
-			   struct sap_context *sap_ctx,
-			   qdf_freq_t chan_freq);
-
-void
-sap_build_start_bss_config(struct start_bss_config *sap_bss_cfg,
-			   struct sap_config *config);
 #endif

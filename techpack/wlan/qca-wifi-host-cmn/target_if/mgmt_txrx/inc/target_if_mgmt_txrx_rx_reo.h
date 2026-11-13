@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -32,6 +31,9 @@
 #include <wmi_unified_param.h>
 
 #ifdef WLAN_MGMT_RX_REO_SUPPORT
+
+#define MGMT_RX_REO_SNAPSHOT_READ_RETRY_LIMIT (5)
+
 /**
  * target_if_get_mgmt_rx_reo_low_level_ops() - Get low-level ops of management
  * rx-reorder module
@@ -129,14 +131,6 @@ target_if_mgmt_rx_reo_extract_reo_params(wmi_unified_t wmi_handle,
 QDF_STATUS
 target_if_mgmt_rx_reo_host_drop_handler(struct wlan_objmgr_pdev *pdev,
 					struct mgmt_rx_event_params *params);
-/**
- * target_if_mgmt_rx_reo_release_frames() - API to release the management
- * frames of a given psoc
- * @arg: Pointer to void * argument
- *
- * Return: void
- */
-void target_if_mgmt_rx_reo_release_frames(void *arg);
 #else
 /**
  * target_if_mgmt_rx_reo_register_event_handlers() - Register management
@@ -210,17 +204,6 @@ target_if_mgmt_rx_reo_host_drop_handler(struct wlan_objmgr_pdev *pdev,
 {
 	/* Nothing to do when REO is compiled off */
 	return QDF_STATUS_SUCCESS;
-}
-
-/**
- * target_if_mgmt_rx_reo_release_frames() - API to release the management
- * frames of a given psoc
- * @arg: Pointer to void * argument
- *
- * Return: void
- */
-static inline void target_if_mgmt_rx_reo_release_frames(void *arg)
-{
 }
 #endif /* WLAN_MGMT_RX_REO_SUPPORT */
 #endif /* _TARGET_IF_MGMT_TXRX_RX_REO_H_ */

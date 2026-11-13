@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -24,7 +24,6 @@
 
 #include <wmi_unified_roam_param.h>
 #include "wlan_cm_roam_public_struct.h"
-#include "wlan_crypto_def_i.h"
 
 #ifdef FEATURE_LFR_SUBNET_DETECTION
 /**
@@ -101,58 +100,9 @@ QDF_STATUS
 wmi_unified_roam_mawc_params_cmd(wmi_unified_t wmi_handle,
 				 struct wlan_roam_mawc_params *params);
 
-#ifdef WLAN_VENDOR_HANDOFF_CONTROL
 /**
- * wmi_extract_roam_vendor_control_param_event() - extract vendor handoff param
- * event coming from fw
- * @wmi_handle: wmi handle
- * @event: vendor handoff param event pointer
- * @len: event len
- * @data: vendor handoff related parameters
- *
- * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
- */
-
-QDF_STATUS
-wmi_extract_roam_vendor_control_param_event(wmi_unified_t wmi_handle,
-				uint8_t *event, uint32_t len,
-				struct roam_vendor_handoff_params **data);
-
-#endif
-
-#if defined(WLAN_FEATURE_ROAM_OFFLOAD) && defined(WLAN_FEATURE_11BE_MLO)
-/**
- * wmi_extract_roam_synch_key_event() - extract roam synch key event
- * @wmi_handle: wmi handle
- * @event: roam synch key event buffer pointer
- * @len: event len
- * @keys: destination buffer to copy keys
- * @num_keys: Number of keys
- * @mld_addr: MLD address pointer
- *
- * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
- */
-QDF_STATUS
-wmi_extract_roam_synch_key_event(wmi_unified_t wmi_handle, uint8_t *event,
-				 uint32_t len,
-				 struct wlan_crypto_key_entry **keys,
-				 uint8_t *num_keys,
-				 struct qdf_mac_addr *mld_addr);
-#else
-static inline QDF_STATUS
-wmi_extract_roam_synch_key_event(wmi_unified_t wmi_handle, uint8_t *event,
-				 uint32_t len,
-				 struct wlan_crypto_key_entry **keys,
-				 uint8_t *num_keys,
-				 struct qdf_mac_addr *mld_addr)
-{
-	return QDF_STATUS_E_NOSUPPORT;
-}
-#endif
-
-/**
- * wmi_unified_roam_scan_filter_cmd() - send roam scan allowlist,
- *                                      denylist and preferred list
+ * wmi_unified_roam_scan_filter_cmd() - send roam scan whitelist,
+ *                                      blacklist and preferred list
  * @wmi_handle: wmi handle
  * @roam_req: roam scan lists related parameters
  *
@@ -191,22 +141,6 @@ QDF_STATUS wmi_unified_plm_start_cmd(wmi_unified_t wmi_handle,
 				     const struct plm_req_params *plm);
 #endif /* FEATURE_WLAN_ESE */
 
-#if defined(WLAN_FEATURE_HOST_ROAM) || defined(WLAN_FEATURE_ROAM_OFFLOAD)
-/**
- * wmi_extract_roam_event  - Extract roam event
- * @wmi_handle: WMI handle
- * @event: Event data received from firmware
- * @data_len: Event data length received from firmware
- * @roam_event: Extract the event and fill in roam_event
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS
-wmi_extract_roam_event(wmi_unified_t wmi_handle, uint8_t *event,
-		       uint32_t data_len,
-		       struct roam_offload_roam_event *roam_event);
-#endif /* WLAN_FEATURE_HOST_ROAM || WLAN_FEATURE_ROAM_OFFLOAD */
-
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 /* wmi_unified_set_ric_req_cmd() - set ric request element
  * @wmi_handle: wmi handle
@@ -233,7 +167,7 @@ QDF_STATUS wmi_unified_roam_synch_complete_cmd(wmi_unified_t wmi_handle,
 					       uint8_t vdev_id);
 
 /**
- * wmi_unified_roam_invoke_cmd() - send roam invoke command to fw.
+ * wmi_unified__roam_invoke_cmd() - send roam invoke command to fw.
  * @wmi_handle: wmi handle
  * @roaminvoke: roam invoke command
  *
@@ -260,8 +194,8 @@ QDF_STATUS wmi_unified_set_roam_triggers(wmi_unified_t wmi_handle,
 /**
  * wmi_unified_send_disconnect_roam_params() - Send disconnect roam trigger
  * parameters to firmware
- * @wmi_handle:  wmi handle
- * @req: pointer to wlan_roam_disconnect_params
+ * @wmi_hdl:  wmi handle
+ * @params: pointer to wlan_roam_disconnect_params
  *
  * Return: QDF_STATUS
  */
@@ -269,26 +203,10 @@ QDF_STATUS
 wmi_unified_send_disconnect_roam_params(wmi_unified_t wmi_handle,
 				struct wlan_roam_disconnect_params *req);
 
-#ifdef WLAN_VENDOR_HANDOFF_CONTROL
-/**
- * wmi_unified_roam_vendor_handoff_req_cmd() - Send vendor handoff request
- * command to fw
- * @wmi_handle:  wmi handle
- * @vdev_id: vdev id
- * @param_id: Vendor Control Param ID from enum
- * WMI_ROAM_GET_VENDOR_CONTROL_PARAM_ID
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS wmi_unified_roam_vendor_handoff_req_cmd(wmi_unified_t wmi_handle,
-						   uint8_t vdev_id,
-						   uint32_t param_id);
-#endif
-
 /**
  * wmi_unified_send_idle_roam_params() - Send idle roam trigger params to fw
- * @wmi_handle:  wmi handle
- * @req: pointer to wlan_roam_idle_params
+ * @wmi_hdl:  wmi handle
+ * @params: pointer to wlan_roam_idle_params
  *
  * Return: QDF_STATUS
  */
@@ -326,7 +244,7 @@ QDF_STATUS wmi_unified_vdev_set_pcl_cmd(wmi_unified_t wmi_handle,
  * @wmi_handle: WMI handle
  * @evt_buf: Event buffer
  * @len: evt buffer data len
- * @sync_ind: roam sync ptr
+ * @synd_ind: roam sync ptr
  *
  * This api will allocate memory for roam sync info, extract
  * the information sent by FW and pass to CM.The memory will be
@@ -354,7 +272,21 @@ wmi_extract_roam_sync_frame_event(wmi_unified_t wmi_handle, void *event,
 				  struct roam_synch_frame_ind *frame_ptr);
 
 /**
- * wmi_extract_btm_denylist_event - Extract btm denylist event
+ * wmi_extract_roam_event  - Extract roam event
+ * @wmi_handle: WMI handle
+ * @event: Event data received from firmware
+ * @data_len: Event data length received from firmware
+ * @roam_event: Extract the event and fill in roam_event
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wmi_extract_roam_event(wmi_unified_t wmi_handle, uint8_t *event,
+		       uint32_t data_len,
+		       struct roam_offload_roam_event *roam_event);
+
+/**
+ * wmi_extract_btm_blacklist_event - Extract btm blacklist event
  * @wmi_handle: WMI handle
  * @event: Event data received from firmware
  * @data_len: Event data length received from firmware
@@ -363,9 +295,9 @@ wmi_extract_roam_sync_frame_event(wmi_unified_t wmi_handle, void *event,
  * Return: QDF_STATUS
  */
 QDF_STATUS
-wmi_extract_btm_denylist_event(wmi_unified_t wmi_handle,
-			       uint8_t *event, uint32_t data_len,
-			       struct roam_denylist_event **dst_list);
+wmi_extract_btm_blacklist_event(wmi_unified_t wmi_handle,
+				uint8_t *event, uint32_t data_len,
+				struct roam_blacklist_event **dst_list);
 
 /**
  * wmi_extract_vdev_disconnect_event - Extract disconnect event data
@@ -466,45 +398,12 @@ wmi_unified_extract_roam_extract_frame_info(wmi_unified_t wmi, void *evt_buf,
 					    struct roam_frame_stats *dst,
 					    uint8_t idx, uint8_t num_frames);
 
-#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_FEATURE_ROAM_OFFLOAD)
-/**
- * wmi_unified_extract_roam_ml_info() - Extract roam ML info into dst buffer
- * @wmi:   wmi handle
- * @event: Pointer to the event buffer
- * @dst: Destination buffer to fill the ML link info
- * @timestamp: FW timestamp( in milliseconds)
- * @idx: Index of the TLV to be read from the event
- */
-QDF_STATUS
-wmi_unified_extract_roam_ml_info(wmi_unified_t wmi, void *event,
-				 struct roam_mlo_link_info *dst,
-				 uint64_t timestamp, uint8_t idx);
-
-static inline QDF_STATUS
-wmi_unified_extract_ml_roam_info(wmi_unified_t wmi, void *event,
-				 struct roam_frame_info *dst,
-				 uint64_t timestamp, uint8_t idx)
-{
-	return wmi_unified_extract_roam_ml_info(wmi, event,
-						&dst->link_info,
-						timestamp, idx);
-}
-#else
-static inline QDF_STATUS
-wmi_unified_extract_ml_roam_info(wmi_unified_t wmi, void *event,
-				 struct roam_frame_info *dst,
-				 uint64_t timestamp, uint8_t idx)
-{
-	return QDF_STATUS_E_FAILURE;
-}
-#endif
-
 /**
  * wmi_extract_auth_offload_event  - Extract auth offload event
  * @wmi_handle: WMI handle
  * @event: Event data received from firmware
  * @data_len: Event data length received from firmware
- * @auth_event: Extract the event and fill in auth_event
+ * @roam_event: Extract the event and fill in auth_event
  *
  * Return: QDF_STATUS
  */
@@ -541,22 +440,10 @@ wmi_extract_roam_candidate_frame_event(wmi_unified_t wmi_handle, uint8_t *event,
 				       struct roam_scan_candidate_frame *data);
 #endif /* WLAN_FEATURE_ROAM_OFFLOAD */
 
-#ifdef WLAN_FEATURE_11BE_MLO
-QDF_STATUS
-wmi_unified_roam_mlo_config_cmd(wmi_unified_t wmi_handle,
-				struct wlan_roam_mlo_config *req);
-#else
-static inline QDF_STATUS
-wmi_unified_roam_mlo_config_cmd(wmi_unified_t wmi_handle,
-				struct wlan_roam_mlo_config *req)
-{
-	return QDF_STATUS_SUCCESS;
-}
-#endif
-
 /**
  * wmi_unified_roam_scan_offload_mode_cmd() - set roam scan parameters
  * @wmi_handle: wmi handle
+ * @scan_cmd_fp: scan related parameters
  * @rso_cfg: roam scan offload parameters
  *
  * This function reads the incoming @rso_cfg and fill in the destination

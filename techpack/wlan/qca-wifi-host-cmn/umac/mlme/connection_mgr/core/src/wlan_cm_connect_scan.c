@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2015,2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -88,10 +88,8 @@ static QDF_STATUS cm_fill_scan_req(struct cnx_mgr *cm_ctx,
 	if (!ch_freq)
 		ch_freq = cm_req->req.chan_freq_hint;
 	if (ch_freq) {
-		state = wlan_reg_get_channel_state_for_pwrmode(
-							pdev,
-							ch_freq,
-							REG_BEST_PWR_MODE);
+		state = wlan_reg_get_channel_state_for_freq(pdev,
+							    ch_freq);
 
 		if (state == CHANNEL_STATE_DISABLE ||
 		    state == CHANNEL_STATE_INVALID) {
@@ -118,10 +116,10 @@ static QDF_STATUS cm_fill_scan_req(struct cnx_mgr *cm_ctx,
 		     cm_req->req.ssid.length);
 
 	req->scan_req.ssid[0].length = cm_req->req.ssid.length;
-	mlme_debug(CM_PREFIX_FMT "Connect scan for " QDF_SSID_FMT,
+	mlme_debug(CM_PREFIX_FMT "Connect scan for %.*s",
 		   CM_PREFIX_REF(vdev_id, cm_req->cm_id),
-		   QDF_SSID_REF(req->scan_req.ssid[0].length,
-				req->scan_req.ssid[0].ssid));
+		   req->scan_req.ssid[0].length,
+		   req->scan_req.ssid[0].ssid);
 
 	req->scan_req.num_bssid = 1;
 	if (qdf_is_macaddr_zero(&cm_req->req.bssid))

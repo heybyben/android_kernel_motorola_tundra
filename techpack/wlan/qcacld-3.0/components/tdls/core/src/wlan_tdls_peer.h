@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -37,7 +36,7 @@ struct tdls_search_peer_param {
 };
 
 /**
- * struct tdls_search_progress_param - used to search progress TDLS peer
+ * struct tdls_progress_param - used to search progress TDLS peer
  * @skip_self: skip self peer
  * @macaddr: MAC address of peer
  * @peer: pointer to the found peer
@@ -86,8 +85,8 @@ struct tdls_peer *
 tdls_find_all_peer(struct tdls_soc_priv_obj *soc_obj, const uint8_t *macaddr);
 
 /**
- * tdls_find_opclass() - find Operating Class based upon channel
- * @psoc: objmgr soc object
+ * tdls_find_all_peer() - find peer matching the input MACaddr in soc range
+ * @soc_obj: TDLS soc object
  * @channel:channel number
  * @bw_offset: offset to bandwidth
  *
@@ -124,32 +123,6 @@ struct tdls_peer *tdls_is_progress(struct tdls_vdev_priv_obj *vdev_obj,
 				   const uint8_t *macaddr, uint8_t skip_self);
 
 /**
- * tdls_get_offchan_freq() - Get preferred offchannel frequency
- * @vdev: Pointer to vdev
- * @soc_obj: TDLS SOC object
- *
- * This function gets preferred offchannel frequency.
- *
- * Return: Preferred offchannel frequency
- */
-qdf_freq_t tdls_get_offchan_freq(struct wlan_objmgr_vdev *vdev,
-				 struct tdls_soc_priv_obj *soc_obj);
-
-/**
- * tdls_get_offchan_bw() - Get preferred offchannel bandwidth on basis of
- *                         frequency
- * @soc_obj: TDLS SOC object
- * @off_chan_freq: Offchannel frequency
- *
- *
- * This function gets preferred offchannel bandwidth on basis of frequency.
- *
- * Return: Preferred offchannel bw
- */
-uint32_t tdls_get_offchan_bw(struct tdls_soc_priv_obj *soc_obj,
-			     qdf_freq_t off_chan_freq);
-
-/**
  * tdls_extract_peer_state_param() - extract peer update params from TDL peer
  * @peer_param: output peer update params
  * @peer: TDLS peer
@@ -162,7 +135,7 @@ void tdls_extract_peer_state_param(struct tdls_peer_update_state *peer_param,
 				   struct tdls_peer *peer);
 
 /**
- * tdls_set_peer_link_status() - set link statue for TDLS peer
+ * tdls_set_link_status() - set link statue for TDLS peer
  * @peer: TDLS peer
  * @link_state: link state
  * @link_reason: reason with link status
@@ -227,7 +200,7 @@ QDF_STATUS tdls_set_callback(struct tdls_peer *peer,
 /**
  * tdls_set_extctrl_param() - set external control parameter on TDLS peer
  * @peer: TDLS peer
- * @ch_freq: channel frequency
+ * @chan: channel
  * @max_latency: maximum latency
  * @op_class: operation class
  * @min_bandwidth: minimal bandwidth
@@ -236,7 +209,7 @@ QDF_STATUS tdls_set_callback(struct tdls_peer *peer,
  *
  * Return: QDF_STATUS_SUCCESS if success; other values if failed
  */
-QDF_STATUS tdls_set_extctrl_param(struct tdls_peer *peer, qdf_freq_t ch_freq,
+QDF_STATUS tdls_set_extctrl_param(struct tdls_peer *peer, uint32_t chan,
 				  uint32_t max_latency, uint32_t op_class,
 				  uint32_t min_bandwidth);
 
@@ -269,15 +242,4 @@ void tdls_peer_idle_timers_destroy(struct tdls_vdev_priv_obj *vdev_obj);
  * Return: None
  */
 void tdls_free_peer_list(struct tdls_vdev_priv_obj *vdev_obj);
-
-/**
- * tdls_update_peer_kickout_count() - Update peer kickout count for the given
- * TDLS peer
- * @vdev:  Vdev object pointer
- * @macaddr: Mac address of the TDLS peer
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS tdls_update_peer_kickout_count(struct wlan_objmgr_vdev *vdev,
-					  uint8_t *macaddr);
 #endif

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -32,7 +32,7 @@
 #define QDF_NBUF_TX_EXT_TID_INVALID     0x1f
 
 /**
- * enum qdf_nbuf_exemption_type - QDF net buf exemption types for encryption
+ * qdf_nbuf_exemption_type - QDF net buf exemption types for encryption
  * @QDF_NBUF_EXEMPT_NO_EXEMPTION: No exemption
  * @QDF_NBUF_EXEMPT_ALWAYS: Exempt always
  * @QDF_NBUF_EXEMPT_ON_KEY_MAPPING_KEY_UNAVAILABLE: Exempt on key mapping
@@ -70,12 +70,8 @@ typedef __in6_addr_t in6_addr_t;
 #define QDF_IEEE80211_FC1_FROMDS        0x02
 #define QDF_IEEE80211_FC1_PM            0x10
 
-#define QDF_IEEE80211_FC0_VERSION_0     0x00
-#define QDF_IEEE80211_FC0_VERSION_MASK  0x03
 #define QDF_IEEE80211_FC0_TYPE_MASK     0x0c
 #define QDF_IEEE80211_FC0_SUBTYPE_MASK  0xf0
-
-#define QDF_IEEE80211_FC0_TYPE_MGT      0x00
 
 #define QDF_IEEE80211_FC0_TYPE_DATA     0x08
 #define QDF_IEEE80211_FC0_SUBTYPE_DATA  0x00
@@ -93,14 +89,13 @@ typedef __in6_addr_t in6_addr_t;
 #define QDF_IEEE80211_FC0_SUBTYPE_BA    0x90
 #define QDF_IEEE80211_FC0_SUBTYPE_PSPOLL  0xA0
 #define QDF_IEEE80211_FC0_SUBTYPE_RTS   0xB0
-#define QDF_IEEE80211_FC0_SUBTYPE_CTS   0xC0
 #define QDF_IEEE80211_FC0_SUBTYPE_ACK   0xD0
 #define QDF_IEEE80211_FC0_SUBTYPE_CF_END 0xE0
 #define QDF_IEEE80211_FC0_SUBTYPE_CF_END_CF_ACK 0xF0
 
 #define QDF_NET_IS_MAC_MULTICAST(_a)   (*(_a) & 0x01)
 
-/*
+/**
  * In LLC header individual LSAP address 0x42 in
  * DSAP and SSAP signifies IEEE 802.1 Bridge
  * Spanning Tree Protocol
@@ -222,7 +217,7 @@ typedef struct {
 #define IGMPV3_BLOCK_OLD_SOURCES   6
 
 /**
- * typedef qdf_net_cmd_vid_t - Command for set/unset vid
+ * qdf_net_cmd_vid_t - Command for set/unset vid
  */
 typedef uint16_t qdf_net_cmd_vid_t ;        /*get/set vlan id*/
 
@@ -354,11 +349,7 @@ typedef struct {
 
 
 /**
- * typedef qdf_net_vlanhdr_t - Vlan header
- * @tpid:
- * @vid:
- * @cfi:
- * @prio:
+ * qdf_net_vlanhdr_t - Vlan header
  */
 typedef struct qdf_net_vlanhdr {
 	uint16_t tpid;
@@ -394,12 +385,7 @@ typedef enum {
 } qdf_net_tso_type_t;
 
 /**
- * typedef qdf_net_dev_info_t - Basic device info
- * @if_name:
- * @dev_addr:
- * @header_len:
- * @mtu_size:
- * @unit:
+ * qdf_net_dev_info_t - Basic device info
  */
 typedef struct {
 	uint8_t  if_name[QDF_NET_IF_NAME_SIZE];
@@ -410,10 +396,7 @@ typedef struct {
 } qdf_net_dev_info_t;
 
 /**
- * typedef qdf_nbuf_tso_t - For TCP large Segment Offload
- * @type:
- * @mss:
- * @hdr_off:
+ * qdf_nbuf_tso_t - For TCP large Segment Offload
  */
 typedef struct {
 	qdf_net_tso_type_t  type;
@@ -422,17 +405,17 @@ typedef struct {
 } qdf_nbuf_tso_t;
 
 /**
- * typedef qdf_net_wireless_event_t - Wireless events
- * @QDF_IEEE80211_ASSOC: station associate (bss mode)
- * @QDF_IEEE80211_REASSOC: station re-associate (bss mode)
- * @QDF_IEEE80211_DISASSOC: station disassociate (bss mode)
- * @QDF_IEEE80211_JOIN: station join (ap mode)
- * @QDF_IEEE80211_LEAVE: station leave (ap mode)
- * @QDF_IEEE80211_SCAN: scan complete, results available
- * @QDF_IEEE80211_REPLAY: sequence counter replay detected
- * @QDF_IEEE80211_MICHAEL: Michael MIC failure detected
- * @QDF_IEEE80211_REJOIN: station re-associate (ap mode)
- * @QDF_CUSTOM_PUSH_BUTTON: WPS push button
+ * qdf_net_wireless_event_t - Wireless events
+ * QDF_IEEE80211_ASSOC = station associate (bss mode)
+ * QDF_IEEE80211_REASSOC = station re-associate (bss mode)
+ * QDF_IEEE80211_DISASSOC = station disassociate (bss mode)
+ * QDF_IEEE80211_JOIN = station join (ap mode)
+ * QDF_IEEE80211_LEAVE = station leave (ap mode)
+ * QDF_IEEE80211_SCAN = scan complete, results available
+ * QDF_IEEE80211_REPLAY = sequence counter replay detected
+ * QDF_IEEE80211_MICHAEL = Michael MIC failure detected
+ * QDF_IEEE80211_REJOIN = station re-associate (ap mode)
+ * QDF_CUSTOM_PUSH_BUTTON = WPS push button
  */
 typedef enum qdf_net_wireless_events {
 	QDF_IEEE80211_ASSOC = __QDF_IEEE80211_ASSOC,
@@ -448,8 +431,7 @@ typedef enum qdf_net_wireless_events {
 } qdf_net_wireless_event_t;
 
 /**
- * typedef qdf_net_ipv6_addr_t - IPv6 Address
- * @in6_u: union of IPv6 address representations
+ * qdf_net_ipv6_addr_t - IPv6 Address
  */
 typedef struct {
 	union {
@@ -461,15 +443,7 @@ typedef struct {
 } qdf_net_ipv6_addr_t;
 
 /**
- * struct qdf_net_ipv6hdr_t - IPv6 Header
- * @ipv6_priority:
- * @ipv6_version:
- * @ipv6_flow_lbl:
- * @ipv6_payload_len:
- * @ipv6_nexthdr:
- * @ipv6_hop_limit:
- * @ipv6_saddr:
- * @ipv6_daddr:
+ * qdf_net_ipv6hdr_t - IPv6 Header
  */
 typedef struct {
 #if defined(QDF_LITTLE_ENDIAN_MACHINE)
@@ -492,11 +466,7 @@ typedef struct {
 } qdf_net_ipv6hdr_t;
 
 /**
- * typedef qdf_net_icmpv6hdr_t - ICMPv6 Header
- * @icmp6_type: ICMPv6 message type
- * @icmp6_code: ICMPv6 message code
- * @icmp6_cksum: ICMPv6 message checksum
- * @icmp6_dataun: Union of supported ICMPv6 message bodies
+ * qdf_net_icmpv6hdr_t - ICMPv6 Header
  */
 typedef struct {
 	uint8_t	 icmp6_type;
@@ -552,10 +522,7 @@ typedef struct {
 } qdf_net_icmpv6hdr_t;
 
 /**
- * typedef qdf_net_nd_msg_t - Neighbor Discovery Message
- * @nd_icmph: ICMPv6 header
- * @nd_target: Target IPv6 address
- * @nd_opt: Neighbor Discovery options
+ * qdf_net_nd_msg_t - Neighbor Discovery Message
  */
 typedef struct {
 	qdf_net_icmpv6hdr_t nd_icmph;
@@ -564,32 +531,12 @@ typedef struct {
 } qdf_net_nd_msg_t;
 
 
-static inline
-__sum16 qdf_csum_tcpudp_magic(uint32_t ip_saddr, uint32_t ip_daddr,
-			      uint16_t adj_ip_len, uint8_t ip_proto,
-			      uint32_t sum)
-{
-	return __qdf_csum_tcpudp_magic(ip_saddr, ip_daddr,
-				       adj_ip_len, ip_proto, sum);
-}
-
-static inline
-uint16_t qdf_ip_fast_csum(qdf_net_iphdr_t *iph_head, uint8_t ip_hl)
-{
-	return __qdf_ip_fast_csum(iph_head, ip_hl);
-}
-
 static inline int32_t qdf_csum_ipv6(const in6_addr_t *saddr,
 				    const in6_addr_t *daddr,
 				    __u32 len, unsigned short proto,
 				    wsum_t sum)
 {
 	return (int32_t)__qdf_csum_ipv6(saddr, daddr, len, proto, sum);
-}
-
-static inline char *qdf_netdev_get_devname(qdf_netdev_t dev)
-{
-	return __qdf_netdev_get_devname(dev);
 }
 
 typedef struct {
@@ -663,5 +610,4 @@ typedef struct {
 		} __packed type_raw;
 	} llc_un /* XXX __packed ??? */;
 } qdf_llc_t;
-
 #endif /*_QDF_NET_TYPES_H*/

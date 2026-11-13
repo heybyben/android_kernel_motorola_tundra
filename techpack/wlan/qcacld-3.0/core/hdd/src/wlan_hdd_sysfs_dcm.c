@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -64,8 +63,7 @@ __wlan_hdd_sysfs_dcm_store(struct net_device *net_dev, char const *buf,
 
 	hdd_debug("dcm %d", value);
 
-	ret = wma_cli_set_command(adapter->deflink->vdev_id,
-				  wmi_vdev_param_he_dcm_enable,
+	ret = wma_cli_set_command(adapter->vdev_id, WMI_VDEV_PARAM_HE_DCM,
 				  value, VDEV_CMD);
 	if (ret) {
 		hdd_err_rl("Failed to set dcm, errno %d", ret);
@@ -112,8 +110,7 @@ __wlan_hdd_sysfs_dcm_show(struct net_device *net_dev, char *buf)
 	if (!wlan_hdd_validate_modules_state(hdd_ctx))
 		return -EINVAL;
 
-	value = wma_cli_get_command(adapter->deflink->vdev_id,
-				    wmi_vdev_param_he_dcm_enable,
+	value = wma_cli_get_command(adapter->vdev_id, WMI_VDEV_PARAM_HE_DCM,
 				    VDEV_CMD);
 
 	hdd_debug("dcm %d", value);

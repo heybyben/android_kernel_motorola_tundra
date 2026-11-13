@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -82,7 +81,6 @@ int hdd_objmgr_release_and_destroy_psoc(struct hdd_context *hdd_ctx);
 /**
  * hdd_objmgr_update_tgt_max_vdev_psoc() - Update target max vdev number
  * @hdd_ctx: Hdd context
- * @max_vdev: Max number of supported vdevs
  *
  * This API update target max vdev number to psoc object
  *
@@ -138,24 +136,24 @@ int hdd_objmgr_set_peer_mlme_state(struct wlan_objmgr_vdev *vdev,
 /**
  * hdd_objmgr_get_vdev_by_user() - Get reference of vdev from adapter
  *  with user id
- * @link_info: Pointer of link_info in HDD adapter
+ * @adapter: hdd adapter
  * @dbgid: reference count dbg id
  *
  * Return: pointer to vdev object for success, NULL for failure
  */
 #ifdef WLAN_OBJMGR_REF_ID_TRACE
-#define hdd_objmgr_get_vdev_by_user(link_info, dbgid) \
-	__hdd_objmgr_get_vdev_by_user(link_info, dbgid, __func__, __LINE__)
+#define hdd_objmgr_get_vdev_by_user(adapter, dbgid) \
+	__hdd_objmgr_get_vdev_by_user(adapter, dbgid, __func__, __LINE__)
 struct wlan_objmgr_vdev *
-__hdd_objmgr_get_vdev_by_user(struct wlan_hdd_link_info *link_info,
+__hdd_objmgr_get_vdev_by_user(struct hdd_adapter *adapter,
 			      wlan_objmgr_ref_dbgid id,
 			      const char *func,
 			      int line);
 #else
-#define hdd_objmgr_get_vdev_by_user(link_info, dbgid) \
-	__hdd_objmgr_get_vdev_by_user(link_info, dbgid, __func__)
+#define hdd_objmgr_get_vdev_by_user(adapter, dbgid) \
+	__hdd_objmgr_get_vdev_by_user(adapter, dbgid, __func__)
 struct wlan_objmgr_vdev *
-__hdd_objmgr_get_vdev_by_user(struct wlan_hdd_link_info *link_info,
+__hdd_objmgr_get_vdev_by_user(struct hdd_adapter *adapter,
 			      wlan_objmgr_ref_dbgid id,
 			      const char *func);
 #endif

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -163,20 +163,6 @@ void wlan_scan_cfg_get_min_dwelltime_6g(struct wlan_objmgr_psoc *psoc,
 		return;
 	*min_dwell_time_6ghz = scan_obj->scan_def.min_dwell_time_6g;
 }
-
-QDF_STATUS wlan_scan_cfg_set_scan_mode_6g(struct wlan_objmgr_psoc *psoc,
-					  enum scan_mode_6ghz scan_mode_6g)
-{
-	struct wlan_scan_obj *scan_obj;
-
-	scan_obj = wlan_psoc_get_scan_obj(psoc);
-	if (!scan_obj)
-		return QDF_STATUS_E_INVAL;
-
-	scan_obj->scan_def.scan_mode_6g = scan_mode_6g;
-
-	return QDF_STATUS_SUCCESS;
-}
 #endif
 
 #ifdef WLAN_POLICY_MGR_ENABLE
@@ -192,7 +178,12 @@ void wlan_scan_update_pno_dwell_time(struct wlan_objmgr_vdev *vdev,
 	if (!psoc)
 		return;
 
-	sap_or_p2p_present = policy_mgr_get_beaconing_mode_count(psoc, NULL) ||
+	sap_or_p2p_present = policy_mgr_mode_specific_connection_count
+			       (psoc,
+				PM_SAP_MODE, NULL) ||
+				policy_mgr_mode_specific_connection_count
+			       (psoc,
+				PM_P2P_GO_MODE, NULL) ||
 				policy_mgr_mode_specific_connection_count
 			       (psoc,
 				PM_P2P_CLIENT_MODE, NULL);
@@ -365,16 +356,6 @@ wlan_scan_process_bcn_probe_rx_sync(struct wlan_objmgr_psoc *psoc,
 
 	bcn->psoc = psoc;
 	bcn->buf = buf;
-
-	/*
-	 * Save the rnr entries from the frame into rnr db.
-	 * The RNR entry would have the partner links as well.
-	 * If the partner link is a non-tx profile, and if there
-	 * is no MBSSID info for that partner link, then look up
-	 * into the rnr db will help to identify if that partner
-	 * is a non-tx profile.
-	 */
-	bcn->save_rnr_info = true;
 	qdf_mem_copy(bcn->rx_data, rx_param, sizeof(*rx_param));
 
 	return __scm_handle_bcn_probe(bcn);
@@ -427,7 +408,8 @@ QDF_STATUS wlan_scan_start(struct scan_start_request *req)
 
 	if (!req || !req->vdev) {
 		scm_err("req or vdev within req is NULL");
-		scm_scan_free_scan_request_mem(req);
+		if (req)
+			scm_scan_free_scan_request_mem(req);
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
@@ -671,268 +653,3 @@ bool wlan_scan_cfg_skip_6g_and_indoor_freq(struct wlan_objmgr_psoc *psoc)
 
 	return scan_obj->scan_def.skip_6g_and_indoor_freq;
 }
-
-void wlan_scan_get_last_scan_ageout_time(struct wlan_objmgr_psoc *psoc,
-					 uint32_t *last_scan_ageout_time)
-{
-	struct wlan_scan_obj *scan_obj;
-
-	scan_obj = wlan_psoc_get_scan_obj(psoc);
-	if (!scan_obj) {
-		*last_scan_ageout_time = 0;
-		return;
-	}
-	*last_scan_ageout_time =
-	scan_obj->scan_def.last_scan_ageout_time;
-}
-
-#ifdef FEATURE_SET
-/**
- * wlan_scan_get_pno_scan_support() - Check if pno scan support is enabled
- * @psoc: pointer to psoc object
- *
- * Return: pno scan_support_enabled flag
- */
-static bool wlan_scan_get_pno_scan_support(struct wlan_objmgr_psoc *psoc)
-{
-	struct wlan_scan_obj *scan_obj;
-
-	scan_obj = wlan_psoc_get_scan_obj(psoc);
-	if (!scan_obj) {
-		scm_err("NULL scan obj");
-		return cfg_default(CFG_PNO_SCAN_SUPPORT);
-	}
-
-	return scan_obj->pno_cfg.scan_support_enabled;
-}
-
-/**
- * wlan_scan_is_connected_scan_enabled() - API to get scan enabled after connect
- * @psoc: pointer to psoc object
- *
- * Return: value.
- */
-static bool wlan_scan_is_connected_scan_enabled(struct wlan_objmgr_psoc *psoc)
-{
-	struct wlan_scan_obj *scan_obj;
-
-	scan_obj = wlan_psoc_get_scan_obj(psoc);
-	if (!scan_obj) {
-		scm_err("Failed to get scan object");
-		return cfg_default(CFG_ENABLE_CONNECTED_SCAN);
-	}
-
-	return scan_obj->scan_def.enable_connected_scan;
-}
-
-void wlan_scan_get_feature_info(struct wlan_objmgr_psoc *psoc,
-				struct wlan_scan_features *scan_feature_set)
-{
-	scan_feature_set->pno_in_unassoc_state =
-					wlan_scan_get_pno_scan_support(psoc);
-	if (scan_feature_set->pno_in_unassoc_state)
-		scan_feature_set->pno_in_assoc_state =
-				wlan_scan_is_connected_scan_enabled(psoc);
-}
-#endif
-
-#ifdef WLAN_POLICY_MGR_ENABLE
-/**
- * wlan_scan_update_hint_bssid() - Update rnr hint bssid info
- * @psoc: objmgr psoc
- * @req: Scan request
- * @ll_sap_freq: ll sap freq
- *
- * Use to update hint_bssid if low latency Sap is UP
- *
- * Return: void
- */
-static void
-wlan_scan_update_hint_bssid(struct wlan_objmgr_psoc *psoc,
-			    struct scan_start_request *req,
-			    qdf_freq_t ll_sap_freq)
-{
-	struct hint_bssid hint_bssid[WLAN_SCAN_MAX_HINT_BSSID] = {0};
-	uint32_t i;
-	uint32_t count = 0;
-	qdf_freq_t freq;
-
-	if (!req->scan_req.num_hint_bssid)
-		return;
-
-	for (i = 0; i < req->scan_req.num_hint_bssid; i++) {
-		freq = req->scan_req.hint_bssid[i].freq_flags >> 16;
-		if (!freq)
-			continue;
-		if (!policy_mgr_2_freq_always_on_same_mac(psoc,
-							  ll_sap_freq,
-							  freq)) {
-			qdf_mem_copy(
-				&hint_bssid[count].bssid,
-				&req->scan_req.hint_bssid[i].bssid,
-				sizeof(hint_bssid[i].bssid));
-			hint_bssid[count].freq_flags =
-				req->scan_req.hint_bssid[i].freq_flags;
-			count++;
-		}
-	}
-	qdf_mem_zero(req->scan_req.hint_bssid,
-		     sizeof(req->scan_req.hint_bssid));
-	if (count)
-		qdf_mem_copy(req->scan_req.hint_bssid, hint_bssid,
-			     sizeof(hint_bssid));
-	req->scan_req.num_hint_bssid = count;
-}
-
-/**
- * wlan_scan_update_hint_s_ssid() - Update rnr hint short ssid info
- * @psoc: objmgr psoc
- * @req: Scan request
- * @ll_sap_freq: ll sap freq
- *
- * Use to update hint_s_ssid if low latency Sap is UP
- *
- * Return: void
- */
-static
-void wlan_scan_update_hint_s_ssid(struct wlan_objmgr_psoc *psoc,
-				  struct scan_start_request *req,
-				  qdf_freq_t ll_sap_freq)
-{
-	struct hint_short_ssid hint_s_ssid[WLAN_SCAN_MAX_HINT_BSSID] = {0};
-	uint32_t i;
-	uint32_t count = 0;
-	qdf_freq_t freq;
-
-	if (!req->scan_req.num_hint_s_ssid)
-		return;
-
-	for (i = 0; i < req->scan_req.num_hint_s_ssid; i++) {
-		freq = req->scan_req.hint_s_ssid[i].freq_flags >> 16;
-		if (!freq)
-			continue;
-		if (!policy_mgr_2_freq_always_on_same_mac(psoc,
-							  ll_sap_freq,
-							  freq)) {
-			qdf_mem_copy(
-				&hint_s_ssid[count].short_ssid,
-				&req->scan_req.hint_s_ssid[i].short_ssid,
-				sizeof(hint_s_ssid[i].short_ssid));
-			hint_s_ssid[count].freq_flags =
-				req->scan_req.hint_s_ssid[i].freq_flags;
-			count++;
-		}
-	}
-	qdf_mem_zero(req->scan_req.hint_s_ssid,
-		     sizeof(req->scan_req.hint_s_ssid));
-	if (count)
-		qdf_mem_copy(req->scan_req.hint_s_ssid, hint_s_ssid,
-			     sizeof(hint_s_ssid));
-	req->scan_req.num_hint_s_ssid = count;
-}
-
-void wlan_scan_update_low_latency_profile_chnlist(
-				struct wlan_objmgr_vdev *vdev,
-				struct scan_start_request *req)
-{
-	uint32_t num_scan_channels = 0, i;
-	struct wlan_objmgr_psoc *psoc;
-	qdf_freq_t freq, ll_sap_freq;
-
-	psoc = wlan_vdev_get_psoc(vdev);
-	if (!psoc) {
-		scm_err("psoc is null");
-		return;
-	}
-
-/*
- * Get ll_sap freq api will be cleaned up once macro is enabled
- */
-#ifndef WLAN_FEATURE_LL_LT_SAP
-	ll_sap_freq = policy_mgr_get_ll_sap_freq(psoc);
-#else
-	ll_sap_freq = policy_mgr_get_ll_ht_sap_freq(psoc);
-#endif
-
-	if (!ll_sap_freq)
-		return;
-
-	wlan_scan_update_hint_bssid(psoc, req, ll_sap_freq);
-	wlan_scan_update_hint_s_ssid(psoc, req, ll_sap_freq);
-	/*
-	 * Scenario: LL SAP is present and scan is requested.
-	 * Allow scan on freq on mutually exclusive mac.
-	 */
-	for (i = 0; i < req->scan_req.chan_list.num_chan; i++) {
-		freq = req->scan_req.chan_list.chan[i].freq;
-		if (policy_mgr_2_freq_always_on_same_mac(psoc,
-							 ll_sap_freq,
-							 freq))
-			continue;
-
-		req->scan_req.chan_list.chan[num_scan_channels++] =
-					req->scan_req.chan_list.chan[i];
-	}
-	if (num_scan_channels < req->scan_req.chan_list.num_chan)
-		scm_debug("For DBS: only 2.4Ghz chan and for SBS: mutually exclusive ll-sap 5GHz chan allowed, total-chan %d, remaining-chan %d, ll-sap chan %d",
-			  req->scan_req.chan_list.num_chan,
-			  num_scan_channels,
-			  ll_sap_freq);
-	req->scan_req.chan_list.num_chan = num_scan_channels;
-}
-#endif
-
-QDF_STATUS
-wlan_scan_get_entry_by_mac_addr(struct wlan_objmgr_pdev *pdev,
-				struct qdf_mac_addr *bssid,
-				struct element_info *frame)
-{
-	return scm_scan_get_entry_by_mac_addr(pdev, bssid, frame);
-}
-
-QDF_STATUS wlan_scan_register_mbssid_cb(struct wlan_objmgr_psoc *psoc,
-					update_mbssid_bcn_prb_rsp cb)
-{
-	return scm_scan_register_mbssid_cb(psoc, cb);
-}
-
-struct scan_cache_entry *
-wlan_scan_get_entry_by_bssid(struct wlan_objmgr_pdev *pdev,
-			     struct qdf_mac_addr *bssid)
-{
-	return scm_scan_get_entry_by_bssid(pdev, bssid);
-}
-
-QDF_STATUS
-wlan_scan_get_mld_addr_by_link_addr(struct wlan_objmgr_pdev *pdev,
-				    struct qdf_mac_addr *link_addr,
-				    struct qdf_mac_addr *mld_mac_addr)
-{
-	return scm_get_mld_addr_by_link_addr(pdev, link_addr, mld_mac_addr);
-}
-
-struct scan_cache_entry *
-wlan_scan_get_scan_entry_by_mac_freq(struct wlan_objmgr_pdev *pdev,
-				     struct qdf_mac_addr *bssid,
-				     uint16_t freq)
-{
-	return scm_scan_get_scan_entry_by_mac_freq(pdev, bssid, freq);
-}
-
-bool wlan_scan_get_aux_support(struct wlan_objmgr_psoc *psoc)
-
-{
-	struct wlan_scan_obj *scan_obj;
-
-	scan_obj = wlan_psoc_get_scan_obj(psoc);
-	if (!scan_obj)
-		return false;
-
-	if (scan_obj->aux_mac_support)
-		scm_debug("aux mac support: %d", scan_obj->aux_mac_support);
-	else
-		scm_debug("aux mac not supported");
-
-	return scan_obj->aux_mac_support;
-}
-

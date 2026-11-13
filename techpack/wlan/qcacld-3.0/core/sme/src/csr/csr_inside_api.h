@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -32,11 +32,12 @@
 
 bool csr_is_supported_channel(struct mac_context *mac, uint32_t chan_freq);
 
-enum csr_sap_response_type {
-	CSR_SAP_START_BSS_SUCCESS,
-	CSR_SAP_START_BSS_FAILURE,
-	CSR_SAP_STOP_BSS_SUCCESS,
-	CSR_SAP_STOP_BSS_FAILURE,
+enum csr_roamcomplete_result {
+	eCsrNothingToJoin,
+	eCsrStartBssSuccess,
+	eCsrStartBssFailure,
+	eCsrStopBssSuccess,
+	eCsrStopBssFailure,
 };
 
 struct tag_csrscan_result {
@@ -46,6 +47,8 @@ struct tag_csrscan_result {
 	eCsrEncryptionType mcEncryptionType;
 	/* Preferred auth type that matched with the profile. */
 	enum csr_akm_type authType;
+	int  bss_score;
+	uint8_t retry_count;
 
 	tCsrScanResultInfo Result;
 	/*
@@ -75,36 +78,58 @@ void csr_roam_joined_state_msg_processor(struct mac_context *mac,
 void csr_release_command_roam(struct mac_context *mac, tSmeCmd *pCommand);
 void csr_release_command_wm_status_change(struct mac_context *mac,
 					  tSmeCmd *pCommand);
+
+QDF_STATUS csr_roam_copy_profile(struct mac_context *mac,
+				 struct csr_roam_profile *pDstProfile,
+				 struct csr_roam_profile *pSrcProfile,
+				 uint8_t vdev_id);
 QDF_STATUS csr_scan_open(struct mac_context *mac);
 QDF_STATUS csr_scan_close(struct mac_context *mac);
 
 void csr_free_scan_result_entry(struct mac_context *mac, struct tag_csrscan_result
 				*pResult);
 
-QDF_STATUS csr_roam_call_callback(struct mac_context *mac, uint32_t vdev_id,
+QDF_STATUS csr_roam_call_callback(struct mac_context *mac, uint32_t sessionId,
 				  struct csr_roam_info *roam_info,
+				  uint32_t roamId,
 				  eRoamCmdStatus u1, eCsrRoamResult u2);
-void csr_roam_complete(struct mac_context *mac, uint8_t session_id);
+QDF_STATUS csr_issue_bss_start(struct mac_context *mac, uint8_t vdev_id,
+			       struct csr_roam_profile *pProfile,
+			       uint32_t roamId);
+void csr_roam_complete(struct mac_context *mac, enum csr_roamcomplete_result Result,
+		       void *Context, uint8_t session_id);
 
 /**
  * csr_issue_set_context_req_helper  - Function to fill unicast/broadcast keys
  * request to set the keys to fw
- * @mac_ctx:     Pointer to mac context
+ * @mac:         Poiner to mac context
  * @vdev_id:     vdev id
  * @bssid:       Connected BSSID
  * @addkey:      Is add key request to crypto
  * @unicast:     Unicast(1) or broadcast key(0)
- * @key_id:      Key index
+ * @key_direction: Key used in TX or RX or both Tx and RX path
+ * @key_id:       Key index
+ * @key_length:   Key length
+ * @key:          Pointer to the key
  *
  * Return: QDF_STATUS
  */
 QDF_STATUS
-csr_issue_set_context_req_helper(struct mac_context *mac_ctx,
-				 uint32_t vdev_id, tSirMacAddr *bssid,
-				 bool addkey, bool unicast, uint8_t key_id);
-
+csr_issue_set_context_req_helper(struct mac_context *mac,
+				 uint32_t session_id,
+				 tSirMacAddr *bssid, bool addkey,
+				 bool unicast, tAniKeyDirection key_direction,
+				 uint8_t key_id, uint16_t key_length,
+				 uint8_t *key);
 void csr_roam_check_for_link_status_change(struct mac_context *mac,
 					tSirSmeRsp *pSirMsg);
+
+QDF_STATUS csr_roam_issue_start_bss(struct mac_context *mac, uint32_t sessionId,
+				    struct csr_roamstart_bssparams *pParam,
+				    struct csr_roam_profile *pProfile,
+				    uint32_t roamId);
+QDF_STATUS csr_roam_issue_stop_bss(struct mac_context *mac, uint32_t sessionId,
+				   enum csr_roam_substate NewSubstate);
 QDF_STATUS csr_send_mb_disassoc_req_msg(struct mac_context *mac, uint32_t sessionId,
 					tSirMacAddr bssId, uint16_t reasonCode);
 QDF_STATUS csr_send_mb_deauth_req_msg(struct mac_context *mac, uint32_t sessionId,
@@ -117,11 +142,18 @@ QDF_STATUS csr_send_assoc_cnf_msg(struct mac_context *mac,
 				  struct assoc_ind *pAssocInd,
 				  QDF_STATUS status,
 				  enum wlan_status_code mac_status_code);
+QDF_STATUS csr_send_mb_start_bss_req_msg(struct mac_context *mac,
+					 uint32_t sessionId,
+					 eCsrRoamBssType bssType,
+					 struct csr_roamstart_bssparams *pParam);
+QDF_STATUS csr_send_mb_stop_bss_req_msg(struct mac_context *mac,
+					uint32_t sessionId);
+
 /**
  * csr_get_cfg_valid_channels() - Get valid channel frequency list
  * @mac: mac context
  * @ch_freq_list: valid channel frequencies
- * @num_ch_freq: valid channel number
+ * @num_ch_freq: valid channel nummber
  *
  * This function returns the valid channel frequencies.
  *
@@ -131,8 +163,14 @@ QDF_STATUS csr_get_cfg_valid_channels(struct mac_context *mac,
 				      uint32_t *ch_freq_list,
 				      uint32_t *num_ch_freq);
 
+/* to free memory allocated inside the profile structure */
+void csr_release_profile(struct mac_context *mac,
+			 struct csr_roam_profile *pProfile);
+
 enum csr_cfgdot11mode
-csr_get_cfg_dot11_mode_from_csr_phy_mode(bool is_ap, eCsrPhyMode phyMode);
+csr_get_cfg_dot11_mode_from_csr_phy_mode(struct csr_roam_profile *pProfile,
+					 eCsrPhyMode phyMode,
+					 bool fProprietary);
 
 uint32_t csr_translate_to_wni_cfg_dot11_mode(struct mac_context *mac,
 				    enum csr_cfgdot11mode csrDot11Mode);
@@ -148,12 +186,13 @@ QDF_STATUS csr_save_to_channel_power2_g_5_g(struct mac_context *mac,
 /*
  * csr_prepare_vdev_delete() - CSR api to delete vdev
  * @mac_ctx: pointer to mac context
- * @vdev: vdev object to be prepared for deletion.
+ * @vdev_id: vdev id to be deleted.
+ * @cleanup: clean up vdev session on true
  *
  * Return QDF_STATUS
  */
 QDF_STATUS csr_prepare_vdev_delete(struct mac_context *mac_ctx,
-				   struct wlan_objmgr_vdev *vdev);
+				   uint8_t vdev_id, bool cleanup);
 
 /*
  * csr_cleanup_vdev_session() - CSR api to cleanup vdev
@@ -188,24 +227,20 @@ QDF_STATUS csr_scan_get_result(struct mac_context *mac,
  *      bssid specified
  * @mac_ctx: mac context
  * @bssid: bssid to get the scan result for
- * @ret_list: pointer to scan results
+ * @res: pointer to tCsrScanResultInfo
  *
  * Return: QDF_STATUS
  */
 QDF_STATUS csr_scan_get_result_for_bssid(struct mac_context *mac_ctx,
 					 struct qdf_mac_addr *bssid,
-					 qdf_list_t **ret_list);
+					 tCsrScanResultInfo *res);
 
-/**
- * csr_scan_filter_results: filter scan result based
- * on valid channel list number.
- * @mac_ctx: mac context
+/*
+ * csr_scan_filter_results() -
+ *  Filter scan results based on valid channel list.
  *
- * Get scan result from scan list and Check Scan result channel number
- * with 11d channel list if channel number is found in 11d channel list
- * then do not remove scan result entry from scan list
- *
- * return: QDF Status
+ * mac - Pointer to Global MAC structure
+ * Return QDF_STATUS
  */
 QDF_STATUS csr_scan_filter_results(struct mac_context *mac);
 
@@ -265,38 +300,71 @@ void csr_send_set_ie(uint8_t type, uint8_t sub_type, uint8_t vdev_id);
 #ifdef FEATURE_WLAN_DIAG_SUPPORT_CSR
 
 /* Security */
+#define WLAN_SECURITY_EVENT_REMOVE_KEY_REQ  5
+#define WLAN_SECURITY_EVENT_REMOVE_KEY_RSP  6
+#define WLAN_SECURITY_EVENT_PMKID_CANDIDATE_FOUND  7
+#define WLAN_SECURITY_EVENT_PMKID_UPDATE    8
 #define WLAN_SECURITY_EVENT_MIC_ERROR       9
+#define WLAN_SECURITY_EVENT_SET_UNICAST_REQ  10
 #define WLAN_SECURITY_EVENT_SET_UNICAST_RSP  11
+#define WLAN_SECURITY_EVENT_SET_BCAST_REQ    12
 #define WLAN_SECURITY_EVENT_SET_BCAST_RSP    13
+
+#define NO_MATCH    0
+#define MATCH       1
 
 #define WLAN_SECURITY_STATUS_SUCCESS        0
 #define WLAN_SECURITY_STATUS_FAILURE        1
 
+/* Scan */
+#define WLAN_SCAN_EVENT_ACTIVE_SCAN_REQ     1
+#define WLAN_SCAN_EVENT_ACTIVE_SCAN_RSP     2
+#define WLAN_SCAN_EVENT_PASSIVE_SCAN_REQ    3
+#define WLAN_SCAN_EVENT_PASSIVE_SCAN_RSP    4
+#define WLAN_SCAN_EVENT_HO_SCAN_REQ         5
+#define WLAN_SCAN_EVENT_HO_SCAN_RSP         6
+
+#define WLAN_SCAN_STATUS_SUCCESS        0
+#define WLAN_SCAN_STATUS_FAILURE        1
+#define WLAN_SCAN_STATUS_ABORT          2
+
+#define AUTO_PICK       0
+#define SPECIFIED       1
+
+#define WLAN_IBSS_STATUS_SUCCESS        0
+#define WLAN_IBSS_STATUS_FAILURE        1
+
 /* 11d */
+#define WLAN_80211D_EVENT_COUNTRY_SET   0
 #define WLAN_80211D_EVENT_RESET         1
+
+#define WLAN_80211D_DISABLED         0
+#define WLAN_80211D_SUPPORT_MULTI_DOMAIN     1
+#define WLAN_80211D_NOT_SUPPORT_MULTI_DOMAIN     2
 #endif /* #ifdef FEATURE_WLAN_DIAG_SUPPORT_CSR */
 /*
  * csr_scan_result_purge() -
  * Remove all items(tCsrScanResult) in the list and free memory for each item
  * hScanResult - returned from csr_scan_get_result. hScanResult is considered
- * gone by calling this function and even before this function returns.
+ * gone by calling this function and even before this function reutrns.
  * Return QDF_STATUS
  */
 QDF_STATUS csr_scan_result_purge(struct mac_context *mac,
 				 tScanResultHandle hScanResult);
 
 /* /////////////////////////////////////////Common Scan ends */
+
 /**
- * csr_bss_start() - CSR API to post the start bss request to serialization
- * module.
- * @mac: mac context
- * @vdev_id: vdev id
- * @bss_config: start bss config
+ * csr_bss_start() - A wrapper function to request CSR to inititiate start bss
+ * @mac: mac ctx
+ * @vdev_id: the vdev id.
+ * @profile: description of bss to start
+ * @roam_id: to get back the request ID
  *
- * Return: QDF_STATUS
+ * Return QDF_STATUS
  */
 QDF_STATUS csr_bss_start(struct mac_context *mac, uint32_t vdev_id,
-			 struct start_bss_config *bss_config);
+			 struct csr_roam_profile *profile, uint32_t *roam_id);
 
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 /*
@@ -359,47 +427,41 @@ QDF_STATUS csr_apply_channel_and_power_list(struct mac_context *mac);
  */
 QDF_STATUS csr_roam_ndi_stop(struct mac_context *mac, uint8_t vdev_id);
 
-/**
- * csr_roam_issue_stop_bss_cmd() - This API posts the stop bss command
- * to the serialization module.
- *
- * @mac: Global mac context
- * @vdev_id: Vdev id
- * @bss_type: BSS type
- *
- * Return : QDF_STATUS
+/* This function is used to stop a BSS. It is similar of csr_roamIssueDisconnect
+ * but this function doesn't have any logic other than blindly trying to stop
+ * BSS
  */
 QDF_STATUS csr_roam_issue_stop_bss_cmd(struct mac_context *mac, uint8_t vdev_id,
-				       eCsrRoamBssType bss_type);
+				       eCsrRoamBssType bss_type,
+				       bool high_priority);
 
 /**
  * csr_roam_issue_disassociate_sta_cmd() - disassociate a associated station
- * @mac: Pointer to global structure for MAC
- * @vdev_id: vdev Id for Soft AP
- * @del_sta_params: Pointer to parameters of the station to disassoc
+ * @mac:          Pointer to global structure for MAC
+ * @sessionId:     Session Id for Soft AP
+ * @p_del_sta_params: Pointer to parameters of the station to disassoc
  *
  * CSR function that HDD calls to issue a deauthenticate station command
  *
  * Return: QDF_STATUS_SUCCESS on success or another QDF_STATUS_* on error
  */
-QDF_STATUS
-csr_roam_issue_disassociate_sta_cmd(struct mac_context *mac,
-				    uint8_t vdev_id,
-				    struct csr_del_sta_params *del_sta_params);
+QDF_STATUS csr_roam_issue_disassociate_sta_cmd(struct mac_context *mac,
+					       uint32_t sessionId,
+					       struct csr_del_sta_params
+					       *p_del_sta_params);
 /**
  * csr_roam_issue_deauth_sta_cmd() - issue deauthenticate station command
- * @mac: Pointer to global structure for MAC
- * @vdev_id: vdev Id for Soft AP
- * @del_sta_params: Pointer to parameters of the station to deauthenticate
+ * @mac:          Pointer to global structure for MAC
+ * @sessionId:     Session Id for Soft AP
+ * @pDelStaParams: Pointer to parameters of the station to deauthenticate
  *
  * CSR function that HDD calls to issue a deauthenticate station command
  *
  * Return: QDF_STATUS_SUCCESS on success or another QDF_STATUS_** on error
  */
-QDF_STATUS
-csr_roam_issue_deauth_sta_cmd(struct mac_context *mac,
-			      uint8_t vdev_id,
-			      struct csr_del_sta_params *del_sta_params);
+QDF_STATUS csr_roam_issue_deauth_sta_cmd(struct mac_context *mac,
+		uint32_t sessionId,
+		struct csr_del_sta_params *pDelStaParams);
 
 /*
  * csr_send_chng_mcc_beacon_interval() -
@@ -467,6 +529,34 @@ QDF_STATUS csr_sta_continue_csa(struct mac_context *mac_ctx,
 QDF_STATUS csr_set_ht2040_mode(struct mac_context *mac, uint32_t sessionId,
 			       ePhyChanBondState cbMode, bool obssEnabled);
 #endif
+QDF_STATUS
+csr_roam_prepare_bss_config_from_profile(struct mac_context *mac_ctx,
+					 struct csr_roam_profile *profile,
+					 uint8_t vdev_id,
+					 struct bss_config_param *bss_cfg);
+
+void
+csr_roam_prepare_bss_params(struct mac_context *mac_ctx, uint32_t session_id,
+			    struct csr_roam_profile *profile,
+			    struct bss_config_param *bss_cfg);
+
+/**
+ * csr_remove_bssid_from_scan_list() - remove the bssid from
+ * scan list
+ * @mac_tx: mac context.
+ * @bssid: bssid to be removed
+ *
+ * This function remove the given bssid from scan list.
+ *
+ * Return: void.
+ */
+void csr_remove_bssid_from_scan_list(struct mac_context *mac_ctx,
+				     tSirMacAddr bssid);
+
+QDF_STATUS
+csr_roam_set_bss_config_cfg(struct mac_context *mac_ctx, uint32_t session_id,
+			    struct csr_roam_profile *profile,
+			    struct bss_config_param *bss_cfg);
 
 void csr_prune_channel_list_for_mode(struct mac_context *mac,
 				     struct csr_channel *pChannelList);
@@ -542,54 +632,5 @@ void csr_cm_get_sta_cxn_info(struct mac_context *mac_ctx, uint8_t vdev_id,
 
 #endif
 #endif
-
-/**
- * csr_process_sap_response() - Wrapper API to process the SAP
- * response from LIM
- * @mac_ctx: mac context
- * @result: Response status of LIM processing
- * @context: Response from LIM
- * @session_id: vdev id
- *
- * Return: void
- */
-void csr_process_sap_response(struct mac_context *mac,
-			      enum csr_sap_response_type result,
-			      void *context, uint8_t session_id);
-
-/**
- * csr_roam_roaming_state_start_bss_rsp_processor() - Handles start bss
- * response from LIM
- *
- * @mac: mac context
- * @msg: start bss response pointer
- *
- * Return: void
- */
-void
-csr_roam_roaming_state_start_bss_rsp_processor(struct mac_context *mac,
-					       void *msg);
-
-/**
- * csr_roam_roaming_state_stop_bss_rsp_processor() - Handles stop bss
- * response from LIM
- *
- * @mac: mac context
- * @msg: stop bss response pointer
- *
- * Return: void
- */
-void csr_roam_roaming_state_stop_bss_rsp_processor(struct mac_context *mac,
-						   void *msg);
-
-/**
- * csr_roam_process_results_default() - Process the result for start bss
- * @mac_ctx: Global MAC Context
- * @cmd:     Command to be processed
- *
- * Return: None
- */
-void
-csr_roam_process_results_default(struct mac_context *mac_ctx, tSmeCmd *cmd);
 
 #endif /* CSR_INSIDE_API_H__ */

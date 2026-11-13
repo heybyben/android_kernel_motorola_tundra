@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -58,9 +58,9 @@
 
 /**
  * enum pkt_capture_tx_status - packet capture tx status
- * @pkt_capture_tx_status_ok: successfully sent + acked
- * @pkt_capture_tx_status_discard: discard - not sent
- * @pkt_capture_tx_status_no_ack: no_ack - sent, but no ack
+ * @pktcapture_tx_status_ok: successfully sent + acked
+ * @pktcapture_tx_status_discard: discard - not sent
+ * @pktcapture_tx_status_no_ack: no_ack - sent, but no ack
  *
  * This enum has tx status types for packet capture mode
  */

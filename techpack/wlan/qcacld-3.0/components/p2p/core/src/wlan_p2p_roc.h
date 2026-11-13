@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2019, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -33,9 +32,9 @@
 #define P2P_WAIT_CLEANUP_ROC     2000
 #define P2P_MAX_ROC_DURATION     1500
 #define P2P_MAX_ROC_DURATION_GO_PRESENT           600
-#define P2P_MAX_ROC_DURATION_DBS_NDP_PRESENT      350
+#define P2P_MAX_ROC_DURATION_DBS_NDP_PRESENT      400
 #define P2P_MAX_ROC_DURATION_NON_DBS_NDP_PRESENT  250
-#define P2P_MAX_ROC_DURATION_DBS_NAN_PRESENT      350
+#define P2P_MAX_ROC_DURATION_DBS_NAN_PRESENT      450
 #define P2P_MAX_ROC_DURATION_NON_DBS_NAN_PRESENT  300
 
 #define P2P_ROC_DURATION_MULTI_GO_PRESENT   300
@@ -189,10 +188,9 @@ struct p2p_roc_context *p2p_find_roc_by_chan_freq(
 QDF_STATUS p2p_restart_roc_timer(struct p2p_roc_context *roc_ctx);
 
 /**
- * p2p_cleanup_roc() - Cleanup roc context in queue
+ * p2p_cleanup_roc_sync() - Cleanup roc context in queue
  * @p2p_soc_obj: p2p psoc private object
  * @vdev:        vdev object
- * @sync: whether to wait for complete event
  *
  * This function cleanup roc context in queue, include the roc
  * context in progressing until cancellation done. To avoid deadlock,
@@ -200,9 +198,9 @@ QDF_STATUS p2p_restart_roc_timer(struct p2p_roc_context *roc_ctx);
  *
  * Return: QDF_STATUS_SUCCESS - in case of success
  */
-QDF_STATUS p2p_cleanup_roc(struct p2p_soc_priv_obj *p2p_soc_obj,
-			   struct wlan_objmgr_vdev *vdev,
-			   bool sync);
+QDF_STATUS p2p_cleanup_roc_sync(
+	struct p2p_soc_priv_obj *p2p_soc_obj,
+	struct wlan_objmgr_vdev *vdev);
 
 /**
  * p2p_process_cleanup_roc_queue() - process the message to cleanup roc

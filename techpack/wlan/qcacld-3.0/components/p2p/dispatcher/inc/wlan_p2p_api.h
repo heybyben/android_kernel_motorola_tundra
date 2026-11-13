@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -44,14 +44,12 @@ bool wlan_p2p_check_oui_and_force_1x1(uint8_t *assoc_ie, uint32_t ie_len);
 /**
  * wlan_p2p_cleanup_roc_by_vdev() - Cleanup roc request by vdev
  * @vdev: pointer to vdev object
- * @sync: whether to wait for complete event
  *
  * This function call P2P API to cleanup roc request by vdev
  *
  * Return: QDF_STATUS_SUCCESS - in case of success
  */
-QDF_STATUS wlan_p2p_cleanup_roc_by_vdev(struct wlan_objmgr_vdev *vdev,
-					bool sync);
+QDF_STATUS wlan_p2p_cleanup_roc_by_vdev(struct wlan_objmgr_vdev *vdev);
 
 /**
  * wlan_p2p_status_connect() - Update P2P connection status
@@ -62,16 +60,6 @@ QDF_STATUS wlan_p2p_cleanup_roc_by_vdev(struct wlan_objmgr_vdev *vdev,
  * Return: QDF_STATUS_SUCCESS - in case of success
  */
 QDF_STATUS wlan_p2p_status_connect(struct wlan_objmgr_vdev *vdev);
-
-/**
- * wlan_p2p_is_action_frame_of_p2p_type() - Given action frame is p2p type or
- * not
- * @data_buf: data buffer address
- * @length: buffer length
- *
- * Return: bool
- */
-bool wlan_p2p_is_action_frame_of_p2p_type(uint8_t *data_buf, uint32_t length);
 
 /**
  * wlan_p2p_abort_scan() - Abort on going scan on p2p interfaces
@@ -100,12 +88,5 @@ QDF_STATUS wlan_p2p_abort_scan(struct wlan_objmgr_pdev *pdev);
 QDF_STATUS
 wlan_p2p_check_and_force_scc_go_plus_go(struct wlan_objmgr_psoc *psoc,
 					struct wlan_objmgr_vdev *vdev);
-#else
-static inline QDF_STATUS
-wlan_p2p_check_and_force_scc_go_plus_go(struct wlan_objmgr_psoc *psoc,
-					struct wlan_objmgr_vdev *vdev)
-{
-	return QDF_STATUS_SUCCESS;
-}
 #endif
 #endif

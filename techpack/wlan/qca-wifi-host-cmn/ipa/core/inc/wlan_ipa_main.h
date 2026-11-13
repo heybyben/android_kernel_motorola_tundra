@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -30,15 +29,6 @@
 #include <wlan_objmgr_pdev_obj.h>
 #include <wlan_ipa_public_struct.h>
 #include <wlan_ipa_priv.h>
-#include "cfg_ucfg_api.h"
-
-/* Declare a variable for IPA instancess added based on pdev */
-extern uint8_t g_instances_added;
-#define IPA_INVALID_HDL 0xFF
-#define IPA_OFFLOAD_CFG 0x7D
-
-#define INTRL_MODE_DISABLE 0xEEEEEEEE
-#define INTRL_MODE_ENABLE 0x27D
 
 #define ipa_fatal(params...) \
 	QDF_TRACE_FATAL(QDF_MODULE_ID_IPA, params)
@@ -74,29 +64,6 @@ extern uint8_t g_instances_added;
 	QDF_TRACE_EXIT(QDF_MODULE_ID_IPA, "exit")
 
 /**
- * ipa_set_cap_offload() - set IPA capability offload support
- * @flag: flag to set
- *
- * Return: None
- */
-void ipa_set_cap_offload(bool flag);
-
-/**
- * ipa_set_pld_enable() - set g_ipa_pld_enable
- * @flag: flag to set g_ipa_pld_enable
- *
- * Return: None
- */
-void ipa_set_pld_enable(bool flag);
-
-/**
- * ipa_get_pld_enable() - check if IPA is disabled in pld
- *
- * Return: g_ipa_pld_enable
- */
-bool ipa_get_pld_enable(void);
-
-/**
  * ipa_check_hw_present() - get IPA hw status
  *
  * ipa_uc_reg_rdyCB is not directly designed to check
@@ -109,7 +76,7 @@ bool ipa_get_pld_enable(void);
 bool ipa_check_hw_present(void);
 
 /**
- * ipa_pdev_get_priv_obj() - private API to get ipa pdev object
+ * wlan_get_pdev_ipa_obj() - private API to get ipa pdev object
  * @pdev: pdev object
  *
  * Return: ipa object
@@ -125,14 +92,6 @@ ipa_pdev_get_priv_obj(struct wlan_objmgr_pdev *pdev)
 
 	return pdev_obj;
 }
-
-/**
- * get_ipa_config() - API to get IPAConfig INI
- * @psoc : psoc handle
- *
- * Return: IPA config value
- */
-uint32_t get_ipa_config(struct wlan_objmgr_psoc *psoc);
 
 /**
  * ipa_priv_obj_get_pdev() - API to get pdev from IPA object
@@ -180,20 +139,6 @@ bool ipa_config_is_enabled(void);
  * Return: true if IPA uC is enabled in IPA config
  */
 bool ipa_config_is_uc_enabled(void);
-
-/**
- * ipa_config_is_opt_wifi_dp_enabled() - Is IPA optional wifi dp enabled?
- *
- * Return: true if IPA opt wifi dp is enabled in IPA config
- */
-bool ipa_config_is_opt_wifi_dp_enabled(void);
-
-/**
- * ipa_config_is_vlan_enabled() - Is IPA vlan config enabled?
- *
- * Return: true if IPA clan support is enabled in IPA config
- */
-bool ipa_config_is_vlan_enabled(void);
 
 /**
  * ipa_obj_setup() - IPA obj initialization and setup
@@ -334,7 +279,7 @@ void ipa_reg_sap_xmit_cb(struct wlan_objmgr_pdev *pdev,
 void ipa_reg_send_to_nw_cb(struct wlan_objmgr_pdev *pdev,
 			   wlan_ipa_send_to_nw cb);
 
-#if defined(QCA_CONFIG_RPS) && !defined(MDM_PLATFORM)
+#ifdef QCA_CONFIG_RPS
 /**
  * ipa_reg_rps_enable_cb() - Register cb to enable RPS
  * @pdev: pdev obj
@@ -346,16 +291,6 @@ void ipa_reg_rps_enable_cb(struct wlan_objmgr_pdev *pdev,
 			   wlan_ipa_rps_enable cb);
 #endif
 
-/**
- * ipa_reg_is_driver_unloading_cb() - Register cb to check if driver is
- *                                    unloading
- * @pdev: pdev obj
- * @cb: callback
- *
- * Return: None
- */
-void ipa_reg_is_driver_unloading_cb(struct wlan_objmgr_pdev *pdev,
-				    wlan_ipa_driver_unloading cb);
 /**
  * ipa_set_mcc_mode() - Set MCC mode
  * @pdev: pdev obj
@@ -418,7 +353,7 @@ QDF_STATUS ipa_suspend(struct wlan_objmgr_pdev *pdev);
 QDF_STATUS ipa_resume(struct wlan_objmgr_pdev *pdev);
 
 /**
- * ipa_uc_ol_init() - Initialize IPA uC offload
+ * ucfg_ipa_uc_ol_init() - Initialize IPA uC offload
  * @pdev: pdev obj
  * @osdev: OS dev
  *
@@ -428,7 +363,7 @@ QDF_STATUS ipa_uc_ol_init(struct wlan_objmgr_pdev *pdev,
 			  qdf_device_t osdev);
 
 /**
- * ipa_uc_ol_deinit() - Deinitialize IPA uC offload
+ * ucfg_ipa_uc_ol_deinit() - Deinitialize IPA uC offload
  * @pdev: pdev obj
  *
  * Return: QDF STATUS
@@ -459,8 +394,8 @@ QDF_STATUS ipa_send_mcc_scc_msg(struct wlan_objmgr_pdev *pdev,
  * @net_dev: Interface net device
  * @device_mode: Net interface device mode
  * @session_id: session id for the event
- * @ipa_event_type: event enum of type ipa_wlan_event
- * @mac_addr: MAC address associated with the event
+ * @type: event enum of type ipa_wlan_event
+ * @mac_address: MAC address associated with the event
  * @is_2g_iface: true if interface is operating on 2G band, otherwise false
  *
  * Return: QDF_STATUS
@@ -468,7 +403,7 @@ QDF_STATUS ipa_send_mcc_scc_msg(struct wlan_objmgr_pdev *pdev,
 QDF_STATUS ipa_wlan_evt(struct wlan_objmgr_pdev *pdev, qdf_netdev_t net_dev,
 			uint8_t device_mode, uint8_t session_id,
 			enum wlan_ipa_wlan_event ipa_event_type,
-			const uint8_t *mac_addr, bool is_2g_iface);
+			uint8_t *mac_addr, bool is_2g_iface);
 
 /**
  * ipa_uc_smmu_map() - Map / Unmap DMA buffer to IPA UC
@@ -492,7 +427,6 @@ bool ipa_is_fw_wdi_activated(struct wlan_objmgr_pdev *pdev);
  * ipa_uc_cleanup_sta() - disconnect and cleanup sta iface
  * @pdev: pdev obj
  * @net_dev: Interface net device
- * @session_id: vdev id
  *
  * Send disconnect sta event to IPA driver and cleanup IPA iface,
  * if not yet done
@@ -500,7 +434,7 @@ bool ipa_is_fw_wdi_activated(struct wlan_objmgr_pdev *pdev);
  * Return: void
  */
 void ipa_uc_cleanup_sta(struct wlan_objmgr_pdev *pdev,
-			qdf_netdev_t net_dev, uint8_t session_id);
+			qdf_netdev_t net_dev);
 
 /**
  * ipa_uc_disconnect_ap() - send ap disconnect event
@@ -518,12 +452,11 @@ QDF_STATUS ipa_uc_disconnect_ap(struct wlan_objmgr_pdev *pdev,
  * ipa_cleanup_dev_iface() - Clean up net dev IPA interface
  * @pdev: pdev obj
  * @net_dev: Interface net device
- * @session_id: vdev_id
  *
  * Return: None
  */
 void ipa_cleanup_dev_iface(struct wlan_objmgr_pdev *pdev,
-			   qdf_netdev_t net_dev, uint8_t session_id);
+			   qdf_netdev_t net_dev);
 
 /**
  * ipa_uc_ssr_cleanup() - handle IPA UC cleanup during SSR
@@ -606,55 +539,10 @@ void ipa_init_deinit_lock(void);
  */
 void ipa_init_deinit_unlock(void);
 
-/**
- * ipa_is_wds_enabled() - IPA wds status
- *
- * Return: true if WDS is enabled otherwise false
- */
-bool ipa_is_wds_enabled(void);
-
-/**
- * ipa_get_alt_pipe() - Get alt_pipe for vdev_id
- * @pdev: pdev obj
- * @vdev_id: vdev_id of the target interface
- * @alt_pipe: Boolean output to indicate if interface with @vdev_id
- *	      is using alternate TX pipe or not.
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS ipa_get_alt_pipe(struct wlan_objmgr_pdev *pdev,
-			    uint8_t vdev_id,
-			    bool *alt_pipe);
-
-/**
- * ipa_set_perf_level_bw_enabled - Get bandwidth based IPA perf voting status
- * @pdev: pdev objmgr pointer
- *
- * This function returns true or false for bandwidth based IPA perf level
- * voting.
- *
- * Return: true - bandwidth based IPA perf voting is enabld. Otherwise false.
- */
-bool ipa_set_perf_level_bw_enabled(struct wlan_objmgr_pdev *pdev);
-
-/**
- * ipa_set_perf_level_bw() - Set IPA perf level based on BW
- * @pdev: pdev objmgr pointer
- * @lvl: enum wlan_ipa_bw_level
- *
- * This routine is called to set IPA perf level based on max BW
- * configured among in-use STA and SAP vdevs
- *
- * Return: None
- */
-void ipa_set_perf_level_bw(struct wlan_objmgr_pdev *pdev,
-			   enum wlan_ipa_bw_level lvl);
-
 #else /* Not IPA_OFFLOAD */
 typedef QDF_STATUS (*wlan_ipa_softap_xmit)(qdf_nbuf_t nbuf, qdf_netdev_t dev);
 typedef void (*wlan_ipa_send_to_nw)(qdf_nbuf_t nbuf, qdf_netdev_t dev);
 typedef void (*wlan_ipa_rps_enable)(uint8_t vdev_id, bool enable);
-typedef bool (*wlan_ipa_driver_unloading)(void);
 
 #endif /* IPA_OFFLOAD */
 #endif /* end  of _WLAN_IPA_MAIN_H_ */

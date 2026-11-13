@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -61,15 +61,13 @@
 /**
  * enum cds_driver_state - Driver state
  * @CDS_DRIVER_STATE_UNINITIALIZED: Driver is in uninitialized state.
- * @CDS_DRIVER_STATE_LOADED: Driver is loaded and functional.
- * @CDS_DRIVER_STATE_LOADING: Driver probe is in progress.
- * @CDS_DRIVER_STATE_UNLOADING: Driver remove is in progress.
- * @CDS_DRIVER_STATE_RECOVERING: Recovery in progress.
- * @CDS_DRIVER_STATE_BAD: Driver in bad state.
- * @CDS_DRIVER_STATE_FW_READY: Driver Firmware ready
- * @CDS_DRIVER_STATE_MODULE_STOP: Module stop in progress or done.
- * @CDS_DRIVER_STATE_ASSERTING_TARGET: Driver assert target in progress.
- * @CDS_DRIVER_STATE_SYS_REBOOTING: System reboot in progress.
+ * CDS_DRIVER_STATE_LOADED: Driver is loaded and functional.
+ * CDS_DRIVER_STATE_LOADING: Driver probe is in progress.
+ * CDS_DRIVER_STATE_UNLOADING: Driver remove is in progress.
+ * CDS_DRIVER_STATE_RECOVERING: Recovery in progress.
+ * CDS_DRIVER_STATE_BAD: Driver in bad state.
+ * CDS_DRIVER_STATE_MODULE_STOP: Module stop in progress or done.
+ * CDS_DRIVER_STATE_ASSERTING_TARGET: Driver assert target in progress.
  */
 enum cds_driver_state {
 	CDS_DRIVER_STATE_UNINITIALIZED          = 0,
@@ -81,11 +79,10 @@ enum cds_driver_state {
 	CDS_DRIVER_STATE_FW_READY               = BIT(5),
 	CDS_DRIVER_STATE_MODULE_STOP            = BIT(6),
 	CDS_DRIVER_STATE_ASSERTING_TARGET       = BIT(7),
-	CDS_DRIVER_STATE_SYS_REBOOTING          = BIT(8),
 };
 
 /**
- * struct cds_vdev_dp_stats - vdev stats populated from DP
+ * struce cds_vdev_dp_stats - vdev stats populated from DP
  * @tx_retries: packet number of successfully transmitted after more
  *              than one retransmission attempt
  * @tx_retries_mpdu: mpdu number of successfully transmitted after more
@@ -329,31 +326,6 @@ static inline bool cds_is_target_asserting(void)
 }
 
 /**
- * cds_set_sys_rebooting() - Set system reboot in progress
- *
- * Return: none
- */
-void cds_set_sys_rebooting(void);
-
-/**
- * cds_sys_reboot_protect() - Require the lock for system reboot and get
- * system rebooting state
- *
- * cds_sys_reboot_protect() and cds_sys_reboot_unprotect() MUST be used
- * in pair.
- *
- * Return: true if system is rebooting, false otherwise
- */
-bool cds_sys_reboot_protect(void);
-
-/**
- * cds_sys_reboot_unprotect() - Release the lock for system reboot
- *
- * Return: none
- */
-void cds_sys_reboot_unprotect(void);
-
-/**
  * cds_init() - Initialize CDS
  *
  * This function allocates the resource required for CDS, but does not
@@ -372,7 +344,7 @@ QDF_STATUS cds_open(struct wlan_objmgr_psoc *psoc);
 
 /**
  * cds_dp_open() - Open datapath module
- * @psoc: object manager soc handle
+ * @psoc - object manager soc handle
  *
  * API to map the datapath rings to interrupts
  * and also open the datapath pdev module.
@@ -559,7 +531,6 @@ void cds_pkt_stats_to_logger_thread(void *pl_hdr, void *pkt_dump, void *data)
  *
  * @count:	Number of lines to be copied
  * @print:	Print callback to print in the buffer
- * @print_priv:	Print callback private data
  *
  * Return:	none
  */
@@ -591,6 +562,14 @@ bool cds_is_group_addr(uint8_t *mac_addr)
 	else
 		return false;
 }
+
+/**
+ * cds_get_connectivity_stats_pkt_bitmap() - get pkt-type bitmap
+ * @context: osif dev context
+ *
+ * Return: pkt bitmap to track
+ */
+uint32_t cds_get_connectivity_stats_pkt_bitmap(void *context);
 
 #ifdef FEATURE_ALIGN_STATS_FROM_DP
 /**

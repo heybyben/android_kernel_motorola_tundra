@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -25,7 +25,7 @@
 
 /**
  * hif_initialize_ipci_ops() - initialize the pci ops
- * @hif_sc: hif_context
+ * @bus_ops: hif_bus_ops table pointer to initialize
  *
  * Return: QDF_STATUS_SUCCESS
  */
@@ -47,6 +47,10 @@ QDF_STATUS hif_initialize_ipci_ops(struct hif_softc *hif_sc)
 	bus_ops->hif_nointrs = &hif_ipci_nointrs;
 	bus_ops->hif_enable_bus = &hif_ipci_enable_bus;
 	bus_ops->hif_disable_bus = &hif_ipci_disable_bus;
+#ifdef FEATURE_RUNTIME_PM
+	bus_ops->hif_bus_get_rpm_ctx = &hif_ipci_get_rpm_ctx;
+	bus_ops->hif_bus_get_dev = &hif_ipci_get_dev;
+#endif
 	bus_ops->hif_bus_configure = &hif_ipci_bus_configure;
 	bus_ops->hif_get_config_item = &hif_dummy_get_config_item;
 	bus_ops->hif_set_mailbox_swap = &hif_dummy_set_mailbox_swap;
@@ -86,23 +90,19 @@ QDF_STATUS hif_initialize_ipci_ops(struct hif_softc *hif_sc)
 	bus_ops->hif_config_irq_clear_cpu_affinity =
 		&hif_ipci_config_irq_clear_cpu_affinity;
 	bus_ops->hif_log_bus_info = &hif_dummy_log_bus_info;
-#ifndef QCA_WIFI_WCN6450
 	bus_ops->hif_enable_grp_irqs = hif_ipci_enable_grp_irqs;
 	bus_ops->hif_disable_grp_irqs = hif_ipci_disable_grp_irqs;
-#endif
 #ifdef FEATURE_IRQ_AFFINITY
 	bus_ops->hif_set_grp_intr_affinity = &hif_ipci_set_grp_intr_affinity;
 #endif
-#ifdef WLAN_FEATURE_AFFINITY_MGR
-	bus_ops->hif_affinity_mgr_set_affinity = &hif_affinity_mgr_affine_irq;
-#endif
+
 	return QDF_STATUS_SUCCESS;
 }
 
 /**
  * hif_ipci_get_context_size() - return the size of the ipci context
  *
- * Return: the size of the context.  (0 for invalid bus)
+ * Return the size of the context.  (0 for invalid bus)
  */
 int hif_ipci_get_context_size(void)
 {

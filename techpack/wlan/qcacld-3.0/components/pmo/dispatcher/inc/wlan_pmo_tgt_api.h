@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -160,7 +159,7 @@ QDF_STATUS pmo_tgt_del_wow_pattern(
 /**
  * pmo_tgt_set_mc_filter_req() - Set mcast filter command to fw
  * @vdev: objmgr vdev
- * @multicast_addr: mcast address
+ * @multicastAddr: mcast address
  *
  * Return: QDF_STATUS_SUCCESS for success or error code
  */
@@ -170,7 +169,7 @@ QDF_STATUS pmo_tgt_set_mc_filter_req(struct wlan_objmgr_vdev *vdev,
 /**
  * pmo_tgt_clear_mc_filter_req() - Clear mcast filter command to fw
  * @vdev: objmgr vdev
- * @multicast_addr: mcast address
+ * @multicastAddr: mcast address
  *
  * Return: QDF_STATUS_SUCCESS for success or error code
  */
@@ -257,7 +256,7 @@ QDF_STATUS pmo_tgt_get_gtk_rsp(struct wlan_objmgr_vdev *vdev);
 /**
  * pmo_tgt_gtk_rsp_evt() - receive gtk rsp event from fwr
  * @psoc: objmgr psoc
- * @rsp_param: gtk response parameters
+ * @gtk_rsp_param: gtk response parameters
  *
  * Return: QDF status
  */
@@ -368,8 +367,7 @@ pmo_tgt_send_igmp_offload_req(struct wlan_objmgr_vdev *vdev,
 #endif
 
 /**
- * pmo_tgt_psoc_update_wow_bus_suspend_state() - update wow bus suspend state
- *                                               flag
+ * pmo_tgt_update_wow_bus_suspend_state() - update wow bus suspend state flag
  * @psoc: objmgr psoc
  * @val: true for setting wow suspend flag to set else false
  *
@@ -379,7 +377,7 @@ void pmo_tgt_psoc_update_wow_bus_suspend_state(struct wlan_objmgr_psoc *psoc,
 		uint8_t val);
 
 /**
- * pmo_tgt_psoc_get_host_credits() - Get host credits
+ * pmo_tgt_get_host_credits() - Get host credits
  * @psoc: objmgr psoc
  *
  * Return: Pending WMI commands on success else EAGAIN on error
@@ -387,7 +385,7 @@ void pmo_tgt_psoc_update_wow_bus_suspend_state(struct wlan_objmgr_psoc *psoc,
 int pmo_tgt_psoc_get_host_credits(struct wlan_objmgr_psoc *psoc);
 
 /**
- * pmo_tgt_psoc_get_pending_cmnds() - Get pending commands
+ * pmo_tgt_get_pending_cmnds() - Get pending commands
  * @psoc: objmgr psoc
  *
  * Return: Pending WMI commands on success else EAGAIN on error
@@ -500,14 +498,4 @@ QDF_STATUS
 pmo_tgt_config_icmp_offload_req(struct wlan_objmgr_psoc *psoc,
 				struct pmo_icmp_offload *pmo_icmp_req);
 #endif
-
-/**
- * pmo_tgt_psoc_set_wow_enable_ack_failed() -set wow enable ack failure status
- * @psoc: objmgr psoc
- *
- * Return: none
- */
-QDF_STATUS
-pmo_tgt_psoc_set_wow_enable_ack_failed(struct wlan_objmgr_psoc *psoc);
-
 #endif /* end  of _WLAN_PMO_TGT_API_H_ */

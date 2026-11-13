@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -35,15 +35,13 @@
 #include "wlan_objmgr_pdev_obj.h"
 #include "wlan_objmgr_vdev_obj.h"
 #include "wlan_ptt_sock_svc.h"
-#include "target_if.h"
-#include "wlan_objmgr_peer_obj.h"
 
 #ifndef CNSS_GENL
 #include <wlan_objmgr_global_obj_i.h>
 #endif
 
 #include "wlan_reg_services_api.h"
-/* forward declaration */
+/* forward declartion */
 struct regulatory_channel;
 
 #define REG_SET_CHANNEL_REG_POWER(reg_info_1, val) do { \
@@ -74,7 +72,7 @@ struct regulatory_channel;
 static uint32_t vdev_idx;
 
 /**
- * wifi_pos_get_tlv_support() - indicates if firmware supports TLV wifi pos msg
+ * wifi_pos_get_tlv_support: indicates if firmware supports TLV wifi pos msg
  * @psoc: psoc object
  *
  * Return: status of operation
@@ -83,6 +81,25 @@ static bool wifi_pos_get_tlv_support(struct wlan_objmgr_psoc *psoc)
 {
 	/* this is TBD */
 	return true;
+}
+
+struct wlan_lmac_if_wifi_pos_tx_ops *
+	wifi_pos_get_tx_ops(struct wlan_objmgr_psoc *psoc)
+{
+	struct wlan_lmac_if_tx_ops *tx_ops;
+
+	if (!psoc) {
+		wifi_pos_err("psoc is null");
+		return NULL;
+	}
+
+	tx_ops = wlan_psoc_get_lmac_if_txops(psoc);
+	if (!tx_ops) {
+		wifi_pos_err("tx_ops is NULL");
+		return NULL;
+	}
+
+	return &tx_ops->wifi_pos_tx_ops;
 }
 
 #ifdef CNSS_GENL
@@ -117,7 +134,7 @@ wifi_pos_prepare_reg_resp(uint32_t *rsp_len,
 }
 
 /**
- * wifi_pos_get_host_pdev_id() - Get host pdev_id
+ * wifi_pos_get_host_pdev_id: Get host pdev_id
  * @psoc: Pointer to psoc object
  * @tgt_pdev_id: target_pdev_id
  * @host_pdev_id: host pdev_id
@@ -314,13 +331,10 @@ static QDF_STATUS wifi_pos_process_set_cap_req(struct wlan_objmgr_psoc *psoc,
 					struct wifi_pos_req_msg *req)
 {
 	int error_code;
-	struct wifi_pos_psoc_priv_obj *wifi_pos_obj = NULL;
-	struct wlan_objmgr_psoc *tmp_psoc = wifi_pos_get_psoc();
+	struct wifi_pos_psoc_priv_obj *wifi_pos_obj =
+				wifi_pos_get_psoc_priv_obj(psoc);
 	struct wifi_pos_user_defined_caps *caps =
 				(struct wifi_pos_user_defined_caps *)req->buf;
-
-	if (tmp_psoc)
-		wifi_pos_obj = wifi_pos_get_psoc_priv_obj(tmp_psoc);
 
 	if (!wifi_pos_obj) {
 		wifi_pos_err("wifi_pos priv obj is null");
@@ -345,11 +359,8 @@ static QDF_STATUS wifi_pos_process_get_cap_req(struct wlan_objmgr_psoc *psoc,
 					struct wifi_pos_req_msg *req)
 {
 	struct wifi_pos_oem_get_cap_rsp cap_rsp = { { {0} } };
-	struct wifi_pos_psoc_priv_obj *wifi_pos_obj = NULL;
-	struct wlan_objmgr_psoc *tmp_psoc = wifi_pos_get_psoc();
-
-	if (tmp_psoc)
-		wifi_pos_obj = wifi_pos_get_psoc_priv_obj(tmp_psoc);
+	struct wifi_pos_psoc_priv_obj *wifi_pos_obj =
+					wifi_pos_get_psoc_priv_obj(psoc);
 
 	if (!wifi_pos_obj) {
 		wifi_pos_err("wifi_pos priv obj is null");
@@ -376,11 +387,8 @@ QDF_STATUS wifi_pos_send_report_resp(struct wlan_objmgr_psoc *psoc,
 				     int err_code)
 {
 	struct wifi_pos_err_msg_report err_report = {0};
-	struct wifi_pos_psoc_priv_obj *wifi_pos_obj = NULL;
-	struct wlan_objmgr_psoc *tmp_psoc = wifi_pos_get_psoc();
-
-	if (tmp_psoc)
-		wifi_pos_obj = wifi_pos_get_psoc_priv_obj(tmp_psoc);
+	struct wifi_pos_psoc_priv_obj *wifi_pos_obj =
+					wifi_pos_get_psoc_priv_obj(psoc);
 
 	if (!wifi_pos_obj) {
 		wifi_pos_err("wifi_pos priv obj is null");
@@ -452,9 +460,8 @@ static void wifi_update_channel_bw_info(struct wlan_objmgr_psoc *psoc,
 		return;
 	}
 
-	wlan_reg_set_channel_params_for_pwrmode(pdev, freq, sec_ch_2g,
-						&ch_params,
-						REG_CURRENT_PWR_MODE);
+	wlan_reg_set_channel_params_for_freq(pdev, freq,
+					     sec_ch_2g, &ch_params);
 	chan->band_center_freq1 = ch_params.mhz_freq_seg0;
 
 	if (wifi_pos_psoc->wifi_pos_get_fw_phy_mode_for_freq) {
@@ -465,8 +472,8 @@ static void wifi_update_channel_bw_info(struct wlan_objmgr_psoc *psoc,
 }
 
 /**
- * wifi_pos_get_valid_channels() - Get the list of valid channels from the
- *                                 given channel list
+ * wifi_pos_get_valid_channels: Get the list of valid channels from the
+ * given channel list
  * @chan_freqs: Channel frequencies to be validated
  * @num_ch: NUmber of channels in the channel list to be validated
  * @valid_channel_list: Pointer to valid channel list
@@ -500,13 +507,6 @@ static void wifi_pos_pdev_iterator(struct wlan_objmgr_psoc *psoc,
 	struct channel_power *ch_info = NULL;
 	struct wifi_pos_channel_power *wifi_pos_ch;
 	int i;
-	struct wifi_pos_psoc_priv_obj *wifi_pos_psoc =
-		wifi_pos_get_psoc_priv_obj(wifi_pos_get_psoc());
-
-	if (!wifi_pos_psoc) {
-		wifi_pos_err("wifi_pos priv obj is null");
-		return;
-	}
 
 	if (!chan_list) {
 		wifi_pos_err("wifi_pos priv arg is null");
@@ -516,7 +516,7 @@ static void wifi_pos_pdev_iterator(struct wlan_objmgr_psoc *psoc,
 	wifi_pos_ch = &chan_list->chan_info[chan_list->num_channels];
 
 	ch_info = (struct channel_power *)qdf_mem_malloc(
-			sizeof(*ch_info) * WIFI_POS_MAX_NUM_CHANNELS);
+			sizeof(*ch_info) * NUM_CHANNELS);
 	if (!ch_info) {
 		wifi_pos_err("ch_info is null");
 		return;
@@ -531,8 +531,7 @@ static void wifi_pos_pdev_iterator(struct wlan_objmgr_psoc *psoc,
 		return;
 	}
 
-	if ((chan_list->num_channels + num_channels) >
-			WIFI_POS_MAX_NUM_CHANNELS) {
+	if ((chan_list->num_channels + num_channels) > NUM_CHANNELS) {
 		wifi_pos_err("Invalid number of channels");
 		qdf_mem_free(ch_info);
 		return;
@@ -547,16 +546,6 @@ static void wifi_pos_pdev_iterator(struct wlan_objmgr_psoc *psoc,
 		wifi_update_channel_bw_info(
 				psoc, pdev,
 				ch_info[i].center_freq, &wifi_pos_ch[i]);
-	}
-
-	if (wifi_pos_psoc->wifi_pos_get_max_fw_phymode_for_channels) {
-		status = wifi_pos_psoc->wifi_pos_get_max_fw_phymode_for_channels(
-				pdev, wifi_pos_ch, num_channels);
-		if (QDF_IS_STATUS_ERROR(status)) {
-			wifi_pos_err("Failed to get phymode");
-			qdf_mem_free(ch_info);
-			return;
-		}
 	}
 
 	chan_list->num_channels += num_channels;
@@ -604,27 +593,6 @@ static void wifi_pos_get_ch_info(struct wlan_objmgr_psoc *psoc,
 }
 #endif
 
-#ifdef CNSS_GENL
-static bool wifi_pos_is_duplicate_freq(struct wifi_pos_ch_info_rsp *ch_info,
-				       int num_chans, qdf_freq_t freq)
-{
-	return false;
-}
-#else
-static bool wifi_pos_is_duplicate_freq(struct wifi_pos_ch_info_rsp *ch_info,
-				       int num_chans, qdf_freq_t freq)
-{
-	int k;
-
-	for (k = 0; k < num_chans; k++) {
-		if (freq == ch_info[k].mhz)
-			return true;
-	}
-
-	return false;
-}
-#endif
-
 static QDF_STATUS wifi_pos_process_ch_info_req(struct wlan_objmgr_psoc *psoc,
 					struct wifi_pos_req_msg *req)
 {
@@ -636,18 +604,14 @@ static QDF_STATUS wifi_pos_process_ch_info_req(struct wlan_objmgr_psoc *psoc,
 	uint8_t *channels = req->buf;
 	struct wlan_objmgr_pdev *pdev;
 	uint32_t num_ch = req->buf_len;
-	qdf_freq_t valid_channel_list[WIFI_POS_MAX_NUM_CHANNELS];
+	qdf_freq_t valid_channel_list[NUM_CHANNELS];
 	uint32_t num_valid_channels = 0;
 	struct wifi_pos_ch_info_rsp *ch_info;
 	struct wifi_pos_channel_list *ch_list = NULL;
-	struct wifi_pos_psoc_priv_obj *wifi_pos_obj = NULL;
+	struct wifi_pos_psoc_priv_obj *wifi_pos_obj =
+					wifi_pos_get_psoc_priv_obj(psoc);
 	QDF_STATUS ret_val;
 	struct wifi_pos_channel_power *ch;
-	bool dup_freq = false;
-	struct wlan_objmgr_psoc *tmp_psoc = wifi_pos_get_psoc();
-
-	if (tmp_psoc)
-		wifi_pos_obj = wifi_pos_get_psoc_priv_obj(tmp_psoc);
 
 	if (!wifi_pos_obj) {
 		wifi_pos_err("wifi_pos priv obj is null");
@@ -663,14 +627,13 @@ static QDF_STATUS wifi_pos_process_ch_info_req(struct wlan_objmgr_psoc *psoc,
 		wifi_pos_err("pdev get API failed");
 		return QDF_STATUS_E_INVAL;
 	}
-	if (num_ch > WIFI_POS_MAX_NUM_CHANNELS) {
+	if (num_ch > NUM_CHANNELS) {
 		wifi_pos_err("Invalid number of channels");
 		ret_val = QDF_STATUS_E_INVAL;
 		goto cleanup;
 	}
 
-	chan_freqs = qdf_mem_malloc(WIFI_POS_MAX_NUM_CHANNELS *
-				    (sizeof(*chan_freqs)));
+	chan_freqs = qdf_mem_malloc(NUM_CHANNELS * (sizeof(*chan_freqs)));
 	if (!chan_freqs) {
 		ret_val = QDF_STATUS_E_NOMEM;
 		goto cleanup;
@@ -700,7 +663,7 @@ static QDF_STATUS wifi_pos_process_ch_info_req(struct wlan_objmgr_psoc *psoc,
 			num_valid_channels++;
 		}
 	} else {
-		for (i = 0; i < WIFI_POS_MAX_NUM_CHANNELS; i++)
+		for (i = 0; i < NUM_CHANNELS; i++)
 			chan_freqs[i] =
 			    wlan_reg_chan_band_to_freq(pdev, channels[i],
 						       BIT(REG_BAND_5G) |
@@ -736,39 +699,27 @@ static QDF_STATUS wifi_pos_process_ch_info_req(struct wlan_objmgr_psoc *psoc,
 	}
 
 	/* First byte of message body will have num of channels */
+	buf[0] = num_valid_channels;
 	ch_info = (struct wifi_pos_ch_info_rsp *)&buf[1];
-	for (idx = 0, i = 0; idx < num_valid_channels; idx++) {
-		dup_freq = wifi_pos_is_duplicate_freq(
-				ch_info, i, ch[idx].ch_power.center_freq);
-		if (dup_freq)
-			continue;
+	for (idx = 0; idx < num_valid_channels; idx++) {
+		ch_info[idx].reserved0 = 0;
+		ch_info[idx].chan_id = ch[idx].ch_power.chan_num;
+		ch_info[idx].mhz = ch[idx].ch_power.center_freq;
+		ch_info[idx].band_center_freq1 = ch[idx].band_center_freq1;
+		ch_info[idx].band_center_freq2 = 0;
+		ch_info[idx].info = 0;
 
-		ch_info[i].reserved0 = 0;
-		ch_info[i].chan_id = ch[idx].ch_power.chan_num;
-		ch_info[i].mhz = ch[idx].ch_power.center_freq;
-		ch_info[i].band_center_freq1 = ch[idx].band_center_freq1;
-		ch_info[i].band_center_freq2 = 0;
-		ch_info[i].info = 0;
-
-		REG_SET_CHANNEL_REG_POWER(ch_info[i].reg_info_1,
+		REG_SET_CHANNEL_REG_POWER(ch_info[idx].reg_info_1,
 					  ch[idx].ch_power.tx_power);
-		REG_SET_CHANNEL_MAX_TX_POWER(ch_info[i].reg_info_2,
+		REG_SET_CHANNEL_MAX_TX_POWER(ch_info[idx].reg_info_2,
 					     ch[idx].ch_power.tx_power);
 
-		if (ch[idx].is_dfs_chan)
-			WIFI_POS_SET_DFS(ch_info[i].info);
+		if (ch[i].is_dfs_chan)
+			WIFI_POS_SET_DFS(ch_info[idx].info);
 
-		if (ch[idx].phy_mode)
-			REG_SET_CHANNEL_MODE(&ch_info[i], ch[idx].phy_mode);
-		wifi_pos_debug("i:%d chan_id:%d freq:%d cfreq1:%d reg_info_1:%x reg_info_2:%x is_dfs_chan:%d phymode:%d",
-			       i, ch_info[i].chan_id, ch_info[i].mhz,
-			       ch_info[i].band_center_freq1,
-			       ch_info[i].reg_info_1, ch_info[i].reg_info_2,
-			       ch[idx].is_dfs_chan, ch[idx].phy_mode);
-		i++;
+		if (ch[i].phy_mode)
+			REG_SET_CHANNEL_MODE(&ch_info[idx], ch[i].phy_mode);
 	}
-
-	buf[0] = i;
 
 	wifi_pos_obj->wifi_pos_send_rsp(psoc, wifi_pos_obj->app_pid,
 					WIFI_POS_CMD_GET_CH_INFO,
@@ -802,12 +753,6 @@ static void wifi_pos_get_vdev_list(struct wlan_objmgr_psoc *psoc,
 				     wifi_pos_vdev_iterator,
 				     vdevs_info, true, WLAN_WIFI_POS_CORE_ID);
 }
-
-static uint32_t wifi_pos_get_vdev_count(struct wlan_objmgr_psoc *psoc)
-{
-	return psoc->soc_objmgr.max_vdev_count;
-}
-
 #else
 /* For WIN, WIFI POS command registration is called only for the first
  * PSOC. Hence, iterate through all the PSOCs and send the vdev list
@@ -828,22 +773,6 @@ static void wifi_pos_get_vdev_list(struct wlan_objmgr_psoc *psoc,
 		}
 	}
 }
-
-static uint32_t wifi_pos_get_vdev_count(struct wlan_objmgr_psoc *tpsoc)
-{
-	struct wlan_objmgr_psoc *psoc = NULL;
-	uint8_t index;
-	uint32_t vdev_count = 0;
-
-	for (index = 0; index < WLAN_OBJMGR_MAX_DEVICES; index++) {
-		if (g_umac_glb_obj->psoc[index]) {
-			psoc = g_umac_glb_obj->psoc[index];
-			vdev_count += psoc->soc_objmgr.max_vdev_count;
-		}
-	}
-
-	return vdev_count;
-}
 #endif
 
 static QDF_STATUS wifi_pos_process_app_reg_req(struct wlan_objmgr_psoc *psoc,
@@ -852,14 +781,11 @@ static QDF_STATUS wifi_pos_process_app_reg_req(struct wlan_objmgr_psoc *psoc,
 	QDF_STATUS ret = QDF_STATUS_SUCCESS;
 	uint8_t err = 0, *app_reg_rsp;
 	uint32_t rsp_len;
-	uint32_t vdev_count;
 	char *sign_str = NULL;
-	struct app_reg_rsp_vdev_info *vdevs_info = NULL;
-	struct wifi_pos_psoc_priv_obj *wifi_pos_obj = NULL;
-	struct wlan_objmgr_psoc *tmp_psoc = wifi_pos_get_psoc();
-
-	if (tmp_psoc)
-		wifi_pos_obj = wifi_pos_get_psoc_priv_obj(tmp_psoc);
+	struct app_reg_rsp_vdev_info vdevs_info[WLAN_UMAC_PSOC_MAX_VDEVS]
+								= { { 0 } };
+	struct wifi_pos_psoc_priv_obj *wifi_pos_obj =
+			wifi_pos_get_psoc_priv_obj(psoc);
 
 	if (!wifi_pos_obj) {
 		wifi_pos_err("wifi_pos priv obj is null");
@@ -887,26 +813,6 @@ static QDF_STATUS wifi_pos_process_app_reg_req(struct wlan_objmgr_psoc *psoc,
 	qdf_spin_unlock_bh(&wifi_pos_obj->wifi_pos_lock);
 
 	vdev_idx = 0;
-	vdev_count = wifi_pos_get_vdev_count(psoc);
-
-	if (!vdev_count || vdev_count > (WLAN_OBJMGR_MAX_DEVICES
-	    * WLAN_UMAC_PSOC_MAX_VDEVS)) {
-		wifi_pos_err("App Reg failed as Vdev count is %d (zero or greater than max)",
-			     vdev_count);
-		ret = QDF_STATUS_E_INVAL;
-		err = OEM_ERR_NULL_CONTEXT;
-		goto app_reg_failed;
-	}
-
-	vdevs_info = (struct app_reg_rsp_vdev_info *)
-			qdf_mem_malloc(sizeof(struct app_reg_rsp_vdev_info) *
-				       vdev_count);
-	if (!vdevs_info) {
-		wifi_pos_err("App Reg failed as Vdevs info allocation failed");
-		ret = QDF_STATUS_E_NOMEM;
-		err = OEM_ERR_NULL_CONTEXT;
-		goto app_reg_failed;
-	}
 
 	wifi_pos_get_vdev_list(psoc, vdevs_info);
 
@@ -914,7 +820,6 @@ static QDF_STATUS wifi_pos_process_app_reg_req(struct wlan_objmgr_psoc *psoc,
 	if (!app_reg_rsp) {
 		ret = QDF_STATUS_E_NOMEM;
 		err = OEM_ERR_NULL_CONTEXT;
-		qdf_mem_free(vdevs_info);
 		goto app_reg_failed;
 	}
 
@@ -927,7 +832,6 @@ static QDF_STATUS wifi_pos_process_app_reg_req(struct wlan_objmgr_psoc *psoc,
 					rsp_len, (uint8_t *)app_reg_rsp);
 
 	qdf_mem_free(app_reg_rsp);
-	qdf_mem_free(vdevs_info);
 	return ret;
 
 app_reg_failed:
@@ -938,9 +842,8 @@ app_reg_failed:
 }
 
 /**
- * wifi_pos_tlv_callback() - wifi pos msg handler registered for TLV type req
- * @psoc: psoc object
- * @req: wifi positioning request msg
+ * wifi_pos_tlv_callback: wifi pos msg handler registered for TLV type req
+ * @wmi_msg: wmi type request msg
  *
  * Return: status of operation
  */
@@ -967,10 +870,9 @@ static QDF_STATUS wifi_pos_tlv_callback(struct wlan_objmgr_psoc *psoc,
 }
 
 /**
- * wifi_pos_non_tlv_callback() - wifi pos msg handler registered for non-TLV
- *                               type req
- * @psoc: psoc object
- * @req: wifi positioning request msg
+ * wifi_pos_non_tlv_callback: wifi pos msg handler registered for non-TLV
+ * type req
+ * @wmi_msg: wmi type request msg
  *
  * Return: status of operation
  */
@@ -1093,140 +995,6 @@ QDF_STATUS  wifi_pos_psoc_obj_destroyed_notification(
 	return status;
 }
 
-#if defined(WIFI_POS_CONVERGED) && defined(WLAN_FEATURE_RTT_11AZ_SUPPORT)
-void
-wifi_pos_init_11az_context(struct wifi_pos_vdev_priv_obj *vdev_pos_obj)
-{
-	struct wifi_pos_11az_context *pasn_context;
-	uint8_t i;
-
-	pasn_context = &vdev_pos_obj->pasn_context;
-	for (i = 0; i < WLAN_MAX_11AZ_PEERS; i++) {
-		qdf_set_macaddr_broadcast(
-				&pasn_context->secure_peer_list[i].peer_mac);
-		qdf_set_macaddr_broadcast(
-				&pasn_context->secure_peer_list[i].self_mac);
-		pasn_context->secure_peer_list[i].force_self_mac_usage = false;
-		pasn_context->secure_peer_list[i].control_flags = 0;
-		qdf_set_macaddr_broadcast(
-				&pasn_context->unsecure_peer_list[i].peer_mac);
-		qdf_set_macaddr_broadcast(&pasn_context->failed_peer_list[i]);
-	}
-
-	pasn_context->num_secure_peers = 0;
-	pasn_context->num_unsecure_peers = 0;
-	pasn_context->num_failed_peers = 0;
-}
-#endif
-
-QDF_STATUS
-wifi_pos_vdev_created_notification(struct wlan_objmgr_vdev *vdev,
-				   void *arg_list)
-{
-	struct wifi_pos_vdev_priv_obj *vdev_pos_obj;
-	QDF_STATUS status = QDF_STATUS_E_FAILURE;
-
-	vdev_pos_obj = qdf_mem_malloc(sizeof(*vdev_pos_obj));
-	if (!vdev_pos_obj)
-		return QDF_STATUS_E_NOMEM;
-
-	status = wlan_objmgr_vdev_component_obj_attach(vdev,
-						       WLAN_UMAC_COMP_WIFI_POS,
-						       vdev_pos_obj,
-						       QDF_STATUS_SUCCESS);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		qdf_mem_free(vdev_pos_obj);
-		wifi_pos_err("Wifi pos vdev attach failed");
-		return status;
-	}
-
-	wifi_pos_init_11az_context(vdev_pos_obj);
-
-	return status;
-}
-
-QDF_STATUS
-wifi_pos_vdev_destroyed_notification(struct wlan_objmgr_vdev *vdev,
-				     void *arg_list)
-{
-	struct wifi_pos_vdev_priv_obj *vdev_pos_obj;
-	QDF_STATUS status = QDF_STATUS_E_FAILURE;
-
-	vdev_pos_obj = wifi_pos_get_vdev_priv_obj(vdev);
-	if (!vdev_pos_obj) {
-		wifi_pos_err("Wifi pos vdev priv obj is null");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	status = wlan_objmgr_vdev_component_obj_detach(vdev,
-						       WLAN_UMAC_COMP_WIFI_POS,
-						       vdev_pos_obj);
-	if (QDF_IS_STATUS_ERROR(status))
-		wifi_pos_err("Detach vdev private obj failed");
-
-	qdf_mem_free(vdev_pos_obj);
-
-	return status;
-}
-
-QDF_STATUS
-wifi_pos_peer_object_created_notification(struct wlan_objmgr_peer *peer,
-					  void *arg)
-{
-	struct wlan_wifi_pos_peer_priv_obj *peer_priv;
-	QDF_STATUS status;
-
-	if (!peer) {
-		wifi_pos_err("Peer is NULL");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	peer_priv = qdf_mem_malloc(sizeof(*peer_priv));
-	if (!peer_priv)
-		return QDF_STATUS_E_NOMEM;
-
-	status = wlan_objmgr_peer_component_obj_attach(peer,
-						       WLAN_UMAC_COMP_WIFI_POS,
-						       (void *)peer_priv,
-						       QDF_STATUS_SUCCESS);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		wifi_pos_err("unable to attach peer_priv obj to peer obj");
-		qdf_mem_free(peer_priv);
-	}
-
-	return status;
-}
-
-QDF_STATUS
-wifi_pos_peer_object_destroyed_notification(struct wlan_objmgr_peer *peer,
-					    void *arg)
-{
-	struct wlan_wifi_pos_peer_priv_obj *peer_priv;
-	QDF_STATUS status;
-
-	if (!peer) {
-		wifi_pos_err("Peer is NULL");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	peer_priv = wlan_objmgr_peer_get_comp_private_obj(peer,
-							  WLAN_UMAC_COMP_WIFI_POS);
-	if (!peer_priv) {
-		wifi_pos_err("peer MLME component object is NULL");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	status = wlan_objmgr_peer_component_obj_detach(peer,
-						       WLAN_UMAC_COMP_WIFI_POS,
-						       (void *)peer_priv);
-	if (QDF_IS_STATUS_ERROR(status))
-		wifi_pos_err("unable to detach peer_priv obj to peer obj");
-
-	qdf_mem_free(peer_priv);
-
-	return status;
-}
-
 int wifi_pos_oem_rsp_handler(struct wlan_objmgr_psoc *psoc,
 			     struct oem_data_rsp *oem_rsp)
 {
@@ -1262,7 +1030,7 @@ int wifi_pos_oem_rsp_handler(struct wlan_objmgr_psoc *psoc,
 	wifi_pos_debug("oem data rsp, len: %d to pid: %d", len, app_pid);
 
 	if (oem_rsp->rsp_len_2 + oem_rsp->dma_len) {
-		/* stitch together the msg data_1 + CIR/CFR + data_2 */
+		/* stitch togther the msg data_1 + CIR/CFR + data_2 */
 		data = qdf_mem_malloc(len);
 		if (!data)
 			return -ENOMEM;
@@ -1290,8 +1058,6 @@ void wifi_pos_register_rx_ops(struct wlan_lmac_if_rx_ops *rx_ops)
 
 	wifi_pos_rx_ops = &rx_ops->wifi_pos_rx_ops;
 	wifi_pos_rx_ops->oem_rsp_event_rx = wifi_pos_oem_rsp_handler;
-	wifi_pos_rx_ops->wifi_pos_vdev_delete_all_ranging_peers_cb =
-			wifi_pos_vdev_delete_all_ranging_peers;
 }
 
 QDF_STATUS wifi_pos_populate_caps(struct wlan_objmgr_psoc *psoc,
@@ -1299,15 +1065,11 @@ QDF_STATUS wifi_pos_populate_caps(struct wlan_objmgr_psoc *psoc,
 {
 	uint16_t i, count = 0;
 	uint32_t freq;
-	struct wifi_pos_psoc_priv_obj *wifi_pos_obj = NULL;
+	struct wifi_pos_psoc_priv_obj *wifi_pos_obj =
+					wifi_pos_get_psoc_priv_obj(psoc);
 	struct wifi_pos_channel_list *ch_list = NULL;
-	struct wlan_objmgr_psoc *tmp_psoc = wifi_pos_get_psoc();
 
 	wifi_pos_debug("Enter");
-
-	if (tmp_psoc)
-		wifi_pos_obj = wifi_pos_get_psoc_priv_obj(tmp_psoc);
-
 	if (!wifi_pos_obj) {
 		wifi_pos_err("wifi_pos_obj is null");
 		return QDF_STATUS_E_NULL_VALUE;
@@ -1317,7 +1079,7 @@ QDF_STATUS wifi_pos_populate_caps(struct wlan_objmgr_psoc *psoc,
 	if (!ch_list)
 		return QDF_STATUS_E_NOMEM;
 
-	strscpy(caps->oem_target_signature,
+	strlcpy(caps->oem_target_signature,
 		OEM_TARGET_SIGNATURE,
 		OEM_TARGET_SIGNATURE_LEN);
 	caps->oem_target_type = wifi_pos_obj->oem_target_type;

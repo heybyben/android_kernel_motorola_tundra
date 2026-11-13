@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -311,84 +311,6 @@
 			1, \
 			"Enable Pending list req")
 
-#if defined(CONFIG_BAND_6GHZ) && defined(CONFIG_AFC_SUPPORT)
-/*
- * afc_reg_no_action - Whether action to AFC response
- * @Min: 0
- * @Max: 1
- * @Default: 0
- *
- * This cfg is used to control whether action to AFC response.
- *
- * Related: None
- *
- * Supported Feature: SAP
- *
- */
-#define CFG_AFC_REG_NO_ACTION CFG_BOOL( \
-	"afc_reg_no_action", false, \
-	"driver/user space action needed for afc resp")
-
-/*
- * enable_6ghz_sp_pwrmode_supp - Enable 6Ghz SP power mode
- * @Min: 0
- * @Max: 1
- * @Default: 0
- *
- * This cfg is used to control support of 6Ghz SP power mode.
- *
- * Related: None
- *
- * Supported Feature: SAP
- *
- */
-#define CFG_6GHZ_SP_POWER_MODE_SUPP CFG_INI_BOOL( \
-	"enable_6ghz_sp_pwrmode_supp", false, \
-	"Enable support for SP Power mode in 6GHz")
-
-/*
- * afc_disable_timer_check - Disable AFC timer check
- * @Min: 0
- * @Max: 1
- * @Default: 0
- *
- * This cfg is used to control whether disable AFC timer check.
- *
- * Related: None
- *
- * Supported Feature: SAP
- *
- */
-#define CFG_AFC_TIMER_CHECK_DIS CFG_BOOL( \
-	"afc_disable_timer_check", false, \
-	"Disable the AFC request timer in FW")
-
-/*
- * afc_disable_request_id_check - Disable AFC request id check
- * @Min: 0
- * @Max: 1
- * @Default: 0
- *
- * This ini is used to control whether disable AFC request id check.
- *
- * Related: None
- *
- * Supported Feature: SAP
- *
- */
-#define CFG_AFC_REQ_ID_CHECK_DIS CFG_BOOL( \
-	"afc_disable_request_id_check", false, \
-	"Disable the AFC request ID check in FW")
-
-#define CFG_AFC_REG_ALL \
-	CFG(CFG_AFC_REG_NO_ACTION) \
-	CFG(CFG_6GHZ_SP_POWER_MODE_SUPP) \
-	CFG(CFG_AFC_TIMER_CHECK_DIS) \
-	CFG(CFG_AFC_REQ_ID_CHECK_DIS)
-#else
-#define CFG_AFC_REG_ALL
-#endif
-
 /*
  * <ini>
  * retain_nol_across_regdmn - Retain NOL across reg domain
@@ -413,50 +335,23 @@
 		"Retain NOL even if the regdomain changes")
 
 #ifdef FEATURE_WLAN_CH_AVOID_EXT
-
-/**
- * enum ignore_fw_coex_info_modes - Represents modes
- * @IGNORE_FW_COEX_INFO_ON_SAP_MODE: Set this bit to ignore fw coex info on
- *                                   SAP mode
- * @IGNORE_FW_COEX_INFO_ON_P2P_GO_MODE: Set this bit to ignore fw coex info
- *                                   on P2P-GO mode
- */
-enum ignore_fw_coex_info_modes {
-	IGNORE_FW_COEX_INFO_ON_SAP_MODE = 1 << 0,
-	IGNORE_FW_COEX_INFO_ON_P2P_GO_MODE = 1 << 1
-};
-
 /*
  * <ini>
  * coex_unsafe_chan_nb_user_prefer- Used to handle coex unsafe freq
  * event
  *
- * @Min: 0
- * @Max: 0xFF
- * @Default: 0
- *
- * Bit map of the modes to consider/ignore firmware provided coex/unsafe
- * channels.
- * Firmware provided coex/unsafe channel info is ignored if the corresponding
- * bit is set to 1.
- * Firmware provided coex/unsafe channel info is honored if the corresponding
- * bit is set to 0.
- *
- * BIT 0: Don't honor firmware coex info for SAP mode
- * BIT 1: Don't honor firmware coex info for P2P-GO mode
- * Rest of the bits are currently reserved
+ * @Min: 0 (Honor Firmware event)
+ * @Max: 1 (Don't honor Firmware event)
+ * Default: 0
  *
  * This ini is used to handle coex unsafe freq event
  * Usage: External
  *
  * </ini>
  */
-#define CFG_COEX_UNSAFE_CHAN_NB_USER_PREFER CFG_INI_UINT( \
+#define CFG_COEX_UNSAFE_CHAN_NB_USER_PREFER CFG_INI_BOOL( \
 		"coex_unsafe_chan_nb_user_prefer", \
 		0, \
-		0xff, \
-		0, \
-		CFG_VALUE_OR_DEFAULT, \
 		"Honor coex unsafe freq event from firmware")
 /*
  * <ini>
@@ -497,7 +392,6 @@ enum ignore_fw_coex_info_modes {
 	CFG(CFG_INDOOR_CHANNEL_SUPPORT) \
 	CFG(CFG_SCAN_11D_INTERVAL) \
 	CFG(CFG_IGNORE_FW_REG_OFFLOAD_IND) \
-	CFG_AFC_REG_ALL \
 	CFG(CFG_RETAIN_NOL_ACROSS_REG_DOMAIN) \
 	CFG_SAP_AVOID_ACS_FREQ_LIST_ALL
 

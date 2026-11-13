@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2018, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -48,7 +47,7 @@ uint8_t target_if_mc_cp_get_mac_id(struct vdev_mlme_obj *vdev_mlme);
 /**
  * tgt_mc_cp_stats_process_stats_event(): API to process stats event
  * @psoc: pointer to psoc object
- * @ev: event parameters
+ * @event: event parameters
  *
  * Return: QDF_STATUS_SUCCESS on Success, other QDF_STATUS error codes on
  * failure
@@ -60,7 +59,7 @@ tgt_mc_cp_stats_process_stats_event(struct wlan_objmgr_psoc *psoc,
 #ifdef WLAN_SUPPORT_INFRA_CTRL_PATH_STATS
 /**
  * tgt_mc_cp_stats_process_infra_stats_event(): API to process event from
- * cp stats infrastructure
+ * cp stats infrastrucure
  * @psoc: pointer to psoc object
  * @infra_event: infra cp stats event parameters
  *
@@ -85,12 +84,23 @@ QDF_STATUS
 tgt_mc_cp_stats_process_big_data_stats_event(
 				struct wlan_objmgr_psoc *psoc,
 				struct big_data_stats_event *event);
+
+/**
+ * tgt_send_cp_big_data_stats_req(): API to send big data stats request
+ * to lmac
+ * @psoc: pointer to psoc object
+ * @req: pointer to request info
+ *
+ * Return: status of operation
+ */
+QDF_STATUS tgt_send_cp_big_data_stats_req(struct wlan_objmgr_psoc *psoc,
+					  struct request_info *req);
+
 #endif
 
 /**
  * tgt_send_mc_cp_stats_req(): API to send stats request to lmac
  * @psoc: pointer to psoc object
- * @type: specific type of stats requested
  * @req: pointer to stats request
  *
  * Return: status of operation
@@ -98,18 +108,6 @@ tgt_mc_cp_stats_process_big_data_stats_event(
 QDF_STATUS tgt_send_mc_cp_stats_req(struct wlan_objmgr_psoc *psoc,
 				    enum stats_req_type type,
 				    struct request_info *req);
-
-/**
- * tgt_set_pdev_stats_update_period(): API to set pdev stats update
- * period to FW
- * @psoc: pointer to psoc object
- * @pdev_id: pdev id
- * @val: pdev stats update period, 0: disabled periodical stats report.
- *
- * Return: status of operation
- */
-QDF_STATUS tgt_set_pdev_stats_update_period(struct wlan_objmgr_psoc *psoc,
-					    uint8_t pdev_id, uint32_t val);
 
 /**
  * tgt_mc_cp_stats_inc_wake_lock_stats() : API to increment wake lock stats

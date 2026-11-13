@@ -17,8 +17,8 @@
  */
 #include <wlan_twt_ucfg_ext_api.h>
 #include <wlan_twt_ucfg_ext_cfg.h>
-#include "twt/core/src/wlan_twt_cfg.h"
-#include "twt/core/src/wlan_twt_main.h"
+#include "wlan_twt_cfg.h"
+#include "wlan_twt_main.h"
 
 QDF_STATUS ucfg_twt_psoc_open(struct wlan_objmgr_psoc *psoc)
 {
@@ -45,12 +45,6 @@ QDF_STATUS
 ucfg_twt_cfg_get_responder(struct wlan_objmgr_psoc *psoc, bool *val)
 {
 	return wlan_twt_cfg_get_responder(psoc, val);
-}
-
-QDF_STATUS
-ucfg_twt_cfg_set_responder(struct wlan_objmgr_psoc *psoc, bool val)
-{
-	return wlan_twt_cfg_set_responder(psoc, val);
 }
 
 QDF_STATUS
@@ -113,11 +107,6 @@ bool ucfg_twt_is_setup_in_progress(struct wlan_objmgr_psoc *psoc,
 	return wlan_twt_is_setup_in_progress(psoc, peer_mac, dialog_id);
 }
 
-bool ucfg_twt_cfg_is_twt_enabled(struct wlan_objmgr_psoc *psoc)
-{
-	return wlan_twt_cfg_is_twt_enabled(psoc);
-}
-
 QDF_STATUS
 ucfg_twt_cfg_get_congestion_timeout(struct wlan_objmgr_psoc *psoc,
 				    uint32_t *val)
@@ -141,18 +130,6 @@ QDF_STATUS
 ucfg_twt_cfg_get_bcast_requestor(struct wlan_objmgr_psoc *psoc, bool *val)
 {
 	return wlan_twt_cfg_get_bcast_requestor(psoc, val);
-}
-
-QDF_STATUS
-ucfg_twt_cfg_get_bcast_responder(struct wlan_objmgr_psoc *psoc, bool *val)
-{
-	return wlan_twt_cfg_get_bcast_responder(psoc, val);
-}
-
-QDF_STATUS
-ucfg_twt_cfg_get_rtwt_requestor(struct wlan_objmgr_psoc *psoc, bool *val)
-{
-	return wlan_twt_cfg_get_rtwt_requestor(psoc, val);
 }
 
 QDF_STATUS
@@ -226,13 +203,10 @@ bool ucfg_twt_is_command_in_progress(struct wlan_objmgr_psoc *psoc,
 
 void ucfg_twt_set_work_params(
 		struct wlan_objmgr_vdev *vdev,
-		struct qdf_mac_addr *peer_mac,
-		uint8_t dialog_id,
-		bool is_ps_disabled,
+		struct twt_add_dialog_complete_event_param *params,
 		uint32_t twt_next_action)
 {
-	return wlan_twt_set_work_params(vdev, peer_mac, dialog_id,
-					is_ps_disabled, twt_next_action);
+	return wlan_twt_set_work_params(vdev, params, twt_next_action);
 }
 
 void ucfg_twt_get_work_params(
@@ -242,9 +216,3 @@ void ucfg_twt_get_work_params(
 {
 	return wlan_twt_get_work_params(vdev, params, next_action);
 }
-
-bool ucfg_twt_get_pmo_allowed(struct wlan_objmgr_psoc *psoc)
-{
-	return wlan_twt_get_pmo_allowed(psoc);
-}
-

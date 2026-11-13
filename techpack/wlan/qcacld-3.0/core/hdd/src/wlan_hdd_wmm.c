@@ -60,12 +60,9 @@
 #include "cfg_ucfg_api.h"
 #include "wlan_hdd_object_manager.h"
 #include "wlan_hdd_cm_api.h"
-#include "wlan_dp_ucfg_api.h"
 
 #define HDD_WMM_UP_TO_AC_MAP_SIZE 8
 #define DSCP(x)	x
-#define MIN_HANDLE_VALUE 5000
-#define MAX_HANDLE_VALUE 6000
 
 const uint8_t hdd_wmm_up_to_ac_map[] = {
 	SME_AC_BE,
@@ -137,6 +134,10 @@ config_tspec_policy[QCA_WLAN_VENDOR_ATTR_CONFIG_TSPEC_MAX + 1] = {
 	[CONFIG_TSPEC_SURPLUS_BANDWIDTH_ALLOWANCE] = {.type = NLA_U16},
 };
 
+/**
+ * enum hdd_wmm_linuxac: AC/Queue Index values for Linux Qdisc to
+ * operate on different traffic.
+ */
 #ifdef QCA_LL_TX_FLOW_CONTROL_V2
 void wlan_hdd_process_peer_unauthorised_pause(struct hdd_adapter *adapter)
 {
@@ -235,8 +236,7 @@ static void hdd_wmm_enable_tl_uapsd(struct hdd_wmm_qos_context *qos_context)
 		sme_enable_uapsd_for_ac(ac_type, ac->tspec.ts_info.tid,
 					ac->tspec.ts_info.up,
 					service_interval, suspension_interval,
-					direction, psb,
-					adapter->deflink->vdev_id,
+					direction, psb, adapter->vdev_id,
 					delayed_trgr_frm_int);
 
 	if (!QDF_IS_STATUS_SUCCESS(status)) {
@@ -272,8 +272,7 @@ static void hdd_wmm_disable_tl_uapsd(struct hdd_wmm_qos_context *qos_context)
 
 	/* have we previously enabled UAPSD? */
 	if (ac->is_uapsd_info_valid == true) {
-		status = sme_disable_uapsd_for_ac(ac_type,
-						  adapter->deflink->vdev_id);
+		status = sme_disable_uapsd_for_ac(ac_type, adapter->vdev_id);
 
 		if (!QDF_IS_STATUS_SUCCESS(status)) {
 			hdd_err("Failed to disable U-APSD for AC=%d", ac_type);
@@ -334,9 +333,9 @@ static void hdd_wmm_free_context(struct hdd_wmm_qos_context *qos_context)
  *
  * Return: None
  */
+#define MAX_NOTIFY_LEN 50
 static void hdd_wmm_notify_app(struct hdd_wmm_qos_context *qos_context)
 {
-#define MAX_NOTIFY_LEN 50
 	struct hdd_adapter *adapter;
 	union iwreq_data wrqu;
 	char buf[MAX_NOTIFY_LEN + 1];
@@ -392,8 +391,7 @@ static void hdd_wmm_inactivity_timer_cb(void *user_data)
 	QDF_STATUS qdf_status;
 	uint32_t traffic_count = 0;
 	sme_ac_enum_type ac_type;
-	unsigned int cpu;
-	struct hdd_tx_rx_stats *tx_rx_stats;
+	uint8_t cpu;
 
 	if (!qos_context) {
 		hdd_err("invalid user data");
@@ -409,11 +407,11 @@ static void hdd_wmm_inactivity_timer_cb(void *user_data)
 	}
 
 	ac = &adapter->hdd_wmm_status.ac_status[ac_type];
-	tx_rx_stats = &adapter->deflink->hdd_stats.tx_rx_stats;
+
 	/* Get the Tx stats for this AC. */
 	for (cpu = 0; cpu < NUM_CPUS; cpu++)
-		traffic_count +=
-		tx_rx_stats->per_cpu[cpu].tx_classified_ac[qos_context->ac_type];
+		traffic_count += adapter->hdd_stats.tx_rx_stats.per_cpu[cpu].
+					 tx_classified_ac[qos_context->ac_type];
 
 	hdd_warn("WMM inactivity check for AC=%d, count=%u, last=%u",
 		 ac_type, traffic_count, ac->last_traffic_count);
@@ -462,8 +460,7 @@ hdd_wmm_enable_inactivity_timer(struct hdd_wmm_qos_context *qos_context,
 	struct hdd_adapter *adapter = qos_context->adapter;
 	sme_ac_enum_type ac_type = qos_context->ac_type;
 	struct hdd_wmm_ac_status *ac;
-	unsigned int cpu;
-	struct hdd_tx_rx_stats *tx_rx_stats;
+	uint8_t cpu;
 
 	adapter = qos_context->adapter;
 	ac = &adapter->hdd_wmm_status.ac_status[ac_type];
@@ -493,11 +490,10 @@ hdd_wmm_enable_inactivity_timer(struct hdd_wmm_qos_context *qos_context,
 
 	ac->last_traffic_count = 0;
 	/* Initialize the current tx traffic count on this AC */
-	tx_rx_stats = &adapter->deflink->hdd_stats.tx_rx_stats;
-	for (cpu = 0; cpu < NUM_CPUS; cpu++) {
+	for (cpu = 0; cpu < NUM_CPUS; cpu++)
 		ac->last_traffic_count +=
-		tx_rx_stats->per_cpu[cpu].tx_classified_ac[qos_context->ac_type];
-	}
+			adapter->hdd_stats.tx_rx_stats.per_cpu[cpu].
+					 tx_classified_ac[qos_context->ac_type];
 	qos_context->is_inactivity_timer_running = true;
 	return qdf_status;
 }
@@ -1441,9 +1437,8 @@ static void __hdd_wmm_do_implicit_qos(struct hdd_wmm_qos_context *qos_context)
 
 	if (tspec.ts_info.ack_policy ==
 	    SME_QOS_WMM_TS_ACK_POLICY_HT_IMMEDIATE_BLOCK_ACK) {
-		if (!sme_qos_is_ts_info_ack_policy_valid(
-					mac_handle, &tspec,
-					adapter->deflink->vdev_id)) {
+		if (!sme_qos_is_ts_info_ack_policy_valid(mac_handle, &tspec,
+							 adapter->vdev_id)) {
 			tspec.ts_info.ack_policy =
 				SME_QOS_WMM_TS_ACK_POLICY_NORMAL_ACK;
 		}
@@ -1455,7 +1450,7 @@ static void __hdd_wmm_do_implicit_qos(struct hdd_wmm_qos_context *qos_context)
 
 #ifndef WLAN_MDM_CODE_REDUCTION_OPT
 	sme_status = sme_qos_setup_req(mac_handle,
-				       adapter->deflink->vdev_id,
+				       adapter->vdev_id,
 				       &tspec,
 				       hdd_wmm_sme_callback,
 				       qos_context,
@@ -1514,7 +1509,7 @@ static void __hdd_wmm_do_implicit_qos(struct hdd_wmm_qos_context *qos_context)
 }
 
 /**
- * hdd_wmm_do_implicit_qos() - SSR wrapper function for hdd_wmm_do_implicit_qos
+ * hdd_wmm_do_implicit_qos() - SSR wraper function for hdd_wmm_do_implicit_qos
  * @work: pointer to work_struct
  *
  * Return: none
@@ -1545,7 +1540,7 @@ QDF_STATUS hdd_send_dscp_up_map_to_fw(struct hdd_adapter *adapter)
 	struct wlan_objmgr_vdev *vdev;
 	int ret;
 
-	vdev = hdd_objmgr_get_vdev_by_user(adapter->deflink, WLAN_FWOL_NB_ID);
+	vdev = hdd_objmgr_get_vdev_by_user(adapter, WLAN_FWOL_NB_ID);
 
 	if (vdev) {
 		/* Send DSCP to TID map table to FW */
@@ -1634,7 +1629,7 @@ static inline QDF_STATUS hdd_custom_dscp_up_map(
  * hdd_wmm_dscp_initial_state() - initialize the WMM DSCP configuration
  * @adapter : [in]  pointer to Adapter context
  *
- * This function will initialize the WMM DSCP configuration of an
+ * This function will initialize the WMM DSCP configuation of an
  * adapter to an initial state.  The configuration can later be
  * overwritten via application APIs or via QoS Map sent OTA.
  *
@@ -1665,7 +1660,7 @@ QDF_STATUS hdd_wmm_dscp_initial_state(struct hdd_adapter *adapter)
  * hdd_wmm_adapter_init() - initialize the WMM configuration of an adapter
  * @adapter: [in]  pointer to Adapter context
  *
- * This function will initialize the WMM configuration and status of an
+ * This function will initialize the WMM configuation and status of an
  * adapter to an initial state.  The configuration can later be
  * overwritten via application APIs
  *
@@ -1732,7 +1727,7 @@ QDF_STATUS hdd_wmm_adapter_clear(struct hdd_adapter *adapter)
 }
 
 /**
- * hdd_wmm_adapter_close() - WMM close function
+ * hdd_wmm_close() - WMM close function
  * @adapter: [in]  pointer to adapter context
  *
  * Function which will perform any necessary work to to clean up the
@@ -1762,41 +1757,6 @@ QDF_STATUS hdd_wmm_adapter_close(struct hdd_adapter *adapter)
 	}
 
 	return QDF_STATUS_SUCCESS;
-}
-
-/**
- * hdd_check_upgrade_vo_vi_qos() - Check and upgrade QOS for UDP packets
- *				   based on request type received
- * @adapter: [in] pointer to the adapter context (Should not be invalid)
- * @user_pri: [out] priority set for this packet
- *
- * This function checks for the request type and upgrade based on request type
- *
- * UDP_QOS_UPGRADE_ALL: Upgrade QoS of all UDP packets if the current set
- *	priority is below the pre-configured threshold for upgrade.
- *
- * UDP_QOS_UPGRADE_BK_BE: Upgrade QoS of all UDP packets if the current set
- *	priority is below the AC VI.
- */
-static inline void
-hdd_check_upgrade_vo_vi_qos(struct hdd_adapter *adapter,
-			    enum sme_qos_wmmuptype *user_pri)
-{
-	switch (adapter->udp_qos_upgrade_type) {
-	case UDP_QOS_UPGRADE_ALL:
-		if (*user_pri <
-		    qca_wlan_ac_to_sme_qos(adapter->upgrade_udp_qos_threshold))
-			*user_pri = qca_wlan_ac_to_sme_qos(
-					adapter->upgrade_udp_qos_threshold);
-		break;
-	case UDP_QOS_UPGRADE_BK_BE:
-		if (*user_pri < qca_wlan_ac_to_sme_qos(QCA_WLAN_AC_VI))
-			*user_pri = qca_wlan_ac_to_sme_qos(
-					adapter->upgrade_udp_qos_threshold);
-		break;
-	default:
-		break;
-	}
 }
 
 /**
@@ -1833,7 +1793,11 @@ hdd_check_and_upgrade_udp_qos(struct hdd_adapter *adapter,
 		break;
 	case QCA_WLAN_AC_VI:
 	case QCA_WLAN_AC_VO:
-		hdd_check_upgrade_vo_vi_qos(adapter, user_pri);
+		if (*user_pri <
+		    qca_wlan_ac_to_sme_qos(adapter->upgrade_udp_qos_threshold))
+			*user_pri = qca_wlan_ac_to_sme_qos(
+					adapter->upgrade_udp_qos_threshold);
+
 		break;
 	default:
 		break;
@@ -1841,82 +1805,21 @@ hdd_check_and_upgrade_udp_qos(struct hdd_adapter *adapter,
 }
 
 /**
- * hdd_wmm_classify_critical_pkt() - Function checks and classifies critical skb
+ * hdd_wmm_classify_pkt() - Function which will classify an OS packet
+ * into a WMM AC based on DSCP
+ *
+ * @adapter: adapter upon which the packet is being transmitted
  * @skb: pointer to network buffer
- * @user_pri: user priority of the OS packet to be determined
- * @is_critical: pointer to be marked true for a critical packet
- *
- * Function checks if the packet is one of the critical packets and determines
- * 'user_pri' for it. EAPOL, ARP, DHCP(v4,v6), NS, NA are considered critical.
- *
- * Note that wlan_hdd_mark_critical_pkt is used to mark packet type in CB for
- * these critical packets. This is done as skb->cb amay be overwritten between
- * _select_queue and_hard_start_xmit functions. hdd_wmm_classify_critical_pkt
- * and wlan_hdd_mark_critical_pkt should be in sync w.r.t packet types.
+ * @user_pri: user priority of the OS packet
+ * @is_eapol: eapol packet flag
  *
  * Return: None
  */
 static
-void hdd_wmm_classify_critical_pkt(struct sk_buff *skb,
-				   enum sme_qos_wmmuptype *user_pri,
-				   bool *is_critical)
-{
-	enum qdf_proto_subtype proto_subtype;
-
-	 /* Send EAPOL on TID 6(VO). Rest are sent on TID 0(BE). */
-
-	if (qdf_nbuf_is_ipv4_eapol_pkt(skb)) {
-		*is_critical = true;
-		*user_pri = SME_QOS_WMM_UP_VO;
-	} else if (qdf_nbuf_is_ipv4_arp_pkt(skb)) {
-		*is_critical = true;
-		*user_pri = SME_QOS_WMM_UP_BE;
-	} else if (qdf_nbuf_is_ipv4_dhcp_pkt(skb)) {
-		*is_critical = true;
-		*user_pri = SME_QOS_WMM_UP_BE;
-	} else if (qdf_nbuf_is_ipv6_dhcp_pkt(skb)) {
-		*is_critical = true;
-		*user_pri = SME_QOS_WMM_UP_BE;
-	} else if (qdf_nbuf_is_icmpv6_pkt(skb)) {
-		proto_subtype = qdf_nbuf_get_icmpv6_subtype(skb);
-		switch (proto_subtype) {
-		case QDF_PROTO_ICMPV6_NA:
-		case QDF_PROTO_ICMPV6_NS:
-			*is_critical = true;
-			*user_pri = SME_QOS_WMM_UP_BE;
-			break;
-		default:
-			break;
-		}
-	}
-}
-
-#ifdef DP_TRAFFIC_END_INDICATION
-/**
- * hdd_wmm_traffic_end_indication_is_enable() - Get feature enable/disable
- *                                              status
- * @adapter: hdd adapter handle
- *
- * Return: true if feature is enable else false
- */
-static inline bool
-hdd_wmm_traffic_end_indication_is_enable(struct hdd_adapter *adapter)
-{
-	return qdf_unlikely(adapter->traffic_end_ind_en);
-}
-#else
-static inline bool
-hdd_wmm_traffic_end_indication_is_enable(struct hdd_adapter *adapter)
-{
-	return false;
-}
-#endif
-
-static
-void hdd_wmm_get_user_priority_from_ip_tos(struct hdd_adapter *adapter,
-					   struct sk_buff *skb,
-					   enum sme_qos_wmmuptype *user_pri)
-
+void hdd_wmm_classify_pkt(struct hdd_adapter *adapter,
+			  struct sk_buff *skb,
+			  enum sme_qos_wmmuptype *user_pri,
+			  bool *is_eapol)
 {
 	unsigned char dscp;
 	unsigned char tos;
@@ -1924,7 +1827,6 @@ void hdd_wmm_get_user_priority_from_ip_tos(struct hdd_adapter *adapter,
 	struct iphdr *ip_hdr;
 	struct ipv6hdr *ipv6hdr;
 	unsigned char *pkt;
-	struct wlan_objmgr_psoc *psoc;
 
 	/* this code is executed for every packet therefore
 	 * all debug code is kept conditional
@@ -2015,65 +1917,24 @@ void hdd_wmm_get_user_priority_from_ip_tos(struct hdd_adapter *adapter,
 		if (eth_hdr->eth_II.h_proto ==
 			htons(HDD_ETHERTYPE_802_1_X)) {
 			tos = 0xC0;
+			*is_eapol = true;
 		} else
 			tos = 0;
 	}
 
 	dscp = (tos >> 2) & 0x3f;
-	if (hdd_wmm_traffic_end_indication_is_enable(adapter)) {
-		psoc = adapter->hdd_ctx->psoc;
-		ucfg_dp_traffic_end_indication_update_dscp(
-				psoc, adapter->deflink->vdev_id, &dscp);
-	}
 	*user_pri = adapter->dscp_to_up_map[dscp];
+
+	/*
+	 * Upgrade the priority, if the user priority of this packet is
+	 * less than the configured threshold.
+	 */
+	hdd_check_and_upgrade_udp_qos(adapter, skb, user_pri);
 
 #ifdef HDD_WMM_DEBUG
 	hdd_debug("tos is %d, dscp is %d, up is %d", tos, dscp, *user_pri);
 #endif /* HDD_WMM_DEBUG */
 }
-
-/**
- * hdd_wmm_classify_pkt() - Function to classify skb into WMM AC based on DSCP
- *
- * @adapter: adapter upon which the packet is being transmitted
- * @skb: pointer to network buffer
- * @user_pri: user priority of the OS packet
- * @is_critical: pointer to be marked true for a critical packet
- *
- * Function checks if the packet is one of the critical packets and determines
- * 'user_pri' for it. Else it uses IP TOS value to determine 'user_pri'.
- * It is the responsibility of caller to set the user_pri to skb->priority.
- * Return: None
- */
-static
-void hdd_wmm_classify_pkt(struct hdd_adapter *adapter,
-			  struct sk_buff *skb,
-			  enum sme_qos_wmmuptype *user_pri,
-			  bool *is_critical)
-{
-	hdd_wmm_classify_critical_pkt(skb, user_pri, is_critical);
-
-	if (false == *is_critical) {
-		hdd_wmm_get_user_priority_from_ip_tos(adapter, skb, user_pri);
-		hdd_check_and_upgrade_udp_qos(adapter, skb, user_pri);
-	}
-}
-
-#ifdef QCA_SUPPORT_TX_MIN_RATES_FOR_SPECIAL_FRAMES
-void hdd_wmm_classify_pkt_cb(void *adapter,
-			     struct sk_buff *skb)
-{
-	enum sme_qos_wmmuptype user_pri = SME_QOS_WMM_UP_BE;
-	bool is_critical = false;
-
-	hdd_wmm_classify_critical_pkt(skb, &user_pri, &is_critical);
-
-	if (is_critical) {
-		skb->priority = user_pri;
-		QDF_NBUF_CB_TX_EXTRA_IS_CRITICAL(skb) = true;
-	}
-}
-#endif
 
 #ifdef TX_MULTIQ_PER_AC
 /**
@@ -2092,8 +1953,7 @@ uint16_t hdd_get_tx_queue_for_ac(struct hdd_adapter *adapter,
 	struct sock *sk = skb->sk;
 	int new_index;
 	int cpu = qdf_get_smp_processor_id();
-	struct hdd_tx_rx_stats *stats =
-				&adapter->deflink->hdd_stats.tx_rx_stats;
+	struct hdd_tx_rx_stats *stats = &adapter->hdd_stats.tx_rx_stats;
 
 	if (qdf_unlikely(ac == HDD_LINUX_AC_HI_PRIO))
 		return TX_GET_QUEUE_IDX(HDD_LINUX_AC_HI_PRIO, 0);
@@ -2158,52 +2018,22 @@ static uint16_t __hdd_get_queue_index(uint16_t up)
 /**
  * hdd_get_queue_index() - get queue index
  * @up: user priority
- * @is_critical: is_critical flag
+ * @is_eapol: is_eapol flag
  *
  * Return: queue_index
  */
 static
-uint16_t hdd_get_queue_index(uint16_t up, bool is_critical)
+uint16_t hdd_get_queue_index(uint16_t up, bool is_eapol)
 {
-	if (qdf_unlikely(is_critical))
+	if (qdf_unlikely(is_eapol == true))
 		return HDD_LINUX_AC_HI_PRIO;
 	return __hdd_get_queue_index(up);
 }
 #else
 static
-uint16_t hdd_get_queue_index(uint16_t up, bool is_critical)
+uint16_t hdd_get_queue_index(uint16_t up, bool is_eapol)
 {
 	return __hdd_get_queue_index(up);
-}
-#endif
-
-#ifdef DP_TX_PACKET_INSPECT_FOR_ILP
-/**
- * hdd_update_pkt_priority_with_inspection() - update TX packets priority
- * @skb: network buffer
- * @up: user priority
- *
- * Update TX packets priority, if some special TX packets like TCP ack,
- * reuse skb->priority upper 8 bits(bit24 ~ 31) to mark them.
- *
- * Return: None
- */
-static inline
-void hdd_update_pkt_priority_with_inspection(struct sk_buff *skb,
-					     enum sme_qos_wmmuptype up)
-{
-	skb->priority = up;
-
-	if (qdf_unlikely(qdf_nbuf_is_ipv4_v6_pure_tcp_ack(skb)))
-		qdf_nbuf_set_priority_pkt_type(
-				skb, QDF_NBUF_PRIORITY_PKT_TCP_ACK);
-}
-#else
-static inline
-void hdd_update_pkt_priority_with_inspection(struct sk_buff *skb,
-					     enum sme_qos_wmmuptype up)
-{
-	skb->priority = up;
 }
 #endif
 
@@ -2213,8 +2043,9 @@ static uint16_t __hdd_wmm_select_queue(struct net_device *dev,
 	enum sme_qos_wmmuptype up = SME_QOS_WMM_UP_BE;
 	uint16_t index;
 	struct hdd_adapter *adapter = WLAN_HDD_GET_PRIV_PTR(dev);
-	bool is_critical = false;
+	bool is_crtical = false;
 	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
+	enum qdf_proto_subtype proto_subtype;
 
 	if (qdf_unlikely(!hdd_ctx || cds_is_driver_transitioning())) {
 		hdd_debug_rl("driver is transitioning! Using default(BE) queue.");
@@ -2223,22 +2054,45 @@ static uint16_t __hdd_wmm_select_queue(struct net_device *dev,
 	}
 
 	/* Get the user priority from IP header */
-	hdd_wmm_classify_pkt(adapter, skb, &up, &is_critical);
+	hdd_wmm_classify_pkt(adapter, skb, &up, &is_crtical);
 
-	hdd_update_pkt_priority_with_inspection(skb, up);
+	if (qdf_nbuf_is_ipv4_arp_pkt(skb)) {
+		is_crtical = true;
+	} else if (qdf_nbuf_is_icmpv6_pkt(skb)) {
+		proto_subtype = qdf_nbuf_get_icmpv6_subtype(skb);
+		switch (proto_subtype) {
+		case QDF_PROTO_ICMPV6_NA:
+		case QDF_PROTO_ICMPV6_NS:
+			is_crtical = true;
+			break;
+		default:
+			break;
+		}
+	}
 
-	index = hdd_get_queue_index(up, is_critical);
+	skb->priority = up;
+	index = hdd_get_queue_index(skb->priority, is_crtical);
 
 	return hdd_get_tx_queue_for_ac(adapter, skb, index);
 }
 
-uint16_t hdd_wmm_select_queue(struct net_device *dev,
-			      struct sk_buff *skb)
+/**
+ * hdd_wmm_select_queue() - Function which will classify the packet
+ *       according to linux qdisc expectation.
+ *
+ * @dev: [in] pointer to net_device structure
+ * @skb: [in] pointer to os packet
+ *
+ * Return: Qdisc queue index
+ */
+static uint16_t hdd_wmm_select_queue(struct net_device *dev,
+				     struct sk_buff *skb)
 {
 	uint16_t q_index;
 
+	hdd_dp_ssr_protect();
 	q_index = __hdd_wmm_select_queue(dev, skb);
-
+	hdd_dp_ssr_unprotect();
 	return q_index;
 }
 
@@ -2486,7 +2340,7 @@ QDF_STATUS hdd_wmm_assoc(struct hdd_adapter *adapter,
 		status = sme_enable_uapsd_for_ac(
 				SME_AC_VO, 7, 7, srv_value, sus_value,
 				SME_QOS_WMM_TS_DIR_BOTH, 1,
-				adapter->deflink->vdev_id,
+				adapter->vdev_id,
 				delayed_trgr_frm_int);
 
 		QDF_ASSERT(QDF_IS_STATUS_SUCCESS(status));
@@ -2509,7 +2363,7 @@ QDF_STATUS hdd_wmm_assoc(struct hdd_adapter *adapter,
 		status = sme_enable_uapsd_for_ac(
 				SME_AC_VI, 5, 5, srv_value, sus_value,
 				SME_QOS_WMM_TS_DIR_BOTH, 1,
-				adapter->deflink->vdev_id,
+				adapter->vdev_id,
 				delayed_trgr_frm_int);
 
 		QDF_ASSERT(QDF_IS_STATUS_SUCCESS(status));
@@ -2532,7 +2386,7 @@ QDF_STATUS hdd_wmm_assoc(struct hdd_adapter *adapter,
 		status = sme_enable_uapsd_for_ac(
 				SME_AC_BK, 2, 2, srv_value, sus_value,
 				SME_QOS_WMM_TS_DIR_BOTH, 1,
-				adapter->deflink->vdev_id,
+				adapter->vdev_id,
 				delayed_trgr_frm_int);
 
 		QDF_ASSERT(QDF_IS_STATUS_SUCCESS(status));
@@ -2555,7 +2409,7 @@ QDF_STATUS hdd_wmm_assoc(struct hdd_adapter *adapter,
 		status = sme_enable_uapsd_for_ac(
 				SME_AC_BE, 3, 3, srv_value, sus_value,
 				SME_QOS_WMM_TS_DIR_BOTH, 1,
-				adapter->deflink->vdev_id,
+				adapter->vdev_id,
 				delayed_trgr_frm_int);
 
 		QDF_ASSERT(QDF_IS_STATUS_SUCCESS(status));
@@ -2563,7 +2417,7 @@ QDF_STATUS hdd_wmm_assoc(struct hdd_adapter *adapter,
 
 	status = sme_update_dsc_pto_up_mapping(hdd_ctx->mac_handle,
 					       adapter->dscp_to_up_map,
-					       adapter->deflink->vdev_id);
+					       adapter->vdev_id);
 
 	if (!QDF_IS_STATUS_SUCCESS(status))
 		hdd_wmm_dscp_initial_state(adapter);
@@ -2599,6 +2453,7 @@ QDF_STATUS hdd_wmm_connect(struct hdd_adapter *adapter,
 	adapter->hdd_wmm_status.qos_connection = qos_connection;
 
 	for (ac = 0; ac < WLAN_MAX_AC; ac++) {
+		hdd_debug("ac %d off", ac);
 		/* admission is not required so access is allowed */
 		adapter->hdd_wmm_status.ac_status[ac].is_access_required = false;
 		adapter->hdd_wmm_status.ac_status[ac].is_access_allowed = true;
@@ -2630,17 +2485,15 @@ bool hdd_wmm_is_acm_allowed(uint8_t vdev_id)
 	struct hdd_adapter *adapter;
 	struct hdd_wmm_ac_status *wmm_ac_status;
 	struct hdd_context *hdd_ctx;
-	struct wlan_hdd_link_info *link_info;
 
 	hdd_ctx = cds_get_context(QDF_MODULE_ID_HDD);
 	if (!hdd_ctx)
 		return false;
 
-	link_info = hdd_get_link_info_by_vdev(hdd_ctx, vdev_id);
-	if (!link_info || hdd_validate_adapter(link_info->adapter))
+	adapter = hdd_get_adapter_by_vdev(hdd_ctx, vdev_id);
+	if (hdd_validate_adapter(adapter))
 		return false;
 
-	adapter = link_info->adapter;
 	wmm_ac_status = adapter->hdd_wmm_status.ac_status;
 
 	if (hdd_wmm_is_active(adapter) &&
@@ -2649,31 +2502,41 @@ bool hdd_wmm_is_acm_allowed(uint8_t vdev_id)
 	return true;
 }
 
+/**
+ * hdd_wmm_addts() - Function which will add a traffic spec at the
+ * request of an application
+ *
+ * @adapter  : [in]  pointer to adapter context
+ * @handle    : [in]  handle to uniquely identify a TS
+ * @tspec    : [in]  pointer to the traffic spec
+ *
+ * Return: HDD_WLAN_WMM_STATUS_*
+ */
 hdd_wlan_wmm_status_e hdd_wmm_addts(struct hdd_adapter *adapter,
 				    uint32_t handle,
 				    struct sme_qos_wmmtspecinfo *tspec)
 {
-	struct hdd_wmm_qos_context *qos_context = NULL;
-	struct hdd_wmm_qos_context *cur_entry;
+	struct hdd_wmm_qos_context *qos_context;
 	hdd_wlan_wmm_status_e status = HDD_WLAN_WMM_STATUS_SETUP_SUCCESS;
 #ifndef WLAN_MDM_CODE_REDUCTION_OPT
 	enum sme_qos_statustype sme_status;
 #endif
+	bool found = false;
 	mac_handle_t mac_handle = hdd_adapter_get_mac_handle(adapter);
 
 	hdd_debug("Entered with handle 0x%x", handle);
 
 	/* see if a context already exists with the given handle */
 	mutex_lock(&adapter->hdd_wmm_status.mutex);
-	list_for_each_entry(cur_entry,
+	list_for_each_entry(qos_context,
 			    &adapter->hdd_wmm_status.context_list, node) {
-		if (cur_entry->handle == handle) {
-			qos_context = cur_entry;
+		if (qos_context->handle == handle) {
+			found = true;
 			break;
 		}
 	}
 	mutex_unlock(&adapter->hdd_wmm_status.mutex);
-	if (qos_context) {
+	if (found) {
 		/* record with that handle already exists */
 		hdd_err("Record already exists with handle 0x%x", handle);
 
@@ -2742,7 +2605,6 @@ hdd_wlan_wmm_status_e hdd_wmm_addts(struct hdd_adapter *adapter,
 	}
 	qos_context->adapter = adapter;
 	qos_context->flow_id = 0;
-	qos_context->ts_id = tspec->ts_info.tid;
 	qos_context->magic = HDD_WMM_CTX_MAGIC;
 	qos_context->is_inactivity_timer_running = false;
 
@@ -2754,7 +2616,7 @@ hdd_wlan_wmm_status_e hdd_wmm_addts(struct hdd_adapter *adapter,
 
 #ifndef WLAN_MDM_CODE_REDUCTION_OPT
 	sme_status = sme_qos_setup_req(mac_handle,
-				       adapter->deflink->vdev_id,
+				       adapter->vdev_id,
 				       tspec,
 				       hdd_wmm_sme_callback,
 				       qos_context,
@@ -2789,7 +2651,7 @@ hdd_wlan_wmm_status_e hdd_wmm_addts(struct hdd_adapter *adapter,
 		hdd_wmm_disable_inactivity_timer(qos_context);
 		/* we can't tell the difference between when a request
 		 * fails because AP rejected it versus when SME
-		 * encountered an internal error
+		 * encounterd an internal error
 		 */
 		hdd_wmm_free_context(qos_context);
 		return HDD_WLAN_WMM_STATUS_SETUP_FAILED;
@@ -2832,8 +2694,8 @@ hdd_wlan_wmm_status_e hdd_wmm_addts(struct hdd_adapter *adapter,
 hdd_wlan_wmm_status_e hdd_wmm_delts(struct hdd_adapter *adapter,
 				    uint32_t handle)
 {
-	struct hdd_wmm_qos_context *qos_context = NULL;
-	struct hdd_wmm_qos_context *cur_entry;
+	struct hdd_wmm_qos_context *qos_context;
+	bool found = false;
 	sme_ac_enum_type ac_type = 0;
 	uint32_t flow_id = 0;
 	hdd_wlan_wmm_status_e status = HDD_WLAN_WMM_STATUS_SETUP_SUCCESS;
@@ -2846,29 +2708,28 @@ hdd_wlan_wmm_status_e hdd_wmm_delts(struct hdd_adapter *adapter,
 
 	/* locate the context with the given handle */
 	mutex_lock(&adapter->hdd_wmm_status.mutex);
-	list_for_each_entry(cur_entry,
+	list_for_each_entry(qos_context,
 			    &adapter->hdd_wmm_status.context_list, node) {
-		if (cur_entry->handle == handle) {
-			qos_context = cur_entry;
+		if (qos_context->handle == handle) {
+			found = true;
+			ac_type = qos_context->ac_type;
+			flow_id = qos_context->flow_id;
 			break;
 		}
 	}
 	mutex_unlock(&adapter->hdd_wmm_status.mutex);
 
-	if (!qos_context) {
-		/* we didn't find the handle, tid is already freed */
-		hdd_info("tid already freed for handle 0x%x", handle);
-		return HDD_WLAN_WMM_STATUS_RELEASE_SUCCESS;
+	if (false == found) {
+		/* we didn't find the handle */
+		hdd_info("handle 0x%x not found", handle);
+		return HDD_WLAN_WMM_STATUS_RELEASE_FAILED_BAD_PARAM;
 	}
 
-	ac_type = qos_context->ac_type;
-	flow_id = qos_context->flow_id;
-
-	hdd_debug("found handle 0x%x, flow %d, AC %d",
-		 handle, flow_id, ac_type);
+	hdd_debug("found handle 0x%x, flow %d, AC %d, context %pK",
+		 handle, flow_id, ac_type, qos_context);
 
 #ifndef WLAN_MDM_CODE_REDUCTION_OPT
-	sme_status = sme_qos_release_req(mac_handle, adapter->deflink->vdev_id,
+	sme_status = sme_qos_release_req(mac_handle, adapter->vdev_id,
 					 flow_id);
 
 	hdd_debug("SME flow %d released, SME status %d", flow_id, sme_status);
@@ -2964,33 +2825,6 @@ hdd_wlan_wmm_status_e hdd_wmm_checkts(struct hdd_adapter *adapter, uint32_t hand
 }
 
 /**
- * hdd_get_handle_from_ts_id() - get handle from ts id
- * @adapter : hdd adapter
- * @ts_id: ts_id
- * @del_tspec_handle: handle to delete the request
- *
- * Return: None
- */
-static void
-hdd_get_handle_from_ts_id(struct hdd_adapter *adapter, uint8_t ts_id,
-			  uint32_t *del_tspec_handle)
-{
-	struct hdd_wmm_qos_context *cur_entry;
-
-	hdd_debug("Entered with ts_id 0x%x", ts_id);
-
-	mutex_lock(&adapter->hdd_wmm_status.mutex);
-	list_for_each_entry(cur_entry,
-			    &adapter->hdd_wmm_status.context_list, node) {
-		if (cur_entry->ts_id == ts_id) {
-			*del_tspec_handle = cur_entry->handle;
-			break;
-		}
-	}
-	mutex_unlock(&adapter->hdd_wmm_status.mutex);
-}
-
-/**
  * __wlan_hdd_cfg80211_config_tspec() - config tspec
  * @wiphy: pointer to wireless wiphy structure.
  * @wdev: pointer to wireless_dev structure.
@@ -3009,8 +2843,6 @@ static int __wlan_hdd_cfg80211_config_tspec(struct wiphy *wiphy,
 	struct sme_qos_wmmtspecinfo tspec;
 	struct nlattr *tb[QCA_WLAN_VENDOR_ATTR_CONFIG_TSPEC_MAX + 1];
 	uint8_t oper, ts_id;
-	static uint32_t add_tspec_handle = MIN_HANDLE_VALUE;
-	uint32_t del_tspec_handle = 0;
 	hdd_wlan_wmm_status_e status;
 	int ret;
 
@@ -3182,12 +3014,8 @@ static int __wlan_hdd_cfg80211_config_tspec(struct wiphy *wiphy,
 		if (tb[CONFIG_TSPEC_MINIMUM_PHY_RATE])
 			tspec.min_phy_rate = nla_get_u32(
 					     tb[CONFIG_TSPEC_MINIMUM_PHY_RATE]);
-		/*
-		 * ts_id send by upper layer is always same as handle and host
-		 * doesn't add new TS entry for same handle. To avoid this
-		 * issue host modifies handle internally.
-		 */
-		status = hdd_wmm_addts(adapter, add_tspec_handle, &tspec);
+
+		status = hdd_wmm_addts(adapter, ts_id, &tspec);
 		if (status == HDD_WLAN_WMM_STATUS_SETUP_FAILED ||
 		    status == HDD_WLAN_WMM_STATUS_SETUP_FAILED_BAD_PARAM ||
 		    status == HDD_WLAN_WMM_STATUS_SETUP_FAILED_NO_WMM ||
@@ -3199,23 +3027,11 @@ static int __wlan_hdd_cfg80211_config_tspec(struct wiphy *wiphy,
 			hdd_err_rl("hdd_wmm_addts failed %d", status);
 			return -EINVAL;
 		}
-
-		add_tspec_handle++;
-		if (add_tspec_handle >= MAX_HANDLE_VALUE)
-			add_tspec_handle = MIN_HANDLE_VALUE;
 		break;
 
 	case QCA_WLAN_TSPEC_DEL:
-		/*
-		 * Host modifies handle internally. So, always
-		 * delete the entry for provided ts_id.
-		 */
-		hdd_get_handle_from_ts_id(adapter, ts_id, &del_tspec_handle);
-		if (!del_tspec_handle) {
-			hdd_err_rl("ts_id is already freed %d", ts_id);
-			break;
-		}
-		status = hdd_wmm_delts(adapter, del_tspec_handle);
+
+		status = hdd_wmm_delts(adapter, ts_id);
 		if (status == HDD_WLAN_WMM_STATUS_RELEASE_FAILED ||
 		    status == HDD_WLAN_WMM_STATUS_RELEASE_FAILED_BAD_PARAM ||
 		    status == HDD_WLAN_WMM_STATUS_INTERNAL_FAILURE) {

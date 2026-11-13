@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -24,7 +24,6 @@
 #include "dp_peer.h"
 #include "dp_internal.h"
 #include <qdf_tracepoint.h>
-#include "dp_ipa.h"
 
 #ifdef RXDMA_OPTIMIZATION
 #ifndef RX_DATA_BUFFER_ALIGNMENT
@@ -44,19 +43,10 @@
 #define DP_DEFRAG_RBM(sw0_bm_id)	HAL_RX_BUF_RBM_SW3_BM(sw0_bm_id)
 #endif
 
-/* Max buffer in invalid peer SG list*/
-#define DP_MAX_INVALID_BUFFERS 10
-#ifdef DP_INVALID_PEER_ASSERT
-#define DP_PDEV_INVALID_PEER_MSDU_CHECK(head, tail) \
-		do {                                \
-			qdf_assert_always(!(head)); \
-			qdf_assert_always(!(tail)); \
-		} while (0)
-#else
-#define DP_PDEV_INVALID_PEER_MSDU_CHECK(head, tail) /* no op */
-#endif
-
 #define RX_BUFFER_RESERVATION   0
+#ifdef QCA_WIFI_QCN9224
+#define RX_MON_MIN_HEAD_ROOM   64
+#endif
 
 #define DP_DEFAULT_NOISEFLOOR	(-96)
 
@@ -70,14 +60,12 @@
 #define dp_rx_info_rl(params...) \
 	__QDF_TRACE_RL(QDF_TRACE_LEVEL_INFO_HIGH, QDF_MODULE_ID_DP_RX, ## params)
 #define dp_rx_debug(params...) QDF_TRACE_DEBUG(QDF_MODULE_ID_DP_RX, params)
-#define dp_rx_err_err(params...) \
-	QDF_TRACE_ERROR(QDF_MODULE_ID_DP_RX_ERROR, params)
 
 /**
  * enum dp_rx_desc_state
  *
- * @RX_DESC_REPLENISHED: rx desc replenished
- * @RX_DESC_IN_FREELIST: rx desc in freelist
+ * @RX_DESC_REPLENISH: rx desc replenished
+ * @RX_DESC_FREELIST: rx desc in freelist
  */
 enum dp_rx_desc_state {
 	RX_DESC_REPLENISHED,
@@ -112,56 +100,39 @@ struct dp_rx_desc_dbg_info {
 /**
  * struct dp_rx_desc
  *
- * @nbuf:		VA of the "skb" posted
- * @rx_buf_start:	VA of the original Rx buffer, before
- *			movement of any skb->data pointer
- * @paddr_buf_start:	PA of the original Rx buffer, before
- *                      movement of any frag pointer
- * @cookie:		index into the sw array which holds
- *			the sw Rx descriptors
- *			Cookie space is 21 bits:
- *			lower 18 bits -- index
- *			upper  3 bits -- pool_id
- * @pool_id:		pool Id for which this allocated.
- *			Can only be used if there is no flow
- *			steering
- * @chip_id:		chip_id indicating MLO chip_id
- *			valid or used only in case of multi-chip MLO
- * @reuse_nbuf:		VA of the "skb" which is being reused
- * @magic:
- * @nbuf_data_addr:	VA of nbuf data posted
- * @dbg_info:
- * @prev_paddr_buf_start: paddr of the prev nbuf attach to rx_desc
- * @in_use:		rx_desc is in use
- * @unmapped:		used to mark rx_desc an unmapped if the corresponding
- *			nbuf is already unmapped
- * @in_err_state:	Nbuf sanity failed for this descriptor.
- * @has_reuse_nbuf:	the nbuf associated with this desc is also saved in
- *			reuse_nbuf field
- * @msdu_done_fail:	this particular rx_desc was dequeued from REO with
- *			msdu_done bit not set in data buffer.
+ * @nbuf		: VA of the "skb" posted
+ * @rx_buf_start	: VA of the original Rx buffer, before
+ *			  movement of any skb->data pointer
+ * @paddr_buf_start     : PA of the original Rx buffer, before
+ *                        movement of any frag pointer
+ * @cookie		: index into the sw array which holds
+ *			  the sw Rx descriptors
+ *			  Cookie space is 21 bits:
+ *			  lower 18 bits -- index
+ *			  upper  3 bits -- pool_id
+ * @pool_id		: pool Id for which this allocated.
+ *			  Can only be used if there is no flow
+ *			  steering
+ * @in_use		  rx_desc is in use
+ * @unmapped		  used to mark rx_desc an unmapped if the corresponding
+ *			  nbuf is already unmapped
+ * @in_err_state	: Nbuf sanity failed for this descriptor.
+ * @nbuf_data_addr	: VA of nbuf data posted
  */
 struct dp_rx_desc {
 	qdf_nbuf_t nbuf;
-#ifdef WLAN_SUPPORT_PPEDS
-	qdf_nbuf_t reuse_nbuf;
-#endif
 	uint8_t *rx_buf_start;
 	qdf_dma_addr_t paddr_buf_start;
 	uint32_t cookie;
 	uint8_t	 pool_id;
-	uint8_t chip_id;
 #ifdef RX_DESC_DEBUG_CHECK
 	uint32_t magic;
 	uint8_t *nbuf_data_addr;
 	struct dp_rx_desc_dbg_info *dbg_info;
-	qdf_dma_addr_t prev_paddr_buf_start;
 #endif
 	uint8_t	in_use:1,
 		unmapped:1,
-		in_err_state:1,
-		has_reuse_nbuf:1,
-		msdu_done_fail:1;
+		in_err_state:1;
 };
 
 #ifndef QCA_HOST_MODE_WIFI_DISABLED
@@ -217,41 +188,17 @@ struct dp_rx_desc {
 #define dp_rx_add_to_free_desc_list(head, tail, new) \
 	__dp_rx_add_to_free_desc_list(head, tail, new, __func__)
 
-#define dp_rx_add_to_free_desc_list_reuse(head, tail, new) \
-	__dp_rx_add_to_free_desc_list_reuse(head, tail, new, __func__)
-
 #define dp_rx_buffers_replenish(soc, mac_id, rxdma_srng, rx_desc_pool, \
-				num_buffers, desc_list, tail, req_only) \
+				num_buffers, desc_list, tail) \
 	__dp_rx_buffers_replenish(soc, mac_id, rxdma_srng, rx_desc_pool, \
-				  num_buffers, desc_list, tail, req_only, \
-				  false, __func__)
-
-#ifdef WLAN_SUPPORT_RX_FISA
-/**
- * dp_rx_set_hdr_pad() - set l3 padding in nbuf cb
- * @nbuf: pkt skb pointer
- * @l3_padding: l3 padding
- *
- * Return: None
- */
-static inline
-void dp_rx_set_hdr_pad(qdf_nbuf_t nbuf, uint32_t l3_padding)
-{
-	QDF_NBUF_CB_RX_PACKET_L3_HDR_PAD(nbuf) = l3_padding;
-}
-#else
-static inline
-void dp_rx_set_hdr_pad(qdf_nbuf_t nbuf, uint32_t l3_padding)
-{
-}
-#endif
+				  num_buffers, desc_list, tail, __func__)
 
 #ifdef DP_RX_SPECIAL_FRAME_NEED
 /**
  * dp_rx_is_special_frame() - check is RX frame special needed
  *
  * @nbuf: RX skb pointer
- * @frame_mask: the mask for special frame needed
+ * @frame_mask: the mask for speical frame needed
  *
  * Check is RX frame wanted matched with mask
  *
@@ -267,11 +214,7 @@ bool dp_rx_is_special_frame(qdf_nbuf_t nbuf, uint32_t frame_mask)
 	    ((frame_mask & FRAME_MASK_IPV4_EAPOL) &&
 	     qdf_nbuf_is_ipv4_eapol_pkt(nbuf)) ||
 	    ((frame_mask & FRAME_MASK_IPV6_DHCP) &&
-	     qdf_nbuf_is_ipv6_dhcp_pkt(nbuf)) ||
-	    ((frame_mask & FRAME_MASK_DNS_QUERY) &&
-	     qdf_nbuf_data_is_dns_query(nbuf)) ||
-	    ((frame_mask & FRAME_MASK_DNS_RESP) &&
-	     qdf_nbuf_data_is_dns_response(nbuf)))
+	     qdf_nbuf_is_ipv6_dhcp_pkt(nbuf)))
 		return true;
 
 	return false;
@@ -284,15 +227,15 @@ bool dp_rx_is_special_frame(qdf_nbuf_t nbuf, uint32_t frame_mask)
  * @soc: Datapath soc handler
  * @peer: pointer to DP peer
  * @nbuf: pointer to the skb of RX frame
- * @frame_mask: the mask for special frame needed
+ * @frame_mask: the mask for speical frame needed
  * @rx_tlv_hdr: start of rx tlv header
  *
  * note: Msdu_len must have been stored in QDF_NBUF_CB_RX_PKT_LEN(nbuf) and
  * single nbuf is expected.
  *
- * Return: true - nbuf has been delivered to stack, false - not.
+ * return: true - nbuf has been delivered to stack, false - not.
  */
-bool dp_rx_deliver_special_frame(struct dp_soc *soc, struct dp_txrx_peer *peer,
+bool dp_rx_deliver_special_frame(struct dp_soc *soc, struct dp_peer *peer,
 				 qdf_nbuf_t nbuf, uint32_t frame_mask,
 				 uint8_t *rx_tlv_hdr);
 #else
@@ -303,7 +246,7 @@ bool dp_rx_is_special_frame(qdf_nbuf_t nbuf, uint32_t frame_mask)
 }
 
 static inline
-bool dp_rx_deliver_special_frame(struct dp_soc *soc, struct dp_txrx_peer *peer,
+bool dp_rx_deliver_special_frame(struct dp_soc *soc, struct dp_peer *peer,
 				 qdf_nbuf_t nbuf, uint32_t frame_mask,
 				 uint8_t *rx_tlv_hdr)
 {
@@ -311,83 +254,21 @@ bool dp_rx_deliver_special_frame(struct dp_soc *soc, struct dp_txrx_peer *peer,
 }
 #endif
 
-#ifdef FEATURE_RX_LINKSPEED_ROAM_TRIGGER
-/**
- * dp_rx_data_is_specific() - Used to exclude specific frames
- *                            not practical for getting rx
- *                            stats like rate, mcs, nss, etc.
- *
- * @hal_soc_hdl: soc handler
- * @rx_tlv_hdr: rx tlv header
- * @nbuf: RX skb pointer
- *
- * Return: true - a specific frame  not suitable
- *                for getting rx stats from it.
- *         false - a common frame suitable for
- *                 getting rx stats from it.
- */
-static inline
-bool dp_rx_data_is_specific(hal_soc_handle_t hal_soc_hdl,
-			    uint8_t *rx_tlv_hdr,
-			    qdf_nbuf_t nbuf)
-{
-	if (qdf_unlikely(qdf_nbuf_is_da_mcbc(nbuf)))
-		return true;
-
-	if (!hal_rx_tlv_first_mpdu_get(hal_soc_hdl, rx_tlv_hdr))
-		return true;
-
-	if (!hal_rx_msdu_end_first_msdu_get(hal_soc_hdl, rx_tlv_hdr))
-		return true;
-
-	/* ARP, EAPOL is neither IPV6 ETH nor IPV4 ETH from L3 level */
-	if (qdf_likely(hal_rx_tlv_l3_type_get(hal_soc_hdl, rx_tlv_hdr) ==
-	    QDF_NBUF_TRAC_IPV4_ETH_TYPE)) {
-		if (qdf_nbuf_is_ipv4_dhcp_pkt(nbuf))
-			return true;
-	} else if (qdf_likely(hal_rx_tlv_l3_type_get(hal_soc_hdl, rx_tlv_hdr) ==
-		   QDF_NBUF_TRAC_IPV6_ETH_TYPE)) {
-		if (qdf_nbuf_is_ipv6_dhcp_pkt(nbuf))
-			return true;
-	} else {
-		return true;
-	}
-	return false;
-}
-#else
-static inline
-bool dp_rx_data_is_specific(hal_soc_handle_t hal_soc_hdl,
-			    uint8_t *rx_tlv_hdr,
-			    qdf_nbuf_t nbuf)
-
-{
-	/*
-	 * default return is true to make sure that rx stats
-	 * will not be handled when this feature is disabled
-	 */
-	return true;
-}
-#endif /* FEATURE_RX_LINKSPEED_ROAM_TRIGGER */
-
 #ifndef QCA_HOST_MODE_WIFI_DISABLED
 #ifdef DP_RX_DISABLE_NDI_MDNS_FORWARDING
 static inline
-bool dp_rx_check_ndi_mdns_fwding(struct dp_txrx_peer *ta_txrx_peer,
-				 qdf_nbuf_t nbuf, uint8_t link_id)
+bool dp_rx_check_ndi_mdns_fwding(struct dp_peer *ta_peer, qdf_nbuf_t nbuf)
 {
-	if (ta_txrx_peer->vdev->opmode == wlan_op_mode_ndi &&
+	if (ta_peer->vdev->opmode == wlan_op_mode_ndi &&
 	    qdf_nbuf_is_ipv6_mdns_pkt(nbuf)) {
-		DP_PEER_PER_PKT_STATS_INC(ta_txrx_peer,
-					  rx.intra_bss.mdns_no_fwd,
-					  1, link_id);
+		DP_STATS_INC(ta_peer, rx.intra_bss.mdns_no_fwd, 1);
 		return false;
 	}
-	return true;
+		return true;
 }
 #else
 static inline
-bool dp_rx_check_ndi_mdns_fwding(struct dp_txrx_peer *ta_txrx_peer,
-				 qdf_nbuf_t nbuf, uint8_t link_id)
+bool dp_rx_check_ndi_mdns_fwding(struct dp_peer *ta_peer, qdf_nbuf_t nbuf)
 {
 	return true;
 }
@@ -408,7 +289,7 @@ bool dp_rx_check_ndi_mdns_fwding(struct dp_txrx_peer *ta_txrx_peer,
 
 /**
  * struct dp_rx_cached_buf - rx cached buffer
- * @node: linked list node
+ * @list: linked list node
  * @buf: skb buffer
  */
 struct dp_rx_cached_buf {
@@ -418,13 +299,13 @@ struct dp_rx_cached_buf {
 
 #endif /* QCA_HOST_MODE_WIFI_DISABLED */
 
-/**
- * dp_rx_xor_block() - xor block of data
- * @b: destination data block
- * @a: source data block
- * @len: length of the data to process
+/*
+ *dp_rx_xor_block() - xor block of data
+ *@b: destination data block
+ *@a: source data block
+ *@len: length of the data to process
  *
- * Return: None
+ *Returns: None
  */
 static inline void dp_rx_xor_block(uint8_t *b, const uint8_t *a, qdf_size_t len)
 {
@@ -434,31 +315,31 @@ static inline void dp_rx_xor_block(uint8_t *b, const uint8_t *a, qdf_size_t len)
 		b[i] ^= a[i];
 }
 
-/**
- * dp_rx_rotl() - rotate the bits left
- * @val: unsigned integer input value
- * @bits: number of bits
+/*
+ *dp_rx_rotl() - rotate the bits left
+ *@val: unsigned integer input value
+ *@bits: number of bits
  *
- * Return: Integer with left rotated by number of 'bits'
+ *Returns: Integer with left rotated by number of 'bits'
  */
 static inline uint32_t dp_rx_rotl(uint32_t val, int bits)
 {
 	return (val << bits) | (val >> (32 - bits));
 }
 
-/**
- * dp_rx_rotr() - rotate the bits right
- * @val: unsigned integer input value
- * @bits: number of bits
+/*
+ *dp_rx_rotr() - rotate the bits right
+ *@val: unsigned integer input value
+ *@bits: number of bits
  *
- * Return: Integer with right rotated by number of 'bits'
+ *Returns: Integer with right rotated by number of 'bits'
  */
 static inline uint32_t dp_rx_rotr(uint32_t val, int bits)
 {
 	return (val >> bits) | (val << (32 - bits));
 }
 
-/**
+/*
  * dp_set_rx_queue() - set queue_mapping in skb
  * @nbuf: skb
  * @queue_id: rx queue_id
@@ -477,25 +358,25 @@ static inline void dp_set_rx_queue(qdf_nbuf_t nbuf, uint8_t queue_id)
 }
 #endif
 
-/**
- * dp_rx_xswap() - swap the bits left
- * @val: unsigned integer input value
+/*
+ *dp_rx_xswap() - swap the bits left
+ *@val: unsigned integer input value
  *
- * Return: Integer with bits swapped
+ *Returns: Integer with bits swapped
  */
 static inline uint32_t dp_rx_xswap(uint32_t val)
 {
 	return ((val & 0x00ff00ff) << 8) | ((val & 0xff00ff00) >> 8);
 }
 
-/**
- * dp_rx_get_le32_split() - get little endian 32 bits split
- * @b0: byte 0
- * @b1: byte 1
- * @b2: byte 2
- * @b3: byte 3
+/*
+ *dp_rx_get_le32_split() - get little endian 32 bits split
+ *@b0: byte 0
+ *@b1: byte 1
+ *@b2: byte 2
+ *@b3: byte 3
  *
- * Return: Integer with split little endian 32 bits
+ *Returns: Integer with split little endian 32 bits
  */
 static inline uint32_t dp_rx_get_le32_split(uint8_t b0, uint8_t b1, uint8_t b2,
 					uint8_t b3)
@@ -503,23 +384,26 @@ static inline uint32_t dp_rx_get_le32_split(uint8_t b0, uint8_t b1, uint8_t b2,
 	return b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
 }
 
-/**
- * dp_rx_get_le32() - get little endian 32 bits
- * @p: source 32-bit value
+/*
+ *dp_rx_get_le32() - get little endian 32 bits
+ *@b0: byte 0
+ *@b1: byte 1
+ *@b2: byte 2
+ *@b3: byte 3
  *
- * Return: Integer with little endian 32 bits
+ *Returns: Integer with little endian 32 bits
  */
 static inline uint32_t dp_rx_get_le32(const uint8_t *p)
 {
 	return dp_rx_get_le32_split(p[0], p[1], p[2], p[3]);
 }
 
-/**
+/*
  * dp_rx_put_le32() - put little endian 32 bits
  * @p: destination char array
  * @v: source 32-bit integer
  *
- * Return: None
+ * Returns: None
  */
 static inline void dp_rx_put_le32(uint8_t *p, uint32_t v)
 {
@@ -545,8 +429,8 @@ static inline void dp_rx_put_le32(uint8_t *p, uint32_t v)
 /**
  * struct dp_rx_desc_list_elem_t
  *
- * @next: Next pointer to form free list
- * @rx_desc: DP Rx descriptor
+ * @next		: Next pointer to form free list
+ * @rx_desc		: DP Rx descriptor
  */
 union dp_rx_desc_list_elem_t {
 	union dp_rx_desc_list_elem_t *next;
@@ -558,7 +442,6 @@ union dp_rx_desc_list_elem_t {
  * dp_rx_desc_find() - find dp rx descriptor from page ID and offset
  * @page_id: Page ID
  * @offset: Offset of the descriptor element
- * @rx_pool: RX pool
  *
  * Return: RX descriptor element
  */
@@ -598,7 +481,7 @@ struct dp_rx_desc *dp_get_rx_mon_status_desc_from_cookie(struct dp_soc *soc,
 	struct rx_desc_pool *rx_desc_pool;
 	union dp_rx_desc_list_elem_t *rx_desc_elem;
 
-	if (qdf_unlikely(pool_id >= NUM_RXDMA_STATUS_RINGS_PER_PDEV))
+	if (qdf_unlikely(pool_id >= NUM_RXDMA_RINGS_PER_PDEV))
 		return NULL;
 
 	rx_desc_pool = &pool[pool_id];
@@ -769,8 +652,7 @@ dp_rx_cookie_reset_invalid_bit(hal_ring_desc_t ring_desc)
 
 #endif /* QCA_HOST_MODE_WIFI_DISABLED */
 
-#if defined(RX_DESC_MULTI_PAGE_ALLOC) && \
-	defined(DP_WAR_VALIDATE_RX_ERR_MSDU_COOKIE)
+#ifdef RX_DESC_MULTI_PAGE_ALLOC
 /**
  * dp_rx_is_sw_cookie_valid() - check whether SW cookie valid
  * @soc: dp soc ref
@@ -807,9 +689,8 @@ fail:
  * @soc: dp soc ref
  * @cookie: Rx buf SW cookie value
  *
- * When multi page alloc is disabled SW cookie validness is
+ * Return: true if cookie is valid else false
  * checked while fetching Rx descriptor, so no need to check here
- *
  * Return: true if cookie is valid else false
  */
 static inline bool dp_rx_is_sw_cookie_valid(struct dp_soc *soc,
@@ -819,140 +700,42 @@ static inline bool dp_rx_is_sw_cookie_valid(struct dp_soc *soc,
 }
 #endif
 
-/**
- * dp_rx_desc_pool_is_allocated() - check if memory is allocated for the
- *					rx descriptor pool
- * @rx_desc_pool: rx descriptor pool pointer
- *
- * Return: QDF_STATUS  QDF_STATUS_SUCCESS
- *		       QDF_STATUS_E_NOMEM
- */
 QDF_STATUS dp_rx_desc_pool_is_allocated(struct rx_desc_pool *rx_desc_pool);
-
-/**
- * dp_rx_desc_pool_alloc() - Allocate a memory pool for software rx
- *			     descriptors
- * @soc: core txrx main context
- * @pool_size: number of rx descriptors (size of the pool)
- * @rx_desc_pool: rx descriptor pool pointer
- *
- * Return: QDF_STATUS  QDF_STATUS_SUCCESS
- *		       QDF_STATUS_E_NOMEM
- *		       QDF_STATUS_E_FAULT
- */
 QDF_STATUS dp_rx_desc_pool_alloc(struct dp_soc *soc,
 				 uint32_t pool_size,
 				 struct rx_desc_pool *rx_desc_pool);
 
-/**
- * dp_rx_desc_pool_init() - Initialize the software RX descriptor pool
- * @soc: core txrx main context
- * @pool_id: pool_id which is one of 3 mac_ids
- * @pool_size: size of the rx descriptor pool
- * @rx_desc_pool: rx descriptor pool pointer
- *
- * Convert the pool of memory into a list of rx descriptors and create
- * locks to access this list of rx descriptors.
- *
- */
 void dp_rx_desc_pool_init(struct dp_soc *soc, uint32_t pool_id,
 			  uint32_t pool_size,
 			  struct rx_desc_pool *rx_desc_pool);
 
-/**
- * dp_rx_add_desc_list_to_free_list() - append unused desc_list back to
- *					freelist.
- * @soc: core txrx main context
- * @local_desc_list: local desc list provided by the caller
- * @tail: attach the point to last desc of local desc list
- * @pool_id: pool_id which is one of 3 mac_ids
- * @rx_desc_pool: rx descriptor pool pointer
- */
 void dp_rx_add_desc_list_to_free_list(struct dp_soc *soc,
 				union dp_rx_desc_list_elem_t **local_desc_list,
 				union dp_rx_desc_list_elem_t **tail,
 				uint16_t pool_id,
 				struct rx_desc_pool *rx_desc_pool);
 
-/**
- * dp_rx_get_free_desc_list() - provide a list of descriptors from
- *				the free rx desc pool.
- * @soc: core txrx main context
- * @pool_id: pool_id which is one of 3 mac_ids
- * @rx_desc_pool: rx descriptor pool pointer
- * @num_descs: number of descs requested from freelist
- * @desc_list: attach the descs to this list (output parameter)
- * @tail: attach the point to last desc of free list (output parameter)
- *
- * Return: number of descs allocated from free list.
- */
 uint16_t dp_rx_get_free_desc_list(struct dp_soc *soc, uint32_t pool_id,
 				struct rx_desc_pool *rx_desc_pool,
 				uint16_t num_descs,
 				union dp_rx_desc_list_elem_t **desc_list,
 				union dp_rx_desc_list_elem_t **tail);
 
-/**
- * dp_rx_pdev_desc_pool_alloc() -  allocate memory for software rx descriptor
- *				   pool
- * @pdev: core txrx pdev context
- *
- * Return: QDF_STATUS - QDF_STATUS_SUCCESS
- *			QDF_STATUS_E_NOMEM
- */
 QDF_STATUS dp_rx_pdev_desc_pool_alloc(struct dp_pdev *pdev);
-
-/**
- * dp_rx_pdev_desc_pool_free() - free software rx descriptor pool
- * @pdev: core txrx pdev context
- */
 void dp_rx_pdev_desc_pool_free(struct dp_pdev *pdev);
 
-/**
- * dp_rx_pdev_desc_pool_init() - initialize software rx descriptors
- * @pdev: core txrx pdev context
- *
- * Return: QDF_STATUS - QDF_STATUS_SUCCESS
- *			QDF_STATUS_E_NOMEM
- */
 QDF_STATUS dp_rx_pdev_desc_pool_init(struct dp_pdev *pdev);
-
-/**
- * dp_rx_pdev_desc_pool_deinit() - de-initialize software rx descriptor pools
- * @pdev: core txrx pdev context
- *
- * This function resets the freelist of rx descriptors and destroys locks
- * associated with this list of descriptors.
- */
 void dp_rx_pdev_desc_pool_deinit(struct dp_pdev *pdev);
-
 void dp_rx_desc_pool_deinit(struct dp_soc *soc,
 			    struct rx_desc_pool *rx_desc_pool,
 			    uint32_t pool_id);
 
 QDF_STATUS dp_rx_pdev_attach(struct dp_pdev *pdev);
-
-/**
- * dp_rx_pdev_buffers_alloc() - Allocate nbufs (skbs) and replenish RxDMA ring
- * @pdev: core txrx pdev context
- *
- * Return: QDF_STATUS - QDF_STATUS_SUCCESS
- *			QDF_STATUS_E_NOMEM
- */
 QDF_STATUS dp_rx_pdev_buffers_alloc(struct dp_pdev *pdev);
-
-/**
- * dp_rx_pdev_buffers_free() - Free nbufs (skbs)
- * @pdev: core txrx pdev context
- */
 void dp_rx_pdev_buffers_free(struct dp_pdev *pdev);
 
 void dp_rx_pdev_detach(struct dp_pdev *pdev);
 
-/**
- * dp_print_napi_stats() - NAPI stats
- * @soc: soc handle
- */
 void dp_print_napi_stats(struct dp_soc *soc);
 
 /**
@@ -972,6 +755,37 @@ dp_rx_process(struct dp_intr *int_ctx, hal_ring_handle_t hal_ring_hdl,
 	      uint32_t quota);
 
 /**
+ * dp_rx_err_process() - Processes error frames routed to REO error ring
+ * @int_ctx: pointer to DP interrupt context
+ * @soc: core txrx main context
+ * @hal_ring: opaque pointer to the HAL Rx Error Ring, which will be serviced
+ * @quota: No. of units (packets) that can be serviced in one shot.
+ *
+ * This function implements error processing and top level demultiplexer
+ * for all the frames routed to REO error ring.
+ *
+ * Return: uint32_t: No. of elements processed
+ */
+uint32_t dp_rx_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
+			   hal_ring_handle_t hal_ring_hdl, uint32_t quota);
+
+/**
+ * dp_rx_wbm_err_process() - Processes error frames routed to WBM release ring
+ * @int_ctx: pointer to DP interrupt context
+ * @soc: core txrx main context
+ * @hal_ring: opaque pointer to the HAL Rx Error Ring, which will be serviced
+ * @quota: No. of units (packets) that can be serviced in one shot.
+ *
+ * This function implements error processing and top level demultiplexer
+ * for all the frames routed to WBM2HOST sw release ring.
+ *
+ * Return: uint32_t: No. of elements processed
+ */
+uint32_t
+dp_rx_wbm_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
+		      hal_ring_handle_t hal_ring_hdl, uint32_t quota);
+
+/**
  * dp_rx_sg_create() - create a frag_list for MSDUs which are spread across
  *		     multiple nbufs.
  * @soc: core txrx main context
@@ -984,14 +798,8 @@ dp_rx_process(struct dp_intr *int_ctx, hal_ring_handle_t hal_ring_hdl,
  */
 qdf_nbuf_t dp_rx_sg_create(struct dp_soc *soc, qdf_nbuf_t nbuf);
 
-/**
- * dp_rx_is_sg_supported() - SG packets processing supported or not.
- *
- * Return: returns true when processing is supported else false.
- */
-bool dp_rx_is_sg_supported(void);
 
-/**
+/*
  * dp_rx_desc_nbuf_and_pool_free() - free the sw rx desc pool called during
  *				     de-initialization of wifi module.
  *
@@ -1006,22 +814,21 @@ void dp_rx_desc_nbuf_and_pool_free(struct dp_soc *soc, uint32_t pool_id,
 
 #endif /* QCA_HOST_MODE_WIFI_DISABLED */
 
-/**
+/*
  * dp_rx_desc_nbuf_free() - free the sw rx desc nbufs called during
  *			    de-initialization of wifi module.
  *
  * @soc: core txrx main context
+ * @pool_id: pool_id which is one of 3 mac_ids
  * @rx_desc_pool: rx descriptor pool pointer
- * @is_mon_pool: true if this is a monitor pool
  *
  * Return: None
  */
 void dp_rx_desc_nbuf_free(struct dp_soc *soc,
-			  struct rx_desc_pool *rx_desc_pool,
-			  bool is_mon_pool);
+			  struct rx_desc_pool *rx_desc_pool);
 
 #ifdef DP_RX_MON_MEM_FRAG
-/**
+/*
  * dp_rx_desc_frag_free() - free the sw rx desc frag called during
  *			    de-initialization of wifi module.
  *
@@ -1039,7 +846,7 @@ void dp_rx_desc_frag_free(struct dp_soc *soc,
 {
 }
 #endif
-/**
+/*
  * dp_rx_desc_pool_free() - free the sw rx desc array called during
  *			    de-initialization of wifi module.
  *
@@ -1051,22 +858,11 @@ void dp_rx_desc_frag_free(struct dp_soc *soc,
 void dp_rx_desc_pool_free(struct dp_soc *soc,
 			  struct rx_desc_pool *rx_desc_pool);
 
-/**
- * dp_rx_deliver_raw() - process RAW mode pkts and hand over the
- *				pkts to RAW mode simulation to
- *				decapsulate the pkt.
- * @vdev: vdev on which RAW mode is enabled
- * @nbuf_list: list of RAW pkts to process
- * @peer: peer object from which the pkt is rx
- * @link_id: link Id on which the packet is received
- *
- * Return: void
- */
 void dp_rx_deliver_raw(struct dp_vdev *vdev, qdf_nbuf_t nbuf_list,
-		       struct dp_txrx_peer *peer, uint8_t link_id);
+				struct dp_peer *peer);
 
 #ifdef RX_DESC_LOGGING
-/**
+/*
  * dp_rx_desc_alloc_dbg_info() - Alloc memory for rx descriptor debug
  *  structure
  * @rx_desc: rx descriptor pointer
@@ -1079,7 +875,7 @@ void dp_rx_desc_alloc_dbg_info(struct dp_rx_desc *rx_desc)
 	rx_desc->dbg_info = qdf_mem_malloc(sizeof(struct dp_rx_desc_dbg_info));
 }
 
-/**
+/*
  * dp_rx_desc_free_dbg_info() - Free rx descriptor debug
  *  structure memory
  * @rx_desc: rx descriptor pointer
@@ -1092,12 +888,10 @@ void dp_rx_desc_free_dbg_info(struct dp_rx_desc *rx_desc)
 	qdf_mem_free(rx_desc->dbg_info);
 }
 
-/**
+/*
  * dp_rx_desc_update_dbg_info() - Update rx descriptor debug info
  *  structure memory
  * @rx_desc: rx descriptor pointer
- * @func_name: name of calling function
- * @flag:
  *
  * Return: None
  */
@@ -1143,7 +937,7 @@ void dp_rx_desc_update_dbg_info(struct dp_rx_desc *rx_desc,
 #endif /* RX_DESC_LOGGING */
 
 /**
- * __dp_rx_add_to_free_desc_list() - Adds to a local free descriptor list
+ * dp_rx_add_to_free_desc_list() - Adds to a local free descriptor list
  *
  * @head: pointer to the head of local free list
  * @tail: pointer to the tail of local free list
@@ -1171,30 +965,14 @@ void __dp_rx_add_to_free_desc_list(union dp_rx_desc_list_elem_t **head,
 		*tail = *head;
 }
 
-/**
- * dp_rx_process_invalid_peer(): Function to pass invalid peer list to umac
- * @soc: DP SOC handle
- * @nbuf: network buffer
- * @mac_id: mac_id which is one of 3 mac_ids(Assuming mac_id and
- * pool_id has same mapping)
- *
- * Return: integer type
- */
 uint8_t dp_rx_process_invalid_peer(struct dp_soc *soc, qdf_nbuf_t nbuf,
 				   uint8_t mac_id);
-
-/**
- * dp_rx_process_invalid_peer_wrapper(): Function to wrap invalid peer handler
- * @soc: DP SOC handle
- * @mpdu: mpdu for which peer is invalid
- * @mpdu_done: if an mpdu is completed
- * @mac_id: mac_id which is one of 3 mac_ids(Assuming mac_id and
- * pool_id has same mapping)
- *
- * Return: integer type
- */
 void dp_rx_process_invalid_peer_wrapper(struct dp_soc *soc,
 		qdf_nbuf_t mpdu, bool mpdu_done, uint8_t mac_id);
+void dp_rx_process_mic_error(struct dp_soc *soc, qdf_nbuf_t nbuf,
+			     uint8_t *rx_tlv_hdr, struct dp_peer *peer);
+void dp_2k_jump_handle(struct dp_soc *soc, qdf_nbuf_t nbuf, uint8_t *rx_tlv_hdr,
+		       uint16_t peer_id, uint8_t tid);
 
 #define DP_RX_HEAD_APPEND(head, elem) \
 	do {                                                            \
@@ -1229,7 +1007,7 @@ void dp_rx_process_invalid_peer_wrapper(struct dp_soc *soc,
 		qdf_nbuf_set_next((ptail), NULL);                     \
 	} while (0)
 
-#if defined(QCA_PADDR_CHECK_ON_3RD_PARTY_PLATFORM)
+#if defined(QCA_PADDR_CHECK_ON_3TH_PLATFORM)
 /*
  * on some third-party platform, the memory below 0x2000
  * is reserved for target use, so any memory allocated in this
@@ -1247,7 +1025,7 @@ void dp_rx_process_invalid_peer_wrapper(struct dp_soc *soc,
 #define DP_PHY_ADDR_RESERVED	0x50000000
 #endif
 
-#if defined(QCA_PADDR_CHECK_ON_3RD_PARTY_PLATFORM) || defined(BUILD_X86)
+#if defined(QCA_PADDR_CHECK_ON_3TH_PLATFORM) || defined(BUILD_X86)
 /**
  * dp_check_paddr() - check if current phy address is valid or not
  * @dp_soc: core txrx main context
@@ -1405,11 +1183,11 @@ static inline bool dp_nbuf_dst_addr_is_self_addr(struct dp_vdev *vdev,
 				    QDF_NBUF_DEST_MAC_OFFSET);
 }
 
-/**
+/*
  * dp_rx_intrabss_eapol_drop_check() - API For EAPOL
  *  pkt with DA not equal to vdev mac addr, fwd is not allowed.
  * @soc: core txrx main context
- * @ta_txrx_peer: source peer entry
+ * @ta_peer: source peer entry
  * @rx_tlv_hdr: start address of rx tlvs
  * @nbuf: nbuf that has to be intrabss forwarded
  *
@@ -1417,14 +1195,12 @@ static inline bool dp_nbuf_dst_addr_is_self_addr(struct dp_vdev *vdev,
  */
 static inline
 bool dp_rx_intrabss_eapol_drop_check(struct dp_soc *soc,
-				     struct dp_txrx_peer *ta_txrx_peer,
+				     struct dp_peer *ta_peer,
 				     uint8_t *rx_tlv_hdr, qdf_nbuf_t nbuf)
 {
 	if (qdf_unlikely(qdf_nbuf_is_ipv4_eapol_pkt(nbuf) &&
-			 !(dp_nbuf_dst_addr_is_self_addr(ta_txrx_peer->vdev,
-							 nbuf) ||
-			   dp_nbuf_dst_addr_is_mld_addr(ta_txrx_peer->vdev,
-							nbuf)))) {
+			 !(dp_nbuf_dst_addr_is_self_addr(ta_peer->vdev, nbuf) ||
+			   dp_nbuf_dst_addr_is_mld_addr(ta_peer->vdev, nbuf)))) {
 		qdf_nbuf_free(nbuf);
 		DP_STATS_INC(soc, rx.err.intrabss_eapol_drop, 1);
 		return true;
@@ -1436,48 +1212,21 @@ bool dp_rx_intrabss_eapol_drop_check(struct dp_soc *soc,
 
 static inline
 bool dp_rx_intrabss_eapol_drop_check(struct dp_soc *soc,
-				     struct dp_txrx_peer *ta_txrx_peer,
+				     struct dp_peer *ta_peer,
 				     uint8_t *rx_tlv_hdr, qdf_nbuf_t nbuf)
 {
 	return false;
 }
 #endif /* DISABLE_EAPOL_INTRABSS_FWD */
 
-/**
- * dp_rx_intrabss_mcbc_fwd() - Does intrabss forward for mcast packets
- * @soc: core txrx main context
- * @ta_peer: source peer entry
- * @rx_tlv_hdr: start address of rx tlvs
- * @nbuf: nbuf that has to be intrabss forwarded
- * @tid_stats: tid stats pointer
- * @link_id: link Id on which packet is received
- *
- * Return: bool: true if it is forwarded else false
- */
-bool dp_rx_intrabss_mcbc_fwd(struct dp_soc *soc,
-			     struct dp_txrx_peer *ta_peer,
+bool dp_rx_intrabss_mcbc_fwd(struct dp_soc *soc, struct dp_peer *ta_peer,
 			     uint8_t *rx_tlv_hdr, qdf_nbuf_t nbuf,
-			     struct cdp_tid_rx_stats *tid_stats,
-			     uint8_t link_id);
+			     struct cdp_tid_rx_stats *tid_stats);
 
-/**
- * dp_rx_intrabss_ucast_fwd() - Does intrabss forward for unicast packets
- * @soc: core txrx main context
- * @ta_peer: source peer entry
- * @tx_vdev_id: VDEV ID for Intra-BSS TX
- * @rx_tlv_hdr: start address of rx tlvs
- * @nbuf: nbuf that has to be intrabss forwarded
- * @tid_stats: tid stats pointer
- * @link_id: link Id on which packet is received
- *
- * Return: bool: true if it is forwarded else false
- */
-bool dp_rx_intrabss_ucast_fwd(struct dp_soc *soc,
-			      struct dp_txrx_peer *ta_peer,
+bool dp_rx_intrabss_ucast_fwd(struct dp_soc *soc, struct dp_peer *ta_peer,
 			      uint8_t tx_vdev_id,
 			      uint8_t *rx_tlv_hdr, qdf_nbuf_t nbuf,
-			      struct cdp_tid_rx_stats *tid_stats,
-			      uint8_t link_id);
+			      struct cdp_tid_rx_stats *tid_stats);
 
 /**
  * dp_rx_defrag_concat() - Concatenate the fragments
@@ -1513,7 +1262,7 @@ static inline QDF_STATUS dp_rx_defrag_concat(qdf_nbuf_t dst, qdf_nbuf_t src)
 
 #ifndef FEATURE_WDS
 void dp_rx_da_learn(struct dp_soc *soc, uint8_t *rx_tlv_hdr,
-		    struct dp_txrx_peer *ta_txrx_peer, qdf_nbuf_t nbuf);
+		    struct dp_peer *ta_peer, qdf_nbuf_t nbuf);
 
 static inline QDF_STATUS dp_rx_ast_set_active(struct dp_soc *soc, uint16_t sa_idx, bool is_active)
 {
@@ -1523,22 +1272,14 @@ static inline QDF_STATUS dp_rx_ast_set_active(struct dp_soc *soc, uint16_t sa_id
 static inline void
 dp_rx_wds_srcport_learn(struct dp_soc *soc,
 			uint8_t *rx_tlv_hdr,
-			struct dp_txrx_peer *txrx_peer,
+			struct dp_peer *ta_peer,
 			qdf_nbuf_t nbuf,
 			struct hal_rx_msdu_metadata msdu_metadata)
 {
 }
-
-static inline void
-dp_rx_ipa_wds_srcport_learn(struct dp_soc *soc,
-			    struct dp_peer *ta_peer, qdf_nbuf_t nbuf,
-			    struct hal_rx_msdu_metadata msdu_end_info,
-			    bool ad4_valid, bool chfrag_start)
-{
-}
 #endif
 
-/**
+/*
  * dp_rx_desc_dump() - dump the sw rx descriptor
  *
  * @rx_desc: sw rx descriptor
@@ -1552,7 +1293,7 @@ static inline void dp_rx_desc_dump(struct dp_rx_desc *rx_desc)
 
 #ifndef QCA_HOST_MODE_WIFI_DISABLED
 
-/**
+/*
  * check_qwrap_multicast_loopback() - Check if rx packet is a loopback packet.
  *					In qwrap mode, packets originated from
  *					any vdev should not loopback and
@@ -1617,7 +1358,6 @@ static inline bool check_qwrap_multicast_loopback(struct dp_vdev *vdev,
  * @ring_index: REO ring number, not used for error & monitor ring
  * @is_reo_exception: flag to indicate if rx from REO ring or exception ring
  * @is_update_stats: flag to indicate whether to update stats or not
- *
  * Return: void
  */
 static inline void
@@ -1637,7 +1377,6 @@ dp_rx_update_protocol_tag(struct dp_soc *soc, struct dp_vdev *vdev,
  * @vdev: vdev on which the packet is received
  * @nbuf: QDF pkt buffer on which the protocol tag should be set
  * @rx_tlv_hdr: rBbase address where the RX TLVs starts
- *
  * Return: bool
  */
 static inline bool
@@ -1657,7 +1396,7 @@ dp_rx_err_cce_drop(struct dp_soc *soc, struct dp_vdev *vdev,
  * @vdev: vdev on which the packet is received
  * @nbuf: QDF pkt buffer on which the protocol tag should be set
  * @rx_tlv_hdr: base address where the RX TLVs starts
- * @update_stats: flag to indicate whether to update stats or not
+ * @is_update_stats: flag to indicate whether to update stats or not
  *
  * Return: void
  */
@@ -1669,12 +1408,12 @@ dp_rx_update_flow_tag(struct dp_soc *soc, struct dp_vdev *vdev,
 #endif /* WLAN_SUPPORT_RX_FLOW_TAG */
 
 #define CRITICAL_BUFFER_THRESHOLD	64
-/**
- * __dp_rx_buffers_replenish() - replenish rxdma ring with rx nbufs
+/*
+ * dp_rx_buffers_replenish() - replenish rxdma ring with rx nbufs
  *			       called during dp rx initialization
  *			       and at the end of dp_rx_process.
  *
- * @dp_soc: core txrx main context
+ * @soc: core txrx main context
  * @mac_id: mac_id which is one of 3 mac_ids
  * @dp_rxdma_srng: dp rxdma circular ring
  * @rx_desc_pool: Pointer to free Rx descriptor pool
@@ -1683,12 +1422,7 @@ dp_rx_update_flow_tag(struct dp_soc *soc, struct dp_vdev *vdev,
  *	       or NULL during dp rx initialization or out of buffer
  *	       interrupt.
  * @tail: tail of descs list
- * @req_only: If true don't replenish more than req buffers
- * @force_replenish: replenish full ring without limit check this
- *                   this field will be considered only when desc_list
- *                   is NULL and req_only is false
  * @func_name: name of the caller function
- *
  * Return: return success or failure
  */
 QDF_STATUS __dp_rx_buffers_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
@@ -1697,112 +1431,13 @@ QDF_STATUS __dp_rx_buffers_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
 				 uint32_t num_req_buffers,
 				 union dp_rx_desc_list_elem_t **desc_list,
 				 union dp_rx_desc_list_elem_t **tail,
-				 bool req_only,
-				 bool force_replenish,
 				 const char *func_name);
 
-/**
- * __dp_rx_buffers_no_map_replenish() - replenish rxdma ring with rx nbufs
- *					use direct APIs to get invalidate
- *					and get the physical address of the
- *					nbuf instead of map api,called during
- *					dp rx initialization and at the end
- *					of dp_rx_process.
- *
- * @dp_soc: core txrx main context
- * @mac_id: mac_id which is one of 3 mac_ids
- * @dp_rxdma_srng: dp rxdma circular ring
- * @rx_desc_pool: Pointer to free Rx descriptor pool
- * @num_req_buffers: number of buffer to be replenished
- * @desc_list: list of descs if called from dp_rx_process
- *	       or NULL during dp rx initialization or out of buffer
- *	       interrupt.
- * @tail: tail of descs list
- *
- * Return: return success or failure
- */
-QDF_STATUS
-__dp_rx_buffers_no_map_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
-				 struct dp_srng *dp_rxdma_srng,
-				 struct rx_desc_pool *rx_desc_pool,
-				 uint32_t num_req_buffers,
-				 union dp_rx_desc_list_elem_t **desc_list,
-				 union dp_rx_desc_list_elem_t **tail);
-
-/**
- * __dp_rx_comp2refill_replenish() - replenish rxdma ring with rx nbufs
- *					use direct APIs to get invalidate
- *					and get the physical address of the
- *					nbuf instead of map api,called during
- *					dp rx initialization and at the end
- *					of dp_rx_process.
- *
- * @dp_soc: core txrx main context
- * @mac_id: mac_id which is one of 3 mac_ids
- * @dp_rxdma_srng: dp rxdma circular ring
- * @rx_desc_pool: Pointer to free Rx descriptor pool
- * @num_req_buffers: number of buffer to be replenished
- * @desc_list: list of descs if called from dp_rx_process
- *	       or NULL during dp rx initialization or out of buffer
- *	       interrupt.
- * @tail: tail of descs list
- * Return: return success or failure
- */
-QDF_STATUS
-__dp_rx_comp2refill_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
-			      struct dp_srng *dp_rxdma_srng,
-			      struct rx_desc_pool *rx_desc_pool,
-			      uint32_t num_req_buffers,
-			      union dp_rx_desc_list_elem_t **desc_list,
-			      union dp_rx_desc_list_elem_t **tail);
-
-/**
- * __dp_rx_buffers_no_map_lt_replenish() - replenish rxdma ring with rx nbufs
- *					use direct APIs to get invalidate
- *					and get the physical address of the
- *					nbuf instead of map api,called when
- *					low threshold interrupt is triggered
- *
- * @dp_soc: core txrx main context
- * @mac_id: mac_id which is one of 3 mac_ids
- * @dp_rxdma_srng: dp rxdma circular ring
- * @rx_desc_pool: Pointer to free Rx descriptor pool
- * @force_replenish: Force replenish the ring fully
- *
- * Return: return success or failure
- */
-QDF_STATUS
-__dp_rx_buffers_no_map_lt_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
-				    struct dp_srng *dp_rxdma_srng,
-				    struct rx_desc_pool *rx_desc_pool,
-				    bool force_replenish);
-
-/**
- * __dp_pdev_rx_buffers_no_map_attach() - replenish rxdma ring with rx nbufs
- *					use direct APIs to get invalidate
- *					and get the physical address of the
- *					nbuf instead of map api,called during
- *					dp rx initialization.
- *
- * @dp_soc: core txrx main context
- * @mac_id: mac_id which is one of 3 mac_ids
- * @dp_rxdma_srng: dp rxdma circular ring
- * @rx_desc_pool: Pointer to free Rx descriptor pool
- * @num_req_buffers: number of buffer to be replenished
- *
- * Return: return success or failure
- */
-QDF_STATUS __dp_pdev_rx_buffers_no_map_attach(struct dp_soc *dp_soc,
-					      uint32_t mac_id,
-					      struct dp_srng *dp_rxdma_srng,
-					      struct rx_desc_pool *rx_desc_pool,
-					      uint32_t num_req_buffers);
-
-/**
+/*
  * dp_pdev_rx_buffers_attach() - replenish rxdma ring with rx nbufs
  *                               called during dp rx initialization
  *
- * @dp_soc: core txrx main context
+ * @soc: core txrx main context
  * @mac_id: mac_id which is one of 3 mac_ids
  * @dp_rxdma_srng: dp rxdma circular ring
  * @rx_desc_pool: Pointer to free Rx descriptor pool
@@ -1817,113 +1452,76 @@ dp_pdev_rx_buffers_attach(struct dp_soc *dp_soc, uint32_t mac_id,
 			  uint32_t num_req_buffers);
 
 /**
- * dp_rx_fill_mesh_stats() - Fills the mesh per packet receive stats
- * @vdev: DP Virtual device handle
- * @nbuf: Buffer pointer
- * @rx_tlv_hdr: start of rx tlv header
- * @txrx_peer: pointer to peer
+ * dp_rx_link_desc_return() - Return a MPDU link descriptor to HW
+ *			      (WBM), following error handling
  *
- * This function allocated memory for mesh receive stats and fill the
- * required stats. Stores the memory address in skb cb.
+ * @soc: core DP main context
+ * @buf_addr_info: opaque pointer to the REO error ring descriptor
+ * @buf_addr_info: void pointer to the buffer_addr_info
+ * @bm_action: put to idle_list or release to msdu_list
  *
- * Return: void
+ * Return: QDF_STATUS_E_FAILURE for failure else QDF_STATUS_SUCCESS
  */
-void dp_rx_fill_mesh_stats(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
-			   uint8_t *rx_tlv_hdr,
-			   struct dp_txrx_peer *txrx_peer);
+QDF_STATUS
+dp_rx_link_desc_return(struct dp_soc *soc, hal_ring_desc_t ring_desc,
+		       uint8_t bm_action);
 
 /**
- * dp_rx_filter_mesh_packets() - Filters mesh unwanted packets
- * @vdev: DP Virtual device handle
- * @nbuf: Buffer pointer
- * @rx_tlv_hdr: start of rx tlv header
+ * dp_rx_link_desc_return_by_addr - Return a MPDU link descriptor to
+ *					(WBM) by address
  *
- * This checks if the received packet is matching any filter out
- * catogery and and drop the packet if it matches.
+ * @soc: core DP main context
+ * @link_desc_addr: link descriptor addr
  *
- * Return: QDF_STATUS_SUCCESS indicates drop,
- *         QDF_STATUS_E_FAILURE indicate to not drop
+ * Return: QDF_STATUS_E_FAILURE for failure else QDF_STATUS_SUCCESS
  */
+QDF_STATUS
+dp_rx_link_desc_return_by_addr(struct dp_soc *soc,
+			       hal_buff_addrinfo_t link_desc_addr,
+			       uint8_t bm_action);
+
+/**
+ * dp_rxdma_err_process() - RxDMA error processing functionality
+ * @soc: core txrx main contex
+ * @mac_id: mac id which is one of 3 mac_ids
+ * @hal_ring: opaque pointer to the HAL Rx Ring, which will be serviced
+ * @quota: No. of units (packets) that can be serviced in one shot.
+ *
+ * Return: num of buffers processed
+ */
+uint32_t
+dp_rxdma_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
+		     uint32_t mac_id, uint32_t quota);
+
+void dp_rx_fill_mesh_stats(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
+				uint8_t *rx_tlv_hdr, struct dp_peer *peer);
 QDF_STATUS dp_rx_filter_mesh_packets(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 					uint8_t *rx_tlv_hdr);
 
 int dp_wds_rx_policy_check(uint8_t *rx_tlv_hdr, struct dp_vdev *vdev,
-			   struct dp_txrx_peer *peer);
+			   struct dp_peer *peer);
 
-/**
- * dp_rx_compute_delay() - Compute and fill in all timestamps
- *				to pass in correct fields
- * @vdev: pdev handle
- * @nbuf: network buffer
+/*
+ * dp_rx_dump_info_and_assert() - dump RX Ring info and Rx Desc info
  *
- * Return: none
+ * @soc: core txrx main context
+ * @hal_ring: opaque pointer to the HAL Rx Ring, which will be serviced
+ * @ring_desc: opaque pointer to the RX ring descriptor
+ * @rx_desc: host rx descriptor
+ *
+ * Return: void
  */
+void dp_rx_dump_info_and_assert(struct dp_soc *soc,
+				hal_ring_handle_t hal_ring_hdl,
+				hal_ring_desc_t ring_desc,
+				struct dp_rx_desc *rx_desc);
+
 void dp_rx_compute_delay(struct dp_vdev *vdev, qdf_nbuf_t nbuf);
 
 #ifdef QCA_PEER_EXT_STATS
-
-/**
- * dp_rx_compute_tid_delay - Compute per TID delay stats
- * @stats: TID delay stats to update
- * @nbuf: NBuffer
- *
- * Return: Void
- */
 void dp_rx_compute_tid_delay(struct cdp_delay_tid_stats *stats,
 			     qdf_nbuf_t nbuf);
 #endif /* QCA_PEER_EXT_STATS */
-
-#ifdef WLAN_SUPPORT_PPEDS
-static inline
-void dp_rx_set_reuse_nbuf(struct dp_rx_desc *rx_desc, qdf_nbuf_t nbuf)
-{
-	rx_desc->reuse_nbuf = nbuf;
-	rx_desc->has_reuse_nbuf = true;
-}
-
-/**
- * __dp_rx_add_to_free_desc_list_reuse() - Adds to a local free descriptor list
- *					   this list will reused
- *
- * @head: pointer to the head of local free list
- * @tail: pointer to the tail of local free list
- * @new: new descriptor that is added to the free list
- * @func_name: caller func name
- *
- * Return: void:
- */
-static inline
-void __dp_rx_add_to_free_desc_list_reuse(union dp_rx_desc_list_elem_t **head,
-					 union dp_rx_desc_list_elem_t **tail,
-					 struct dp_rx_desc *new,
-					 const char *func_name)
-{
-	qdf_assert(head && new);
-
-	dp_rx_desc_update_dbg_info(new, func_name, RX_DESC_IN_FREELIST);
-
-	new->nbuf = NULL;
-
-	((union dp_rx_desc_list_elem_t *)new)->next = *head;
-	*head = (union dp_rx_desc_list_elem_t *)new;
-	/* reset tail if head->next is NULL */
-	if (!*tail || !(*head)->next)
-		*tail = *head;
-}
-#else
-static inline
-void dp_rx_set_reuse_nbuf(struct dp_rx_desc *rx_desc, qdf_nbuf_t nbuf)
-{
-}
-
-static inline
-void __dp_rx_add_to_free_desc_list_reuse(union dp_rx_desc_list_elem_t **head,
-					 union dp_rx_desc_list_elem_t **tail,
-					 struct dp_rx_desc *new,
-					 const char *func_name)
-{
-}
-#endif
 
 #ifdef RX_DESC_DEBUG_CHECK
 /**
@@ -1958,9 +1556,6 @@ void dp_rx_desc_prep(struct dp_rx_desc *rx_desc,
 	rx_desc->nbuf = (nbuf_frag_info_t->virt_addr).nbuf;
 	rx_desc->unmapped = 0;
 	rx_desc->nbuf_data_addr = (uint8_t *)qdf_nbuf_data(rx_desc->nbuf);
-	dp_rx_set_reuse_nbuf(rx_desc, rx_desc->nbuf);
-	rx_desc->prev_paddr_buf_start = rx_desc->paddr_buf_start;
-	rx_desc->paddr_buf_start = nbuf_frag_info_t->paddr;
 }
 
 /**
@@ -1996,7 +1591,7 @@ void dp_rx_desc_frag_prep(struct dp_rx_desc *rx_desc,
  * @rx_desc: rx descriptor
  * @ring_paddr: paddr obatined from the ring
  *
- * Return: QDF_STATUS
+ * Returns: QDF_STATUS
  */
 static inline
 bool dp_rx_desc_paddr_sanity_check(struct dp_rx_desc *rx_desc,
@@ -2016,8 +1611,6 @@ void dp_rx_desc_prep(struct dp_rx_desc *rx_desc,
 		     struct dp_rx_nbuf_frag_info *nbuf_frag_info_t)
 {
 	rx_desc->nbuf = (nbuf_frag_info_t->virt_addr).nbuf;
-	dp_rx_set_reuse_nbuf(rx_desc, rx_desc->nbuf);
-	rx_desc->paddr_buf_start = nbuf_frag_info_t->paddr;
 	rx_desc->unmapped = 0;
 }
 
@@ -2047,46 +1640,21 @@ bool dp_rx_desc_paddr_sanity_check(struct dp_rx_desc *rx_desc,
 }
 #endif /* RX_DESC_DEBUG_CHECK */
 
-/**
- * dp_rx_enable_mon_dest_frag() - Enable frag processing for
- *              monitor destination ring via frag.
- * @rx_desc_pool: Rx desc pool
- * @is_mon_dest_desc: Is it for monitor dest buffer
- *
- * Enable this flag only for monitor destination buffer processing
- * if DP_RX_MON_MEM_FRAG feature is enabled.
- * If flag is set then frag based function will be called for alloc,
- * map, prep desc and free ops for desc buffer else normal nbuf based
- * function will be called.
- *
- * Return: None
- */
 void dp_rx_enable_mon_dest_frag(struct rx_desc_pool *rx_desc_pool,
 				bool is_mon_dest_desc);
 
+void dp_rx_process_rxdma_err(struct dp_soc *soc, qdf_nbuf_t nbuf,
+			     uint8_t *rx_tlv_hdr, struct dp_peer *peer,
+			     uint8_t err_code, uint8_t mac_id);
+
 #ifndef QCA_MULTIPASS_SUPPORT
 static inline
-bool dp_rx_multipass_process(struct dp_txrx_peer *peer, qdf_nbuf_t nbuf,
-			     uint8_t tid)
+bool dp_rx_multipass_process(struct dp_peer *peer, qdf_nbuf_t nbuf, uint8_t tid)
 {
 	return false;
 }
 #else
-/**
- * dp_rx_multipass_process - insert vlan tag on frames for traffic separation
- * @txrx_peer: DP txrx peer handle
- * @nbuf: skb
- * @tid: traffic priority
- *
- * Return: bool: true in case of success else false
- * Success is considered if:
- *  i. If frame has vlan header
- *  ii. If the frame comes from different peer and dont need multipass processing
- * Failure is considered if:
- *  i. Frame comes from multipass peer but doesn't contain vlan header.
- *  In failure case, drop such frames.
- */
-bool dp_rx_multipass_process(struct dp_txrx_peer *txrx_peer, qdf_nbuf_t nbuf,
+bool dp_rx_multipass_process(struct dp_peer *peer, qdf_nbuf_t nbuf,
 			     uint8_t tid);
 #endif
 
@@ -2109,7 +1677,7 @@ QDF_STATUS dp_peer_set_rx_capture_enabled(struct dp_pdev *pdev,
  * Caller to hold peer refcount and check for valid peer
  * @soc: soc
  * @vdev: vdev
- * @peer: txrx peer
+ * @peer: peer
  * @nbuf_head: skb list head
  * @nbuf_tail: skb list tail
  *
@@ -2117,7 +1685,7 @@ QDF_STATUS dp_peer_set_rx_capture_enabled(struct dp_pdev *pdev,
  */
 QDF_STATUS dp_rx_deliver_to_stack(struct dp_soc *soc,
 				  struct dp_vdev *vdev,
-				  struct dp_txrx_peer *peer,
+				  struct dp_peer *peer,
 				  qdf_nbuf_t nbuf_head,
 				  qdf_nbuf_t nbuf_tail);
 
@@ -2131,14 +1699,96 @@ QDF_STATUS dp_rx_deliver_to_stack(struct dp_soc *soc,
  * @nbuf_head: skb list head
  * @nbuf_tail: skb list tail
  *
- * Return: QDF_STATUS
+ * return: QDF_STATUS
  */
 QDF_STATUS dp_rx_eapol_deliver_to_stack(struct dp_soc *soc,
 					struct dp_vdev *vdev,
-					struct dp_txrx_peer *peer,
+					struct dp_peer *peer,
 					qdf_nbuf_t nbuf_head,
 					qdf_nbuf_t nbuf_tail);
 #endif
+
+#ifndef QCA_HOST_MODE_WIFI_DISABLED
+
+#ifdef QCA_OL_RX_LOCK_LESS_ACCESS
+/*
+ * dp_rx_ring_access_start()- Wrapper function to log access start of a hal ring
+ * @int_ctx: pointer to DP interrupt context
+ * @dp_soc - DP soc structure pointer
+ * @hal_ring_hdl - HAL ring handle
+ *
+ * Return: 0 on success; error on failure
+ */
+static inline int
+dp_rx_srng_access_start(struct dp_intr *int_ctx, struct dp_soc *soc,
+			hal_ring_handle_t hal_ring_hdl)
+{
+	return hal_srng_access_start_unlocked(soc->hal_soc, hal_ring_hdl);
+}
+
+/*
+ * dp_rx_ring_access_end()- Wrapper function to log access end of a hal ring
+ * @int_ctx: pointer to DP interrupt context
+ * @dp_soc - DP soc structure pointer
+ * @hal_ring_hdl - HAL ring handle
+ *
+ * Return - None
+ */
+static inline void
+dp_rx_srng_access_end(struct dp_intr *int_ctx, struct dp_soc *soc,
+		      hal_ring_handle_t hal_ring_hdl)
+{
+	hal_srng_access_end_unlocked(soc->hal_soc, hal_ring_hdl);
+}
+#else
+static inline int
+dp_rx_srng_access_start(struct dp_intr *int_ctx, struct dp_soc *soc,
+			hal_ring_handle_t hal_ring_hdl)
+{
+	return dp_srng_access_start(int_ctx, soc, hal_ring_hdl);
+}
+
+static inline void
+dp_rx_srng_access_end(struct dp_intr *int_ctx, struct dp_soc *soc,
+		      hal_ring_handle_t hal_ring_hdl)
+{
+	dp_srng_access_end(int_ctx, soc, hal_ring_hdl);
+}
+#endif
+
+#endif /* QCA_HOST_MODE_WIFI_DISABLED */
+
+/*
+ * dp_rx_wbm_sg_list_reset() - Initialize sg list
+ *
+ * This api should be called at soc init and afterevery sg processing.
+ *@soc: DP SOC handle
+ */
+static inline void dp_rx_wbm_sg_list_reset(struct dp_soc *soc)
+{
+	if (soc) {
+		soc->wbm_sg_param.wbm_is_first_msdu_in_sg = false;
+		soc->wbm_sg_param.wbm_sg_nbuf_head = NULL;
+		soc->wbm_sg_param.wbm_sg_nbuf_tail = NULL;
+		soc->wbm_sg_param.wbm_sg_desc_msdu_len = 0;
+	}
+}
+
+/*
+ * dp_rx_wbm_sg_list_deinit() - De-initialize sg list
+ *
+ * This api should be called in down path, to avoid any leak.
+ *@soc: DP SOC handle
+ */
+static inline void dp_rx_wbm_sg_list_deinit(struct dp_soc *soc)
+{
+	if (soc) {
+		if (soc->wbm_sg_param.wbm_sg_nbuf_head)
+			qdf_nbuf_list_free(soc->wbm_sg_param.wbm_sg_nbuf_head);
+
+		dp_rx_wbm_sg_list_reset(soc);
+	}
+}
 
 #ifndef QCA_HOST_MODE_WIFI_DISABLED
 
@@ -2166,13 +1816,27 @@ QDF_STATUS dp_rx_eapol_deliver_to_stack(struct dp_soc *soc,
 
 #endif /* QCA_HOST_MODE_WIFI_DISABLED */
 
+/*
+ * dp_rx_link_desc_refill_duplicate_check() - check if link desc duplicate
+					      to refill
+ * @soc: DP SOC handle
+ * @buf_info: the last link desc buf info
+ * @ring_buf_info: current buf address pointor including link desc
+ *
+ * return: none.
+ */
+void dp_rx_link_desc_refill_duplicate_check(
+				struct dp_soc *soc,
+				struct hal_buf_info *buf_info,
+				hal_buff_addrinfo_t ring_buf_info);
+
 #ifdef WLAN_FEATURE_PKT_CAPTURE_V2
 /**
  * dp_rx_deliver_to_pkt_capture() - deliver rx packet to packet capture
  * @soc : dp_soc handle
  * @pdev: dp_pdev handle
  * @peer_id: peer_id of the peer for which completion came
- * @is_offload:
+ * @ppdu_id: ppdu_id
  * @netbuf: Buffer pointer
  *
  * This function is used to deliver rx packet to packet capture
@@ -2211,12 +1875,12 @@ dp_rx_deliver_to_pkt_capture_no_peer(struct dp_soc *soc, qdf_nbuf_t nbuf,
  *
  */
 bool dp_rx_mcast_echo_check(struct dp_soc *soc,
-			    struct dp_txrx_peer *peer,
+			    struct dp_peer *peer,
 			    uint8_t *rx_tlv_hdr,
 			    qdf_nbuf_t nbuf);
 #else
 static inline bool dp_rx_mcast_echo_check(struct dp_soc *soc,
-					  struct dp_txrx_peer *peer,
+					  struct dp_peer *peer,
 					  uint8_t *rx_tlv_hdr,
 					  qdf_nbuf_t nbuf)
 {
@@ -2226,15 +1890,6 @@ static inline bool dp_rx_mcast_echo_check(struct dp_soc *soc,
 #endif /* QCA_HOST_MODE_WIFI_DISABLED */
 
 #ifdef RECEIVE_OFFLOAD
-/**
- * dp_rx_fill_gro_info() - Fill GRO info from RX TLV into skb->cb
- * @soc: DP SOC handle
- * @rx_tlv: RX TLV received for the msdu
- * @msdu: msdu for which GRO info needs to be filled
- * @rx_ol_pkt_cnt: counter to be incremented for GRO eligible packets
- *
- * Return: None
- */
 void dp_rx_fill_gro_info(struct dp_soc *soc, uint8_t *rx_tlv,
 			 qdf_nbuf_t msdu, uint32_t *rx_ol_pkt_cnt);
 #else
@@ -2245,50 +1900,47 @@ void dp_rx_fill_gro_info(struct dp_soc *soc, uint8_t *rx_tlv,
 }
 #endif
 
-/**
- * dp_rx_msdu_stats_update() - update per msdu stats.
- * @soc: core txrx main context
- * @nbuf: pointer to the first msdu of an amsdu.
- * @rx_tlv_hdr: pointer to the start of RX TLV headers.
- * @txrx_peer: pointer to the txrx peer object.
- * @ring_id: reo dest ring number on which pkt is reaped.
- * @tid_stats: per tid rx stats.
- * @link_id: link Id on which packet is received
- *
- * update all the per msdu stats for that nbuf.
- *
- * Return: void
- */
 void dp_rx_msdu_stats_update(struct dp_soc *soc, qdf_nbuf_t nbuf,
-			     uint8_t *rx_tlv_hdr,
-			     struct dp_txrx_peer *txrx_peer,
+			     uint8_t *rx_tlv_hdr, struct dp_peer *peer,
 			     uint8_t ring_id,
-			     struct cdp_tid_rx_stats *tid_stats,
-			     uint8_t link_id);
+			     struct cdp_tid_rx_stats *tid_stats);
 
-/**
- * dp_rx_deliver_to_stack_no_peer() - try deliver rx data even if
- *				      no corresbonding peer found
- * @soc: core txrx main context
- * @nbuf: pkt skb pointer
- *
- * This function will try to deliver some RX special frames to stack
- * even there is no peer matched found. for instance, LFR case, some
- * eapol data will be sent to host before peer_map done.
- *
- * Return: None
- */
 void dp_rx_deliver_to_stack_no_peer(struct dp_soc *soc, qdf_nbuf_t nbuf);
 
+uint32_t dp_rx_srng_get_num_pending(hal_soc_handle_t hal_soc,
+				    hal_ring_handle_t hal_ring_hdl,
+				    uint32_t num_entries,
+				    bool *near_full);
+
+#ifdef WLAN_FEATURE_DP_RX_RING_HISTORY
+void dp_rx_ring_record_entry(struct dp_soc *soc, uint8_t ring_num,
+			     hal_ring_desc_t ring_desc);
+#else
+static inline void
+dp_rx_ring_record_entry(struct dp_soc *soc, uint8_t ring_num,
+			hal_ring_desc_t ring_desc)
+{
+}
+#endif
+
 #ifndef QCA_HOST_MODE_WIFI_DISABLED
+#ifdef RX_DESC_SANITY_WAR
+QDF_STATUS dp_rx_desc_sanity(struct dp_soc *soc, hal_soc_handle_t hal_soc,
+			     hal_ring_handle_t hal_ring_hdl,
+			     hal_ring_desc_t ring_desc,
+			     struct dp_rx_desc *rx_desc);
+#else
+static inline
+QDF_STATUS dp_rx_desc_sanity(struct dp_soc *soc, hal_soc_handle_t hal_soc,
+			     hal_ring_handle_t hal_ring_hdl,
+			     hal_ring_desc_t ring_desc,
+			     struct dp_rx_desc *rx_desc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 #ifdef DP_RX_DROP_RAW_FRM
-/**
- * dp_rx_is_raw_frame_dropped() - if raw frame nbuf, free and drop
- * @nbuf: pkt skb pointer
- *
- * Return: true - raw frame, dropped
- *	   false - not raw frame, do nothing
- */
 bool dp_rx_is_raw_frame_dropped(qdf_nbuf_t nbuf);
 #else
 static inline
@@ -2298,14 +1950,21 @@ bool dp_rx_is_raw_frame_dropped(qdf_nbuf_t nbuf)
 }
 #endif
 
+#ifdef RX_DESC_DEBUG_CHECK
+QDF_STATUS dp_rx_desc_nbuf_sanity_check(struct dp_soc *soc,
+					hal_ring_desc_t ring_desc,
+					struct dp_rx_desc *rx_desc);
+#else
+static inline
+QDF_STATUS dp_rx_desc_nbuf_sanity_check(struct dp_soc *soc,
+					hal_ring_desc_t ring_desc,
+					struct dp_rx_desc *rx_desc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 #ifdef WLAN_DP_FEATURE_SW_LATENCY_MGR
-/**
- * dp_rx_update_stats() - Update soc level rx packet count
- * @soc: DP soc handle
- * @nbuf: nbuf received
- *
- * Return: none
- */
 void dp_rx_update_stats(struct dp_soc *soc, qdf_nbuf_t nbuf);
 #else
 static inline
@@ -2316,7 +1975,6 @@ void dp_rx_update_stats(struct dp_soc *soc, qdf_nbuf_t nbuf)
 
 /**
  * dp_rx_cksum_offload() - set the nbuf checksum as defined by hardware.
- * @pdev: dp_pdev handle
  * @nbuf: pointer to the first msdu of an amsdu.
  * @rx_tlv_hdr: pointer to the start of RX TLV headers.
  *
@@ -2325,7 +1983,6 @@ void dp_rx_update_stats(struct dp_soc *soc, qdf_nbuf_t nbuf)
  *
  * Return: void
  */
-#if defined(MAX_PDEV_CNT) && (MAX_PDEV_CNT == 1)
 static inline
 void dp_rx_cksum_offload(struct dp_pdev *pdev,
 			 qdf_nbuf_t nbuf,
@@ -2335,46 +1992,40 @@ void dp_rx_cksum_offload(struct dp_pdev *pdev,
 	//TODO - Move this to ring desc api
 	//HAL_RX_MSDU_DESC_IP_CHKSUM_FAIL_GET
 	//HAL_RX_MSDU_DESC_TCP_UDP_CHKSUM_FAIL_GET
-	uint32_t ip_csum_err, tcp_udp_csum_er, ip_frag;
+	uint32_t ip_csum_err, tcp_udp_csum_er;
 
 	hal_rx_tlv_csum_err_get(pdev->soc->hal_soc, rx_tlv_hdr, &ip_csum_err,
-				&tcp_udp_csum_er, &ip_frag);
+				&tcp_udp_csum_er);
 
-	if (qdf_unlikely(ip_frag))
-		goto bypass_tcp_udp;
-
-	if (qdf_unlikely(ip_csum_err)) {
-		DP_STATS_INC(pdev, err.ip_csum_err, 1);
-		goto bypass_tcp_udp;
-	}
-
-	if (qdf_nbuf_is_ipv4_udp_pkt(nbuf) ||
-	    qdf_nbuf_is_ipv4_tcp_pkt(nbuf)) {
-		if (qdf_likely(!tcp_udp_csum_er)) {
+	if (qdf_nbuf_is_ipv4_pkt(nbuf)) {
+		if (qdf_likely(!ip_csum_err)) {
 			cksum.l4_result = QDF_NBUF_RX_CKSUM_TCP_UDP_UNNECESSARY;
-			cksum.csum_level = 1;
+			if (qdf_nbuf_is_ipv4_udp_pkt(nbuf) ||
+			    qdf_nbuf_is_ipv4_tcp_pkt(nbuf)) {
+				if (qdf_likely(!tcp_udp_csum_er))
+					cksum.csum_level = 1;
+				else
+					DP_STATS_INCC(pdev,
+						      err.tcp_udp_csum_err, 1,
+						      tcp_udp_csum_er);
+			}
 		} else {
-		    DP_STATS_INC(pdev, err.tcp_udp_csum_err, 1);
+			DP_STATS_INCC(pdev, err.ip_csum_err, 1, ip_csum_err);
 		}
 	} else if (qdf_nbuf_is_ipv6_udp_pkt(nbuf) ||
 		   qdf_nbuf_is_ipv6_tcp_pkt(nbuf)) {
 		if (qdf_likely(!tcp_udp_csum_er))
 			cksum.l4_result = QDF_NBUF_RX_CKSUM_TCP_UDP_UNNECESSARY;
 		else
-			DP_STATS_INC(pdev, err.tcp_udp_csum_err, 1);
+			DP_STATS_INCC(pdev, err.tcp_udp_csum_err, 1,
+				      tcp_udp_csum_er);
+	} else {
+		cksum.l4_result = QDF_NBUF_RX_CKSUM_NONE;
 	}
 
-bypass_tcp_udp:
 	qdf_nbuf_set_rx_cksum(nbuf, &cksum);
 }
-#else
-static inline
-void dp_rx_cksum_offload(struct dp_pdev *pdev,
-			 qdf_nbuf_t nbuf,
-			 uint8_t *rx_tlv_hdr)
-{
-}
-#endif
+
 #endif /* QCA_HOST_MODE_WIFI_DISABLED */
 
 #ifdef WLAN_FEATURE_RX_SOFTIRQ_TIME_LIMIT
@@ -2427,701 +2078,65 @@ static inline int dp_rx_get_loop_pkt_limit(struct dp_soc *soc)
 
 void dp_rx_update_stats(struct dp_soc *soc, qdf_nbuf_t nbuf);
 
-static inline uint16_t
-dp_rx_peer_metadata_peer_id_get(struct dp_soc *soc, uint32_t peer_metadata)
-{
-	return soc->arch_ops.dp_rx_peer_metadata_peer_id_get(soc,
-							     peer_metadata);
-}
-
-#if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
+#ifdef QCA_SUPPORT_WDS_EXTENDED
 /**
- * dp_rx_nbuf_set_link_id_from_tlv() - Set link id in nbuf cb
- * @soc: SOC handle
- * @tlv_hdr: rx tlv header
- * @nbuf: nbuf pointer
+ * dp_rx_is_list_ready() - Make different lists for 4-address
+			   and 3-address frames
+ * @nbuf_head: skb list head
+ * @vdev: vdev
+ * @peer: peer
+ * @peer_id: peer id of new received frame
+ * @vdev_id: vdev_id of new received frame
+ *
+ * Return: true if peer_ids are different.
+ */
+static inline bool
+dp_rx_is_list_ready(qdf_nbuf_t nbuf_head,
+		    struct dp_vdev *vdev,
+		    struct dp_peer *peer,
+		    uint16_t peer_id,
+		    uint8_t vdev_id)
+{
+	if (nbuf_head && peer && (peer->peer_id != peer_id))
+		return true;
+
+	return false;
+}
+#else
+static inline bool
+dp_rx_is_list_ready(qdf_nbuf_t nbuf_head,
+		    struct dp_vdev *vdev,
+		    struct dp_peer *peer,
+		    uint16_t peer_id,
+		    uint8_t vdev_id)
+{
+	if (nbuf_head && vdev && (vdev->vdev_id != vdev_id))
+		return true;
+
+	return false;
+}
+#endif
+
+#ifdef WLAN_FEATURE_MARK_FIRST_WAKEUP_PACKET
+/**
+ * dp_rx_mark_first_packet_after_wow_wakeup - get first packet after wow wakeup
+ * @pdev: pointer to dp_pdev structure
+ * @rx_tlv: pointer to rx_pkt_tlvs structure
+ * @nbuf: pointer to skb buffer
  *
  * Return: None
  */
-static inline void
-dp_rx_nbuf_set_link_id_from_tlv(struct dp_soc *soc, uint8_t *tlv_hdr,
-				qdf_nbuf_t nbuf)
-{
-	uint32_t peer_metadata = hal_rx_tlv_peer_meta_data_get(soc->hal_soc,
-								tlv_hdr);
-
-	if (soc->arch_ops.dp_rx_peer_set_link_id)
-		soc->arch_ops.dp_rx_peer_set_link_id(nbuf, peer_metadata);
-}
-
-/**
- * dp_rx_set_nbuf_band() - Set band info in nbuf cb
- * @nbuf: nbuf pointer
- * @txrx_peer: txrx_peer pointer
- * @link_id: Peer Link ID
- *
- * Returen: None
- */
-static inline void
-dp_rx_set_nbuf_band(qdf_nbuf_t nbuf, struct dp_txrx_peer *txrx_peer,
-		    uint8_t link_id)
-{
-	qdf_nbuf_rx_set_band(nbuf, txrx_peer->band[link_id]);
-}
+void dp_rx_mark_first_packet_after_wow_wakeup(struct dp_pdev *pdev,
+					      uint8_t *rx_tlv,
+					      qdf_nbuf_t nbuf);
 #else
 static inline void
-dp_rx_nbuf_set_link_id_from_tlv(struct dp_soc *soc, uint8_t *tlv_hdr,
-				qdf_nbuf_t nbuf)
-{
-}
-
-static inline void
-dp_rx_set_nbuf_band(qdf_nbuf_t nbuf, struct dp_txrx_peer *txrx_peer,
-		    uint8_t link_id)
+dp_rx_mark_first_packet_after_wow_wakeup(struct dp_pdev *pdev,
+					 uint8_t *rx_tlv,
+					 qdf_nbuf_t nbuf)
 {
 }
 #endif
-
-/**
- * dp_rx_desc_pool_init_generic() - Generic Rx descriptors initialization
- * @soc: SOC handle
- * @rx_desc_pool: pointer to RX descriptor pool
- * @pool_id: pool ID
- *
- * Return: None
- */
-QDF_STATUS dp_rx_desc_pool_init_generic(struct dp_soc *soc,
-				  struct rx_desc_pool *rx_desc_pool,
-				  uint32_t pool_id);
-
-void dp_rx_desc_pool_deinit_generic(struct dp_soc *soc,
-				  struct rx_desc_pool *rx_desc_pool,
-				  uint32_t pool_id);
-
-/**
- * dp_rx_pkt_tracepoints_enabled() - Get the state of rx pkt tracepoint
- *
- * Return: True if any rx pkt tracepoint is enabled else false
- */
-static inline
-bool dp_rx_pkt_tracepoints_enabled(void)
-{
-	return (qdf_trace_dp_rx_tcp_pkt_enabled() ||
-		qdf_trace_dp_rx_udp_pkt_enabled() ||
-		qdf_trace_dp_rx_pkt_enabled());
-}
-
-#ifdef FEATURE_DIRECT_LINK
-/**
- * dp_audio_smmu_map()- Map memory region into Audio SMMU CB
- * @qdf_dev: pointer to QDF device structure
- * @paddr: physical address
- * @iova: DMA address
- * @size: memory region size
- *
- * Return: 0 on success else failure code
- */
-static inline
-int dp_audio_smmu_map(qdf_device_t qdf_dev, qdf_dma_addr_t paddr,
-		      qdf_dma_addr_t iova, qdf_size_t size)
-{
-	return pld_audio_smmu_map(qdf_dev->dev, paddr, iova, size);
-}
-
-/**
- * dp_audio_smmu_unmap()- Remove memory region mapping from Audio SMMU CB
- * @qdf_dev: pointer to QDF device structure
- * @iova: DMA address
- * @size: memory region size
- *
- * Return: None
- */
-static inline
-void dp_audio_smmu_unmap(qdf_device_t qdf_dev, qdf_dma_addr_t iova,
-			 qdf_size_t size)
-{
-	pld_audio_smmu_unmap(qdf_dev->dev, iova, size);
-}
-#else
-static inline
-int dp_audio_smmu_map(qdf_device_t qdf_dev, qdf_dma_addr_t paddr,
-		      qdf_dma_addr_t iova, qdf_size_t size)
-{
-	return 0;
-}
-
-static inline
-void dp_audio_smmu_unmap(qdf_device_t qdf_dev, qdf_dma_addr_t iova,
-			 qdf_size_t size)
-{
-}
-#endif
-
-#if defined(QCA_DP_RX_NBUF_NO_MAP_UNMAP) && !defined(BUILD_X86)
-static inline
-QDF_STATUS dp_pdev_rx_buffers_attach_simple(struct dp_soc *soc, uint32_t mac_id,
-					    struct dp_srng *rxdma_srng,
-					    struct rx_desc_pool *rx_desc_pool,
-					    uint32_t num_req_buffers)
-{
-	return __dp_pdev_rx_buffers_no_map_attach(soc, mac_id,
-						  rxdma_srng,
-						  rx_desc_pool,
-						  num_req_buffers);
-}
-
-static inline
-void dp_rx_buffers_replenish_simple(struct dp_soc *soc, uint32_t mac_id,
-				    struct dp_srng *rxdma_srng,
-				    struct rx_desc_pool *rx_desc_pool,
-				    uint32_t num_req_buffers,
-				    union dp_rx_desc_list_elem_t **desc_list,
-				    union dp_rx_desc_list_elem_t **tail)
-{
-	__dp_rx_buffers_no_map_replenish(soc, mac_id, rxdma_srng, rx_desc_pool,
-					 num_req_buffers, desc_list, tail);
-}
-
-static inline
-void dp_rx_comp2refill_replenish(struct dp_soc *soc, uint32_t mac_id,
-				 struct dp_srng *rxdma_srng,
-				 struct rx_desc_pool *rx_desc_pool,
-				 uint32_t num_req_buffers,
-				 union dp_rx_desc_list_elem_t **desc_list,
-				 union dp_rx_desc_list_elem_t **tail)
-{
-	__dp_rx_comp2refill_replenish(soc, mac_id, rxdma_srng, rx_desc_pool,
-				      num_req_buffers, desc_list, tail);
-}
-
-static inline
-void dp_rx_buffers_lt_replenish_simple(struct dp_soc *soc, uint32_t mac_id,
-				       struct dp_srng *rxdma_srng,
-				       struct rx_desc_pool *rx_desc_pool,
-				       bool force_replenish)
-{
-	__dp_rx_buffers_no_map_lt_replenish(soc, mac_id, rxdma_srng,
-					    rx_desc_pool,
-					    force_replenish);
-}
-
-#ifndef QCA_DP_NBUF_FAST_RECYCLE_CHECK
-static inline
-qdf_dma_addr_t dp_rx_nbuf_sync_no_dsb(struct dp_soc *dp_soc,
-				      qdf_nbuf_t nbuf,
-				      uint32_t buf_size)
-{
-	qdf_nbuf_dma_inv_range_no_dsb((void *)nbuf->data,
-				      (void *)(nbuf->data + buf_size));
-
-	return (qdf_dma_addr_t)qdf_mem_virt_to_phys(nbuf->data);
-}
-#else
-#define L3_HEADER_PAD 2
-static inline
-qdf_dma_addr_t dp_rx_nbuf_sync_no_dsb(struct dp_soc *dp_soc,
-				      qdf_nbuf_t nbuf,
-				      uint32_t buf_size)
-{
-	if (nbuf->recycled_for_ds)
-		return (qdf_dma_addr_t)qdf_mem_virt_to_phys(nbuf->data);
-
-	if (unlikely(!nbuf->fast_recycled)) {
-		qdf_nbuf_dma_inv_range_no_dsb((void *)nbuf->data,
-					      (void *)(nbuf->data + buf_size));
-	}
-
-	DP_STATS_INC(dp_soc, rx.fast_recycled, 1);
-	nbuf->fast_recycled = 0;
-
-	return (qdf_dma_addr_t)qdf_mem_virt_to_phys(nbuf->data);
-}
-#endif
-
-static inline
-qdf_dma_addr_t dp_rx_nbuf_sync(struct dp_soc *dp_soc,
-			       qdf_nbuf_t nbuf,
-			       uint32_t buf_size)
-{
-	qdf_nbuf_dma_inv_range((void *)nbuf->data,
-			       (void *)(nbuf->data + buf_size));
-
-	return (qdf_dma_addr_t)qdf_mem_virt_to_phys(nbuf->data);
-}
-
-#if !defined(SPECULATIVE_READ_DISABLED)
-static inline
-void dp_rx_nbuf_unmap(struct dp_soc *soc,
-		      struct dp_rx_desc *rx_desc,
-		      uint8_t reo_ring_num)
-{
-	struct rx_desc_pool *rx_desc_pool;
-	qdf_nbuf_t nbuf;
-
-	rx_desc_pool = &soc->rx_desc_buf[rx_desc->pool_id];
-	nbuf = rx_desc->nbuf;
-
-	qdf_nbuf_dma_inv_range_no_dsb((void *)nbuf->data,
-			       (void *)(nbuf->data + rx_desc_pool->buf_size));
-}
-
-static inline
-void dp_rx_nbuf_unmap_pool(struct dp_soc *soc,
-			   struct rx_desc_pool *rx_desc_pool,
-			   qdf_nbuf_t nbuf)
-{
-	qdf_nbuf_dma_inv_range((void *)nbuf->data,
-			       (void *)(nbuf->data + rx_desc_pool->buf_size));
-}
-
-#else
-static inline
-void dp_rx_nbuf_unmap(struct dp_soc *soc,
-		      struct dp_rx_desc *rx_desc,
-		      uint8_t reo_ring_num)
-{
-}
-
-static inline
-void dp_rx_nbuf_unmap_pool(struct dp_soc *soc,
-			   struct rx_desc_pool *rx_desc_pool,
-			   qdf_nbuf_t nbuf)
-{
-}
-#endif
-
-static inline
-void dp_rx_per_core_stats_update(struct dp_soc *soc, uint8_t ring_id,
-				 uint32_t bufs_reaped)
-{
-}
-
-static inline
-qdf_nbuf_t dp_rx_nbuf_alloc(struct dp_soc *soc,
-			    struct rx_desc_pool *rx_desc_pool)
-{
-	return qdf_nbuf_alloc_simple(soc->osdev, rx_desc_pool->buf_size,
-				     RX_BUFFER_RESERVATION,
-				     rx_desc_pool->buf_alignment, FALSE);
-}
-
-static inline
-void  dp_rx_nbuf_free(qdf_nbuf_t nbuf)
-{
-	qdf_nbuf_free_simple(nbuf);
-}
-#else
-static inline
-QDF_STATUS dp_pdev_rx_buffers_attach_simple(struct dp_soc *soc, uint32_t mac_id,
-					    struct dp_srng *rxdma_srng,
-					    struct rx_desc_pool *rx_desc_pool,
-					    uint32_t num_req_buffers)
-{
-	return dp_pdev_rx_buffers_attach(soc, mac_id,
-					 rxdma_srng,
-					 rx_desc_pool,
-					 num_req_buffers);
-}
-
-static inline
-void dp_rx_buffers_replenish_simple(struct dp_soc *soc, uint32_t mac_id,
-				    struct dp_srng *rxdma_srng,
-				    struct rx_desc_pool *rx_desc_pool,
-				    uint32_t num_req_buffers,
-				    union dp_rx_desc_list_elem_t **desc_list,
-				    union dp_rx_desc_list_elem_t **tail)
-{
-	dp_rx_buffers_replenish(soc, mac_id, rxdma_srng, rx_desc_pool,
-				num_req_buffers, desc_list, tail, false);
-}
-
-static inline
-void dp_rx_buffers_lt_replenish_simple(struct dp_soc *soc, uint32_t mac_id,
-				       struct dp_srng *rxdma_srng,
-				       struct rx_desc_pool *rx_desc_pool,
-				       bool force_replenish)
-{
-	union dp_rx_desc_list_elem_t *desc_list = NULL;
-	union dp_rx_desc_list_elem_t *tail = NULL;
-
-	__dp_rx_buffers_replenish(soc, mac_id, rxdma_srng, rx_desc_pool,
-				  0, &desc_list, &tail, false, force_replenish,
-				  __func__);
-}
-
-static inline
-qdf_dma_addr_t dp_rx_nbuf_sync_no_dsb(struct dp_soc *dp_soc,
-				      qdf_nbuf_t nbuf,
-				      uint32_t buf_size)
-{
-	return (qdf_dma_addr_t)NULL;
-}
-
-static inline
-qdf_dma_addr_t dp_rx_nbuf_sync(struct dp_soc *dp_soc,
-			       qdf_nbuf_t nbuf,
-			       uint32_t buf_size)
-{
-	return (qdf_dma_addr_t)NULL;
-}
-
-static inline
-void dp_rx_nbuf_unmap(struct dp_soc *soc,
-		      struct dp_rx_desc *rx_desc,
-		      uint8_t reo_ring_num)
-{
-	struct rx_desc_pool *rx_desc_pool;
-
-	rx_desc_pool = &soc->rx_desc_buf[rx_desc->pool_id];
-	dp_ipa_reo_ctx_buf_mapping_lock(soc, reo_ring_num);
-
-	dp_audio_smmu_unmap(soc->osdev,
-			    QDF_NBUF_CB_PADDR(rx_desc->nbuf),
-			    rx_desc_pool->buf_size);
-
-	dp_ipa_handle_rx_buf_smmu_mapping(soc, rx_desc->nbuf,
-					  rx_desc_pool->buf_size,
-					  false, __func__, __LINE__);
-	qdf_nbuf_unmap_nbytes_single(soc->osdev, rx_desc->nbuf,
-				     QDF_DMA_FROM_DEVICE,
-				     rx_desc_pool->buf_size);
-	rx_desc->unmapped = 1;
-
-	dp_ipa_reo_ctx_buf_mapping_unlock(soc, reo_ring_num);
-}
-
-static inline
-void dp_rx_nbuf_unmap_pool(struct dp_soc *soc,
-			   struct rx_desc_pool *rx_desc_pool,
-			   qdf_nbuf_t nbuf)
-{
-	dp_audio_smmu_unmap(soc->osdev, QDF_NBUF_CB_PADDR(nbuf),
-			    rx_desc_pool->buf_size);
-	dp_ipa_handle_rx_buf_smmu_mapping(soc, nbuf,
-					  rx_desc_pool->buf_size,
-					  false, __func__, __LINE__);
-	qdf_nbuf_unmap_nbytes_single(soc->osdev, nbuf, QDF_DMA_FROM_DEVICE,
-				     rx_desc_pool->buf_size);
-}
-
-static inline
-void dp_rx_per_core_stats_update(struct dp_soc *soc, uint8_t ring_id,
-				 uint32_t bufs_reaped)
-{
-	int cpu_id = qdf_get_cpu();
-
-	DP_STATS_INC(soc, rx.ring_packets[cpu_id][ring_id], bufs_reaped);
-}
-
-static inline
-qdf_nbuf_t dp_rx_nbuf_alloc(struct dp_soc *soc,
-			    struct rx_desc_pool *rx_desc_pool)
-{
-	return qdf_nbuf_alloc(soc->osdev, rx_desc_pool->buf_size,
-			      RX_BUFFER_RESERVATION,
-			      rx_desc_pool->buf_alignment, FALSE);
-}
-
-static inline
-void dp_rx_nbuf_free(qdf_nbuf_t nbuf)
-{
-	qdf_nbuf_free(nbuf);
-}
-#endif
-
-#ifdef DP_UMAC_HW_RESET_SUPPORT
-/**
- * dp_rx_desc_reuse() - Reuse the rx descriptors to fill the rx buf ring
- * @soc: core txrx main context
- * @nbuf_list: nbuf list for delayed free
- *
- * Return: void
- */
-void dp_rx_desc_reuse(struct dp_soc *soc, qdf_nbuf_t *nbuf_list);
-
-/**
- * dp_rx_desc_delayed_free() - Delayed free of the rx descs
- *
- * @soc: core txrx main context
- *
- * Return: void
- */
-void dp_rx_desc_delayed_free(struct dp_soc *soc);
-#endif
-
-/**
- * dp_rx_get_txrx_peer_and_vdev() - Get txrx peer and vdev from peer id
- * @soc: core txrx main context
- * @nbuf : pointer to the first msdu of an amsdu.
- * @peer_id : Peer id of the peer
- * @txrx_ref_handle : Buffer to save the handle for txrx peer's reference
- * @pkt_capture_offload : Flag indicating if pkt capture offload is needed
- * @vdev : Buffer to hold pointer to vdev
- * @rx_pdev : Buffer to hold pointer to rx pdev
- * @dsf : delay stats flag
- * @old_tid : Old tid
- *
- * Get txrx peer and vdev from peer id
- *
- * Return: Pointer to txrx peer
- */
-static inline struct dp_txrx_peer *
-dp_rx_get_txrx_peer_and_vdev(struct dp_soc *soc,
-			     qdf_nbuf_t nbuf,
-			     uint16_t peer_id,
-			     dp_txrx_ref_handle *txrx_ref_handle,
-			     bool pkt_capture_offload,
-			     struct dp_vdev **vdev,
-			     struct dp_pdev **rx_pdev,
-			     uint32_t *dsf,
-			     uint32_t *old_tid)
-{
-	struct dp_txrx_peer *txrx_peer = NULL;
-
-	txrx_peer = dp_txrx_peer_get_ref_by_id(soc, peer_id, txrx_ref_handle,
-					       DP_MOD_ID_RX);
-
-	if (qdf_likely(txrx_peer)) {
-		*vdev = txrx_peer->vdev;
-	} else {
-		nbuf->next = NULL;
-		dp_rx_deliver_to_pkt_capture_no_peer(soc, nbuf,
-						     pkt_capture_offload);
-		if (!pkt_capture_offload)
-			dp_rx_deliver_to_stack_no_peer(soc, nbuf);
-
-		goto end;
-	}
-
-	if (qdf_unlikely(!(*vdev))) {
-		qdf_nbuf_free(nbuf);
-		DP_STATS_INC(soc, rx.err.invalid_vdev, 1);
-		goto end;
-	}
-
-	*rx_pdev = (*vdev)->pdev;
-	*dsf = (*rx_pdev)->delay_stats_flag;
-	*old_tid = 0xff;
-
-end:
-	return txrx_peer;
-}
-
-static inline QDF_STATUS
-dp_peer_rx_reorder_queue_setup(struct dp_soc *soc, struct dp_peer *peer,
-			       uint32_t tid_bitmap, uint32_t ba_window_size)
-{
-	return soc->arch_ops.dp_peer_rx_reorder_queue_setup(soc,
-							    peer, tid_bitmap,
-							    ba_window_size);
-}
-
-static inline
-void dp_rx_nbuf_list_deliver(struct dp_soc *soc,
-			     struct dp_vdev *vdev,
-			     struct dp_txrx_peer *txrx_peer,
-			     uint16_t peer_id,
-			     uint8_t pkt_capture_offload,
-			     qdf_nbuf_t deliver_list_head,
-			     qdf_nbuf_t deliver_list_tail)
-{
-	qdf_nbuf_t nbuf, next;
-
-	if (qdf_likely(deliver_list_head)) {
-		if (qdf_likely(txrx_peer)) {
-			dp_rx_deliver_to_pkt_capture(soc, vdev->pdev, peer_id,
-						     pkt_capture_offload,
-						     deliver_list_head);
-			if (!pkt_capture_offload)
-				dp_rx_deliver_to_stack(soc, vdev, txrx_peer,
-						       deliver_list_head,
-						       deliver_list_tail);
-		} else {
-			nbuf = deliver_list_head;
-			while (nbuf) {
-				next = nbuf->next;
-				nbuf->next = NULL;
-				dp_rx_deliver_to_stack_no_peer(soc, nbuf);
-				nbuf = next;
-			}
-		}
-	}
-}
-
-#ifdef DP_TX_RX_TPUT_SIMULATE
-/*
- * Change this macro value to simulate different RX T-put,
- * if OTA is 100 Mbps, to simulate 200 Mbps, then multiplication factor
- * is 2, set macro value as 1 (multiplication factor - 1).
- */
-#define DP_RX_PKTS_DUPLICATE_CNT 0
-static inline
-void dp_rx_nbuf_list_dup_deliver(struct dp_soc *soc,
-				 struct dp_vdev *vdev,
-				 struct dp_txrx_peer *txrx_peer,
-				 uint16_t peer_id,
-				 uint8_t pkt_capture_offload,
-				 qdf_nbuf_t ori_list_head,
-				 qdf_nbuf_t ori_list_tail)
-{
-	qdf_nbuf_t new_skb = NULL;
-	qdf_nbuf_t new_list_head = NULL;
-	qdf_nbuf_t new_list_tail = NULL;
-	qdf_nbuf_t nbuf = NULL;
-	int i;
-
-	for (i = 0; i < DP_RX_PKTS_DUPLICATE_CNT; i++) {
-		nbuf = ori_list_head;
-		new_list_head = NULL;
-		new_list_tail = NULL;
-
-		while (nbuf) {
-			new_skb = qdf_nbuf_copy(nbuf);
-			if (qdf_likely(new_skb))
-				DP_RX_LIST_APPEND(new_list_head,
-						  new_list_tail,
-						  new_skb);
-			else
-				dp_err("copy skb failed");
-
-			nbuf = qdf_nbuf_next(nbuf);
-		}
-
-		/* deliver the copied nbuf list */
-		dp_rx_nbuf_list_deliver(soc, vdev, txrx_peer, peer_id,
-					pkt_capture_offload,
-					new_list_head,
-					new_list_tail);
-	}
-
-	/* deliver the original skb_list */
-	dp_rx_nbuf_list_deliver(soc, vdev, txrx_peer, peer_id,
-				pkt_capture_offload,
-				ori_list_head,
-				ori_list_tail);
-}
-
-#define DP_RX_DELIVER_TO_STACK dp_rx_nbuf_list_dup_deliver
-
-#else /* !DP_TX_RX_TPUT_SIMULATE */
-
-#define DP_RX_DELIVER_TO_STACK dp_rx_nbuf_list_deliver
-
-#endif /* DP_TX_RX_TPUT_SIMULATE */
-
-/**
- * dp_rx_wbm_desc_nbuf_sanity_check() - Add sanity check to for WBM rx_desc
- *                                      paddr corruption
- * @soc: core txrx main context
- * @hal_ring_hdl: opaque pointer to the HAL Rx Error Ring
- * @ring_desc: REO ring descriptor
- * @rx_desc: Rx descriptor
- *
- * Return: NONE
- */
-QDF_STATUS dp_rx_wbm_desc_nbuf_sanity_check(struct dp_soc *soc,
-					    hal_ring_handle_t hal_ring_hdl,
-					    hal_ring_desc_t ring_desc,
-					    struct dp_rx_desc *rx_desc);
-/**
- * dp_rx_is_sg_formation_required() - Check if sg formation is required
- * @info: WBM desc info
- *
- * Return: True if sg is required else false
- */
-bool dp_rx_is_sg_formation_required(struct hal_wbm_err_desc_info *info);
-
-/**
- * dp_rx_err_tlv_invalidate() - Invalidate network buffer
- * @soc: core txrx main context
- * @nbuf: Network buffer to invalidate
- *
- * Return: NONE
- */
-void dp_rx_err_tlv_invalidate(struct dp_soc *soc,
-			      qdf_nbuf_t nbuf);
-
-/**
- * dp_rx_wbm_sg_list_last_msdu_war() - war for HW issue
- * @soc: DP SOC handle
- *
- * This is a war for HW issue where length is only valid in last msdu
- *
- * Return: NONE
- */
-void dp_rx_wbm_sg_list_last_msdu_war(struct dp_soc *soc);
-
-/**
- * dp_rx_check_pkt_len() - Check for pktlen validity
- * @soc: DP SOC context
- * @pkt_len: computed length of the pkt from caller in bytes
- *
- * Return: true if pktlen > RX_BUFFER_SIZE, else return false
- *
- */
-bool dp_rx_check_pkt_len(struct dp_soc *soc, uint32_t pkt_len);
-
-/**
- * dp_rx_null_q_handle_invalid_peer_id_exception() - to find exception
- * @soc: pointer to dp_soc struct
- * @pool_id: Pool id to find dp_pdev
- * @rx_tlv_hdr: TLV header of received packet
- * @nbuf: SKB
- *
- * In certain types of packets if peer_id is not correct then
- * driver may not be able find. Try finding peer by addr_2 of
- * received MPDU. If you find the peer then most likely sw_peer_id &
- * ast_idx is corrupted.
- *
- * Return: True if you find the peer by addr_2 of received MPDU else false
- */
-bool dp_rx_null_q_handle_invalid_peer_id_exception(struct dp_soc *soc,
-						   uint8_t pool_id,
-						   uint8_t *rx_tlv_hdr,
-						   qdf_nbuf_t nbuf);
-
-/**
- * dp_rx_err_drop_3addr_mcast() - Check if feature drop_3ddr_mcast is enabled
- *                                If so, drop the multicast frame.
- * @vdev: datapath vdev
- * @rx_tlv_hdr: TLV header
- *
- * Return: true if packet is to be dropped,
- *         false, if packet is not dropped.
- */
-bool dp_rx_err_drop_3addr_mcast(struct dp_vdev *vdev, uint8_t *rx_tlv_hdr);
-
-/**
- * dp_rx_deliver_to_osif_stack() - function to deliver rx pkts to stack
- * @soc: DP soc
- * @vdev: DP vdev handle
- * @txrx_peer: pointer to the txrx_peer object
- * @nbuf: skb list head
- * @tail: skb list tail
- * @is_eapol: eapol pkt check
- *
- * Return: None
- */
-void
-dp_rx_deliver_to_osif_stack(struct dp_soc *soc,
-			    struct dp_vdev *vdev,
-			    struct dp_txrx_peer *txrx_peer,
-			    qdf_nbuf_t nbuf,
-			    qdf_nbuf_t tail,
-			    bool is_eapol);
-
-/**
- * dp_rx_set_wbm_err_info_in_nbuf() - function to set wbm err info in nbuf
- * @soc: DP soc
- * @nbuf: skb list head
- * @wbm_err: wbm error info details
- *
- * Return: None
- */
-void
-dp_rx_set_wbm_err_info_in_nbuf(struct dp_soc *soc,
-			       qdf_nbuf_t nbuf,
-			       union hal_wbm_err_info_u wbm_err);
 
 #if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
 static inline uint8_t
@@ -3155,444 +2170,39 @@ dp_rx_get_defrag_bm_id(struct dp_soc *soc)
 }
 #endif
 
-#ifndef WLAN_SOFTUMAC_SUPPORT /* WLAN_SOFTUMAC_SUPPORT */
-/**
- * dp_rx_dump_info_and_assert() - dump RX Ring info and Rx Desc info
- *
- * @soc: core txrx main context
- * @hal_ring_hdl: opaque pointer to the HAL Rx Ring, which will be serviced
- * @ring_desc: opaque pointer to the RX ring descriptor
- * @rx_desc: host rx descriptor
- *
- * Return: void
- */
-void dp_rx_dump_info_and_assert(struct dp_soc *soc,
-				hal_ring_handle_t hal_ring_hdl,
-				hal_ring_desc_t ring_desc,
-				struct dp_rx_desc *rx_desc);
+static inline uint16_t
+dp_rx_peer_metadata_peer_id_get(struct dp_soc *soc, uint32_t peer_metadata)
+{
+	return soc->arch_ops.dp_rx_peer_metadata_peer_id_get(soc,
+							     peer_metadata);
+}
 
 /**
- * dp_rx_link_desc_return() - Return a MPDU link descriptor to HW
- *			      (WBM), following error handling
- *
- * @soc: core DP main context
- * @ring_desc: opaque pointer to the REO error ring descriptor
- * @bm_action: put to idle_list or release to msdu_list
- *
- * Return: QDF_STATUS_E_FAILURE for failure else QDF_STATUS_SUCCESS
- */
-QDF_STATUS
-dp_rx_link_desc_return(struct dp_soc *soc, hal_ring_desc_t ring_desc,
-		       uint8_t bm_action);
-
-/**
- * dp_rx_link_desc_return_by_addr - Return a MPDU link descriptor to
- *					(WBM) by address
- *
- * @soc: core DP main context
- * @link_desc_addr: link descriptor addr
- * @bm_action: put to idle_list or release to msdu_list
- *
- * Return: QDF_STATUS_E_FAILURE for failure else QDF_STATUS_SUCCESS
- */
-QDF_STATUS
-dp_rx_link_desc_return_by_addr(struct dp_soc *soc,
-			       hal_buff_addrinfo_t link_desc_addr,
-			       uint8_t bm_action);
-
-/**
- * dp_rxdma_err_process() - RxDMA error processing functionality
- * @int_ctx: pointer to DP interrupt context
- * @soc: core txrx main context
- * @mac_id: mac id which is one of 3 mac_ids
- * @quota: No. of units (packets) that can be serviced in one shot.
- *
- * Return: num of buffers processed
- */
-uint32_t
-dp_rxdma_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
-		     uint32_t mac_id, uint32_t quota);
-
-/**
- * dp_rx_process_rxdma_err() - Function to deliver rxdma unencrypted_err
- *			       frames to OS or wifi parse errors.
- * @soc: core DP main context
- * @nbuf: buffer pointer
- * @rx_tlv_hdr: start of rx tlv header
- * @txrx_peer: peer reference
- * @err_code: rxdma err code
- * @mac_id: mac_id which is one of 3 mac_ids(Assuming mac_id and
- * pool_id has same mapping)
- * @link_id: link Id on which the packet is received
+ * dp_rx_desc_pool_init_generic() - Generic Rx descriptors initialization
+ * @soc: SOC handle
+ * @rx_desc_pool: pointer to RX descriptor pool
+ * @pool_id: pool ID
  *
  * Return: None
  */
-void
-dp_rx_process_rxdma_err(struct dp_soc *soc, qdf_nbuf_t nbuf,
-			uint8_t *rx_tlv_hdr, struct dp_txrx_peer *txrx_peer,
-			uint8_t err_code, uint8_t mac_id, uint8_t link_id);
+QDF_STATUS dp_rx_desc_pool_init_generic(struct dp_soc *soc,
+				  struct rx_desc_pool *rx_desc_pool,
+				  uint32_t pool_id);
+
+void dp_rx_desc_pool_deinit_generic(struct dp_soc *soc,
+				  struct rx_desc_pool *rx_desc_pool,
+				  uint32_t pool_id);
 
 /**
- * dp_rx_process_mic_error(): Function to pass mic error indication to umac
- * @soc: core DP main context
- * @nbuf: buffer pointer
- * @rx_tlv_hdr: start of rx tlv header
- * @txrx_peer: txrx peer handle
+ * dp_rx_pkt_tracepoints_enabled() - Get the state of rx pkt tracepoint
  *
- * Return: void
+ * Return: True if any rx pkt tracepoint is enabled else false
  */
-void dp_rx_process_mic_error(struct dp_soc *soc, qdf_nbuf_t nbuf,
-			     uint8_t *rx_tlv_hdr,
-			     struct dp_txrx_peer *txrx_peer);
-
-/**
- * dp_2k_jump_handle() - Function to handle 2k jump exception
- *                        on WBM ring
- * @soc: core DP main context
- * @nbuf: buffer pointer
- * @rx_tlv_hdr: start of rx tlv header
- * @peer_id: peer id of first msdu
- * @tid: Tid for which exception occurred
- *
- * This function handles 2k jump violations arising out
- * of receiving aggregates in non BA case. This typically
- * may happen if aggregates are received on a QOS enabled TID
- * while Rx window size is still initialized to value of 2. Or
- * it may also happen if negotiated window size is 1 but peer
- * sends aggregates.
- */
-void dp_2k_jump_handle(struct dp_soc *soc, qdf_nbuf_t nbuf, uint8_t *rx_tlv_hdr,
-		       uint16_t peer_id, uint8_t tid);
-
-#ifndef QCA_HOST_MODE_WIFI_DISABLED
-
-/**
- * dp_rx_err_process() - Processes error frames routed to REO error ring
- * @int_ctx: pointer to DP interrupt context
- * @soc: core txrx main context
- * @hal_ring_hdl: opaque pointer to the HAL Rx Error Ring, which will be serviced
- * @quota: No. of units (packets) that can be serviced in one shot.
- *
- * This function implements error processing and top level demultiplexer
- * for all the frames routed to REO error ring.
- *
- * Return: uint32_t: No. of elements processed
- */
-uint32_t dp_rx_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
-			   hal_ring_handle_t hal_ring_hdl, uint32_t quota);
-
-/**
- * dp_rx_wbm_err_process() - Processes error frames routed to WBM release ring
- * @int_ctx: pointer to DP interrupt context
- * @soc: core txrx main context
- * @hal_ring_hdl: opaque pointer to the HAL Rx Error Ring, which will be
- *                serviced
- * @quota: No. of units (packets) that can be serviced in one shot.
- *
- * This function implements error processing and top level demultiplexer
- * for all the frames routed to WBM2HOST sw release ring.
- *
- * Return: uint32_t: No. of elements processed
- */
-uint32_t
-dp_rx_wbm_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
-		      hal_ring_handle_t hal_ring_hdl, uint32_t quota);
-
-#ifdef QCA_OL_RX_LOCK_LESS_ACCESS
-/**
- * dp_rx_srng_access_start()- Wrapper function to log access start of a hal ring
- * @int_ctx: pointer to DP interrupt context
- * @soc: DP soc structure pointer
- * @hal_ring_hdl: HAL ring handle
- *
- * Return: 0 on success; error on failure
- */
-static inline int
-dp_rx_srng_access_start(struct dp_intr *int_ctx, struct dp_soc *soc,
-			hal_ring_handle_t hal_ring_hdl)
-{
-	return hal_srng_access_start_unlocked(soc->hal_soc, hal_ring_hdl);
-}
-
-/**
- * dp_rx_srng_access_end()- Wrapper function to log access end of a hal ring
- * @int_ctx: pointer to DP interrupt context
- * @soc: DP soc structure pointer
- * @hal_ring_hdl: HAL ring handle
- *
- * Return: None
- */
-static inline void
-dp_rx_srng_access_end(struct dp_intr *int_ctx, struct dp_soc *soc,
-		      hal_ring_handle_t hal_ring_hdl)
-{
-	hal_srng_access_end_unlocked(soc->hal_soc, hal_ring_hdl);
-}
-#else
-static inline int
-dp_rx_srng_access_start(struct dp_intr *int_ctx, struct dp_soc *soc,
-			hal_ring_handle_t hal_ring_hdl)
-{
-	return dp_srng_access_start(int_ctx, soc, hal_ring_hdl);
-}
-
-static inline void
-dp_rx_srng_access_end(struct dp_intr *int_ctx, struct dp_soc *soc,
-		      hal_ring_handle_t hal_ring_hdl)
-{
-	dp_srng_access_end(int_ctx, soc, hal_ring_hdl);
-}
-#endif
-
-#ifdef RX_DESC_SANITY_WAR
-QDF_STATUS dp_rx_desc_sanity(struct dp_soc *soc, hal_soc_handle_t hal_soc,
-			     hal_ring_handle_t hal_ring_hdl,
-			     hal_ring_desc_t ring_desc,
-			     struct dp_rx_desc *rx_desc);
-#else
 static inline
-QDF_STATUS dp_rx_desc_sanity(struct dp_soc *soc, hal_soc_handle_t hal_soc,
-			     hal_ring_handle_t hal_ring_hdl,
-			     hal_ring_desc_t ring_desc,
-			     struct dp_rx_desc *rx_desc)
+bool dp_rx_pkt_tracepoints_enabled(void)
 {
-	return QDF_STATUS_SUCCESS;
+	return (qdf_trace_dp_rx_tcp_pkt_enabled() ||
+		qdf_trace_dp_rx_udp_pkt_enabled() ||
+		qdf_trace_dp_rx_pkt_enabled());
 }
-#endif
-
-#ifdef RX_DESC_DEBUG_CHECK
-/**
- * dp_rx_desc_nbuf_sanity_check - Add sanity check to catch REO rx_desc paddr
- *				  corruption
- * @soc: DP SoC context
- * @ring_desc: REO ring descriptor
- * @rx_desc: Rx descriptor
- *
- * Return: NONE
- */
-QDF_STATUS dp_rx_desc_nbuf_sanity_check(struct dp_soc *soc,
-					hal_ring_desc_t ring_desc,
-					struct dp_rx_desc *rx_desc);
-#else
-static inline
-QDF_STATUS dp_rx_desc_nbuf_sanity_check(struct dp_soc *soc,
-					hal_ring_desc_t ring_desc,
-					struct dp_rx_desc *rx_desc)
-{
-	return QDF_STATUS_SUCCESS;
-}
-#endif
-#endif /* QCA_HOST_MODE_WIFI_DISABLED */
-
-/**
- * dp_rx_wbm_sg_list_reset() - Initialize sg list
- *
- * This api should be called at soc init and afterevery sg processing.
- *@soc: DP SOC handle
- */
-static inline void dp_rx_wbm_sg_list_reset(struct dp_soc *soc)
-{
-	if (soc) {
-		soc->wbm_sg_param.wbm_is_first_msdu_in_sg = false;
-		soc->wbm_sg_param.wbm_sg_nbuf_head = NULL;
-		soc->wbm_sg_param.wbm_sg_nbuf_tail = NULL;
-		soc->wbm_sg_param.wbm_sg_desc_msdu_len = 0;
-	}
-}
-
-/**
- * dp_rx_wbm_sg_list_deinit() - De-initialize sg list
- *
- * This api should be called in down path, to avoid any leak.
- *@soc: DP SOC handle
- */
-static inline void dp_rx_wbm_sg_list_deinit(struct dp_soc *soc)
-{
-	if (soc) {
-		if (soc->wbm_sg_param.wbm_sg_nbuf_head)
-			qdf_nbuf_list_free(soc->wbm_sg_param.wbm_sg_nbuf_head);
-
-		dp_rx_wbm_sg_list_reset(soc);
-	}
-}
-
-/**
- * dp_rx_link_desc_refill_duplicate_check() - check if link desc duplicate
- *					      to refill
- * @soc: DP SOC handle
- * @buf_info: the last link desc buf info
- * @ring_buf_info: current buf address pointor including link desc
- *
- * Return: none.
- */
-void dp_rx_link_desc_refill_duplicate_check(
-				struct dp_soc *soc,
-				struct hal_buf_info *buf_info,
-				hal_buff_addrinfo_t ring_buf_info);
-/**
- * dp_rx_srng_get_num_pending() - get number of pending entries
- * @hal_soc: hal soc opaque pointer
- * @hal_ring_hdl: opaque pointer to the HAL Rx Ring
- * @num_entries: number of entries in the hal_ring.
- * @near_full: pointer to a boolean. This is set if ring is near full.
- *
- * The function returns the number of entries in a destination ring which are
- * yet to be reaped. The function also checks if the ring is near full.
- * If more than half of the ring needs to be reaped, the ring is considered
- * approaching full.
- * The function uses hal_srng_dst_num_valid_locked to get the number of valid
- * entries. It should not be called within a SRNG lock. HW pointer value is
- * synced into cached_hp.
- *
- * Return: Number of pending entries if any
- */
-uint32_t dp_rx_srng_get_num_pending(hal_soc_handle_t hal_soc,
-				    hal_ring_handle_t hal_ring_hdl,
-				    uint32_t num_entries,
-				    bool *near_full);
-
-#ifdef WLAN_FEATURE_DP_RX_RING_HISTORY
-/**
- * dp_rx_ring_record_entry() - Record an entry into the rx ring history.
- * @soc: Datapath soc structure
- * @ring_num: REO ring number
- * @ring_desc: REO ring descriptor
- *
- * Return: None
- */
-void dp_rx_ring_record_entry(struct dp_soc *soc, uint8_t ring_num,
-			     hal_ring_desc_t ring_desc);
-#else
-static inline void
-dp_rx_ring_record_entry(struct dp_soc *soc, uint8_t ring_num,
-			hal_ring_desc_t ring_desc)
-{
-}
-#endif
-
-#ifdef QCA_SUPPORT_WDS_EXTENDED
-/**
- * dp_rx_is_list_ready() - Make different lists for 4-address
- *			   and 3-address frames
- * @nbuf_head: skb list head
- * @vdev: vdev
- * @txrx_peer : txrx_peer
- * @peer_id: peer id of new received frame
- * @vdev_id: vdev_id of new received frame
- *
- * Return: true if peer_ids are different.
- */
-static inline bool
-dp_rx_is_list_ready(qdf_nbuf_t nbuf_head,
-		    struct dp_vdev *vdev,
-		    struct dp_txrx_peer *txrx_peer,
-		    uint16_t peer_id,
-		    uint8_t vdev_id)
-{
-	if (nbuf_head && txrx_peer && txrx_peer->peer_id != peer_id)
-		return true;
-
-	return false;
-}
-
-/**
- * dp_rx_deliver_to_stack_ext() - Deliver to netdev per sta
- * @soc: core txrx main context
- * @vdev: vdev
- * @txrx_peer: txrx peer
- * @nbuf_head: skb list head
- *
- * Return: true if packet is delivered to netdev per STA.
- */
-bool
-dp_rx_deliver_to_stack_ext(struct dp_soc *soc, struct dp_vdev *vdev,
-			   struct dp_txrx_peer *txrx_peer,
-			   qdf_nbuf_t nbuf_head);
-#else
-static inline bool
-dp_rx_is_list_ready(qdf_nbuf_t nbuf_head,
-		    struct dp_vdev *vdev,
-		    struct dp_txrx_peer *txrx_peer,
-		    uint16_t peer_id,
-		    uint8_t vdev_id)
-{
-	if (nbuf_head && vdev && (vdev->vdev_id != vdev_id))
-		return true;
-
-	return false;
-}
-#endif
-
-#ifdef WLAN_FEATURE_MARK_FIRST_WAKEUP_PACKET
-/**
- * dp_rx_mark_first_packet_after_wow_wakeup - get first packet after wow wakeup
- * @pdev: pointer to dp_pdev structure
- * @rx_tlv: pointer to rx_pkt_tlvs structure
- * @nbuf: pointer to skb buffer
- *
- * Return: None
- */
-void dp_rx_mark_first_packet_after_wow_wakeup(struct dp_pdev *pdev,
-					      uint8_t *rx_tlv,
-					      qdf_nbuf_t nbuf);
-#else
-static inline void
-dp_rx_mark_first_packet_after_wow_wakeup(struct dp_pdev *pdev,
-					 uint8_t *rx_tlv,
-					 qdf_nbuf_t nbuf)
-{
-}
-#endif
-
-#else
-static inline QDF_STATUS
-dp_rx_link_desc_return_by_addr(struct dp_soc *soc,
-			       hal_buff_addrinfo_t link_desc_addr,
-			       uint8_t bm_action)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-static inline void dp_rx_wbm_sg_list_reset(struct dp_soc *soc)
-{
-}
-
-static inline void dp_rx_wbm_sg_list_deinit(struct dp_soc *soc)
-{
-}
-
-static inline uint32_t
-dp_rxdma_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
-		     uint32_t mac_id, uint32_t quota)
-{
-	return 0;
-}
-#endif /* WLAN_SOFTUMAC_SUPPORT */
-
-#ifndef CONFIG_NBUF_AP_PLATFORM
-static inline uint8_t
-dp_rx_get_stats_arr_idx_from_link_id(qdf_nbuf_t nbuf,
-				     struct dp_txrx_peer *txrx_peer)
-{
-	return QDF_NBUF_CB_RX_LOGICAL_LINK_ID(nbuf);
-}
-#else
-static inline uint8_t
-dp_rx_get_stats_arr_idx_from_link_id(qdf_nbuf_t nbuf,
-				     struct dp_txrx_peer *txrx_peer)
-{
-	uint8_t link_id = 0;
-
-	link_id = (QDF_NBUF_CB_RX_HW_LINK_ID(nbuf) + 1);
-	if (link_id > DP_MAX_MLO_LINKS) {
-		link_id = 0;
-		DP_PEER_PER_PKT_STATS_INC(txrx_peer,
-					  rx.inval_link_id_pkt_cnt,
-					  1, link_id);
-	}
-
-	return link_id;
-}
-#endif /* CONFIG_NBUF_AP_PLATFORM */
-
 #endif /* _DP_RX_H */

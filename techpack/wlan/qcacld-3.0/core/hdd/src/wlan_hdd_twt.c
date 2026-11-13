@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -18,7 +18,7 @@
  */
 
 /**
- * DOC: wlan_hdd_twt.c
+ * DOC : wlan_hdd_twt.c
  *
  * WLAN Host Device Driver file for TWT (Target Wake Time) support.
  *
@@ -41,7 +41,6 @@
 #include <target_if.h>
 #include "wlan_hdd_object_manager.h"
 #include "osif_twt_ext_req.h"
-#include "wlan_mlo_mgr_sta.h"
 #include "wlan_twt_ucfg_ext_api.h"
 #include "wlan_twt_ucfg_ext_cfg.h"
 #include "osif_twt_internal.h"
@@ -82,8 +81,7 @@ QDF_STATUS hdd_send_twt_responder_enable_cmd(struct hdd_context *hdd_ctx)
 
 void wlan_twt_concurrency_update(struct hdd_context *hdd_ctx)
 {
-	if (wlan_hdd_is_twt_pmo_allowed(hdd_ctx))
-		qdf_sched_work(0, &hdd_ctx->twt_en_dis_work);
+	qdf_sched_work(0, &hdd_ctx->twt_en_dis_work);
 }
 
 void hdd_twt_update_work_handler(void *data)
@@ -140,7 +138,7 @@ void wlan_hdd_twt_deinit(struct hdd_context *hdd_ctx)
 }
 
 void
-hdd_send_twt_del_all_sessions_to_userspace(struct wlan_hdd_link_info *link_info)
+hdd_send_twt_del_all_sessions_to_userspace(struct hdd_adapter *adapter)
 {
 }
 
@@ -169,9 +167,8 @@ void wlan_hdd_twt_init(struct hdd_context *hdd_ctx)
 /**
  * hdd_twt_terminate_session - Process TWT terminate
  * operation in the received vendor command and
- * send it to firmware
+ * send it to firmare
  * @adapter: adapter pointer
- * @vdev: associated vdev object
  * @twt_param_attr: nl attributes
  *
  * Handles QCA_WLAN_TWT_TERMINATE
@@ -228,7 +225,7 @@ static int hdd_twt_configure(struct hdd_adapter *adapter,
 
 	hdd_debug("TWT Operation 0x%x", twt_oper);
 
-	vdev = hdd_objmgr_get_vdev_by_user(adapter->deflink, WLAN_TWT_ID);
+	vdev = hdd_objmgr_get_vdev_by_user(adapter, WLAN_TWT_ID);
 	if (!vdev) {
 		hdd_err("vdev is NULL");
 		return -EINVAL;
@@ -280,7 +277,6 @@ static int hdd_twt_configure(struct hdd_adapter *adapter,
 #define TWT_DISABLE_COMPLETE_TIMEOUT 1000
 #define TWT_ENABLE_COMPLETE_TIMEOUT  1000
 #define TWT_ACK_COMPLETE_TIMEOUT 1000
-#define TWT_WORK_RESCHED_WAIT_TIME 30
 
 #define TWT_FLOW_TYPE_ANNOUNCED 0
 #define TWT_FLOW_TYPE_UNANNOUNCED 1
@@ -315,7 +311,6 @@ qca_wlan_vendor_twt_add_dialog_policy[QCA_WLAN_VENDOR_ATTR_TWT_SETUP_MAX + 1] = 
 							.type = NLA_U8 },
 	[QCA_WLAN_VENDOR_ATTR_TWT_SETUP_BCAST_PERSISTENCE] = {.type = NLA_U8 },
 	[QCA_WLAN_VENDOR_ATTR_TWT_SETUP_WAKE_TIME_TSF] = {.type = NLA_U64 },
-	[QCA_WLAN_VENDOR_ATTR_TWT_SETUP_ANNOUNCE_TIMEOUT] = {.type = NLA_U32 },
 };
 
 static const struct nla_policy
@@ -337,11 +332,6 @@ qca_wlan_vendor_twt_nudge_dialog_policy[QCA_WLAN_VENDOR_ATTR_TWT_NUDGE_MAX + 1] 
 	[QCA_WLAN_VENDOR_ATTR_TWT_NUDGE_WAKE_TIME] = {.type = NLA_U32 },
 	[QCA_WLAN_VENDOR_ATTR_TWT_NUDGE_NEXT_TWT_SIZE] = {.type = NLA_U32 },
 	[QCA_WLAN_VENDOR_ATTR_TWT_NUDGE_MAC_ADDR] = VENDOR_NLA_POLICY_MAC_ADDR,
-};
-
-static const struct nla_policy
-qca_wlan_vendor_twt_set_param_policy[QCA_WLAN_VENDOR_ATTR_TWT_SET_PARAM_MAX + 1] = {
-	[QCA_WLAN_VENDOR_ATTR_TWT_SET_PARAM_AP_AC_VALUE] = {.type = NLA_U8 },
 };
 
 static
@@ -555,12 +545,6 @@ int hdd_twt_get_add_dialog_values(struct nlattr **tb,
 	else
 		params->wake_time_tsf = 0;
 
-	cmd_id = QCA_WLAN_VENDOR_ATTR_TWT_SETUP_ANNOUNCE_TIMEOUT;
-	if (tb[cmd_id])
-		params->announce_timeout_us = nla_get_u32(tb[cmd_id]);
-	else
-		params->announce_timeout_us = 0;
-
 	hdd_debug("twt: dialog_id %d, vdev %d, wake intvl_us %d, min %d, max %d, mantis %d",
 		  params->dialog_id, params->vdev_id, params->wake_intvl_us,
 		  params->min_wake_intvl_us, params->max_wake_intvl_us,
@@ -578,8 +562,6 @@ int hdd_twt_get_add_dialog_values(struct nlattr **tb,
 	hdd_debug("twt: peer mac_addr "
 		  QDF_MAC_ADDR_FMT,
 		  QDF_MAC_ADDR_REF(params->peer_macaddr));
-	hdd_debug("twt: announce timeout(in us) %u",
-		  params->announce_timeout_us);
 
 	return 0;
 }
@@ -602,16 +584,16 @@ int hdd_test_config_twt_setup_session(struct hdd_adapter *adapter,
 		return -EOPNOTSUPP;
 	}
 
-	hdd_sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter->deflink);
-	if (!hdd_cm_is_vdev_associated(adapter->deflink)) {
+	hdd_sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter);
+	if (!hdd_cm_is_vdev_associated(adapter)) {
 		hdd_err_rl("Invalid state, vdev %d mode %d",
-			   adapter->deflink->vdev_id, adapter->device_mode);
+			   adapter->vdev_id, adapter->device_mode);
 		return -EINVAL;
 	}
 
 	qdf_mem_copy(params.peer_macaddr, hdd_sta_ctx->conn_info.bssid.bytes,
 		     QDF_MAC_ADDR_SIZE);
-	params.vdev_id = adapter->deflink->vdev_id;
+	params.vdev_id = adapter->vdev_id;
 
 	cmd_id = QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_TWT_SETUP;
 	nla_for_each_nested(twt_session, tb[cmd_id], tmp) {
@@ -669,17 +651,17 @@ int hdd_test_config_twt_terminate_session(struct hdd_adapter *adapter,
 		return -EOPNOTSUPP;
 	}
 
-	hdd_sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter->deflink);
-	if (!hdd_cm_is_vdev_associated(adapter->deflink)) {
+	hdd_sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter);
+	if (!hdd_cm_is_vdev_associated(adapter)) {
 		hdd_err_rl("Invalid state, vdev %d mode %d",
-			   adapter->deflink->vdev_id, adapter->device_mode);
+			   adapter->vdev_id, adapter->device_mode);
 		return -EINVAL;
 	}
 
 	qdf_mem_copy(params.peer_macaddr,
 		     hdd_sta_ctx->conn_info.bssid.bytes,
 		     QDF_MAC_ADDR_SIZE);
-	params.vdev_id = adapter->deflink->vdev_id;
+	params.vdev_id = adapter->vdev_id;
 	params.dialog_id = 0;
 	hdd_debug("twt_terminate: vdev_id %d", params.vdev_id);
 
@@ -715,7 +697,7 @@ QDF_STATUS hdd_twt_check_all_twt_support(struct wlan_objmgr_psoc *psoc,
 /**
  * hdd_twt_get_params_resp_len() - Calculates the length
  * of twt get_params nl response
- * @params: twt session stats parameters
+ * @params twt session stats parameters
  *
  * Return: Length of get params nl response
  */
@@ -799,7 +781,7 @@ hdd_get_converted_twt_state(enum wlan_twt_session_state state)
  * hdd_twt_pack_get_params_resp_nlmsg()- Packs and sends twt get_params response
  * @psoc: Pointer to Global psoc
  * @reply_skb: pointer to response skb buffer
- * @params: Pointer to twt peer session parameters
+ * @params: Ponter to twt peer session parameters
  * @num_twt_session: total number of valid twt session
  *
  * Return: QDF_STATUS_SUCCESS on success, else other qdf error values
@@ -1002,12 +984,12 @@ hdd_twt_pack_get_params_resp(struct hdd_context *hdd_ctx,
 	if (QDF_IS_STATUS_ERROR(qdf_status))
 		goto fail;
 
-	if (wlan_cfg80211_vendor_cmd_reply(reply_skb))
+	if (cfg80211_vendor_cmd_reply(reply_skb))
 		qdf_status = QDF_STATUS_E_INVAL;
-	return qdf_status;
-
 fail:
-	wlan_cfg80211_vendor_free_skb(reply_skb);
+	if (QDF_IS_STATUS_ERROR(qdf_status) && reply_skb)
+		kfree_skb(reply_skb);
+
 	return qdf_status;
 }
 
@@ -1019,9 +1001,9 @@ static int hdd_is_twt_command_allowed(struct hdd_adapter *adapter)
 	    adapter->device_mode != QDF_P2P_CLIENT_MODE)
 		return -EOPNOTSUPP;
 
-	if (!hdd_cm_is_vdev_associated(adapter->deflink)) {
+	if (!hdd_cm_is_vdev_associated(adapter)) {
 		hdd_err_rl("Invalid state, vdev %d mode %d",
-			   adapter->deflink->vdev_id, adapter->device_mode);
+			   adapter->vdev_id, adapter->device_mode);
 		return -EAGAIN;
 	}
 
@@ -1039,7 +1021,6 @@ static int hdd_is_twt_command_allowed(struct hdd_adapter *adapter)
 /**
  * hdd_send_inactive_session_reply  -  Send session state as inactive for
  * dialog ID for which setup is not done.
- * @adapter: hdd_adapter
  * @params: TWT session parameters
  *
  * Return: QDF_STATUS
@@ -1087,7 +1068,7 @@ hdd_twt_get_peer_session_params(struct hdd_context *hdd_ctx,
 }
 
 /**
- * hdd_sap_twt_get_session_params() - Parses twt nl attributes, obtains twt
+ * hdd_sap_twt_get_session_params() - Parses twt nl attrributes, obtains twt
  * session parameters based on dialog_id and returns to user via nl layer
  * @adapter: hdd_adapter
  * @twt_param_attr: twt nl attributes
@@ -1120,7 +1101,7 @@ static int hdd_sap_twt_get_session_params(struct hdd_adapter *adapter,
 	if (!params)
 		return -ENOMEM;
 
-	params[0].vdev_id = adapter->deflink->vdev_id;
+	params[0].vdev_id = adapter->vdev_id;
 	id = QCA_WLAN_VENDOR_ATTR_TWT_SETUP_FLOW_ID;
 	id1 = QCA_WLAN_VENDOR_ATTR_TWT_SETUP_MAC_ADDR;
 
@@ -1164,7 +1145,7 @@ done:
 }
 
 /**
- * hdd_sta_twt_get_session_params() - Parses twt nl attributes, obtains twt
+ * hdd_sta_twt_get_session_params() - Parses twt nl attrributes, obtains twt
  * session parameters based on dialog_id and returns to user via nl layer
  * @adapter: hdd_adapter
  * @twt_param_attr: twt nl attributes
@@ -1175,7 +1156,7 @@ static int hdd_sta_twt_get_session_params(struct hdd_adapter *adapter,
 					  struct nlattr *twt_param_attr)
 {
 	struct hdd_station_ctx *hdd_sta_ctx =
-				WLAN_HDD_GET_STATION_CTX_PTR(adapter->deflink);
+				WLAN_HDD_GET_STATION_CTX_PTR(adapter);
 	struct nlattr *tb[QCA_WLAN_VENDOR_ATTR_TWT_SETUP_MAX + 1];
 	struct wmi_host_twt_session_stats_info
 				params[TWT_PSOC_MAX_SESSIONS] = { {0} };
@@ -1190,7 +1171,7 @@ static int hdd_sta_twt_get_session_params(struct hdd_adapter *adapter,
 	if (ret)
 		return ret;
 
-	params[0].vdev_id = adapter->deflink->vdev_id;
+	params[0].vdev_id = adapter->vdev_id;
 	/*
 	 * Currently twt_get_params nl cmd is sending only dialog_id(STA), fill
 	 * mac_addr of STA in params and call hdd_twt_get_peer_session_params.
@@ -1220,7 +1201,7 @@ static int hdd_sta_twt_get_session_params(struct hdd_adapter *adapter,
 					 &hdd_sta_ctx->conn_info.bssid,
 					 params[0].dialog_id)) {
 		hdd_debug("vdev%d: TWT session %d setup incomplete",
-			  adapter->deflink->vdev_id, params[0].dialog_id);
+			  adapter->vdev_id, params[0].dialog_id);
 		qdf_status = hdd_send_inactive_session_reply(adapter, params);
 
 		return qdf_status_to_os_return(qdf_status);
@@ -1236,7 +1217,7 @@ static int hdd_sta_twt_get_session_params(struct hdd_adapter *adapter,
 }
 
 /**
- * hdd_twt_get_session_params() - Parses twt nl attributes, obtains twt
+ * hdd_twt_get_session_params() - Parses twt nl attrributes, obtains twt
  * session parameters based on dialog_id and returns to user via nl layer
  * @adapter: hdd_adapter
  * @twt_param_attr: twt nl attributes
@@ -1423,8 +1404,6 @@ wmi_twt_nudge_status_to_vendor_twt_status(enum WMI_HOST_NUDGE_TWT_STATUS status)
 		return QCA_WLAN_VENDOR_TWT_STATUS_NO_ACK;
 	case WMI_HOST_NUDGE_TWT_STATUS_UNKNOWN_ERROR:
 		return QCA_WLAN_VENDOR_TWT_STATUS_UNKNOWN_ERROR;
-	case WMI_HOST_NUDGE_TWT_STATUS_ALREADY_PAUSED:
-		return QCA_WLAN_VENDOR_TWT_STATUS_ALREADY_SUSPENDED;
 	case WMI_HOST_NUDGE_TWT_STATUS_CHAN_SW_IN_PROGRESS:
 		return QCA_WLAN_VENDOR_TWT_STATUS_CHANNEL_SWITCH_IN_PROGRESS;
 	default:
@@ -1435,7 +1414,7 @@ wmi_twt_nudge_status_to_vendor_twt_status(enum WMI_HOST_NUDGE_TWT_STATUS status)
 /**
  * wmi_twt_add_cmd_to_vendor_twt_resp_type() - convert from
  * WMI_HOST_TWT_COMMAND to qca_wlan_vendor_twt_setup_resp_type
- * @type: WMI_HOST_TWT_COMMAND value from firmware
+ * @status: WMI_HOST_TWT_COMMAND value from firmare
  *
  * Return: qca_wlan_vendor_twt_setup_resp_type values for valid
  * WMI_HOST_TWT_COMMAND value and -EINVAL for invalid value
@@ -1460,9 +1439,9 @@ int wmi_twt_add_cmd_to_vendor_twt_resp_type(enum WMI_HOST_TWT_COMMAND type)
 /**
  * wmi_twt_del_status_to_vendor_twt_status() - convert from
  * WMI_HOST_DEL_TWT_STATUS to qca_wlan_vendor_twt_status
- * @status: WMI_HOST_DEL_TWT_STATUS value from firmware
+ * @status: WMI_HOST_DEL_TWT_STATUS value from firmare
  *
- * Return: qca_wlan_vendor_twt_status values corresponding
+ * Return: qca_wlan_vendor_twt_status values corresponsing
  * to the firmware failure status
  */
 static
@@ -1503,7 +1482,7 @@ int wmi_twt_del_status_to_vendor_twt_status(enum WMI_HOST_DEL_TWT_STATUS status)
 /**
  * wmi_twt_add_status_to_vendor_twt_status() - convert from
  * WMI_HOST_ADD_TWT_STATUS to qca_wlan_vendor_twt_status
- * @status: WMI_HOST_ADD_TWT_STATUS value from firmware
+ * @status: WMI_HOST_ADD_TWT_STATUS value from firmare
  *
  * Return: qca_wlan_vendor_twt_status values corresponding
  * to WMI_HOST_ADD_TWT_STATUS.
@@ -1737,7 +1716,7 @@ hdd_twt_setup_pack_resp_nlmsg(struct sk_buff *reply_skb,
 
 /**
  * hdd_send_twt_setup_response  - Send TWT setup response to userspace
- * @adapter: Pointer to HDD adapter. This pointer is expected to
+ * @hdd_adapter: Pointer to HDD adapter. This pointer is expeceted to
  * be validated by the caller.
  * @add_dialog_comp_ev_params: Add dialog completion event structure
  *
@@ -1916,16 +1895,14 @@ hdd_twt_add_dialog_comp_cb(struct wlan_objmgr_psoc *psoc,
 			   bool renego_fail)
 {
 	struct hdd_adapter *adapter;
-	struct wlan_hdd_link_info *link_info;
 	uint8_t vdev_id = add_dialog_event->params.vdev_id;
 
-	link_info = wlan_hdd_get_link_info_from_vdev(psoc, vdev_id);
-	if (!link_info) {
-		hdd_err("Invalid vdev");
+	adapter = wlan_hdd_get_adapter_from_vdev(psoc, vdev_id);
+	if (!adapter) {
+		hdd_err("adapter is NULL");
 		return;
 	}
 
-	adapter = link_info->adapter;
 	hdd_debug("TWT: add dialog_id:%d, status:%d vdev_id:%d renego_fail:%d peer mac_addr "
 		  QDF_MAC_ADDR_FMT, add_dialog_event->params.dialog_id,
 		  add_dialog_event->params.status, vdev_id, renego_fail,
@@ -2040,7 +2017,7 @@ static bool hdd_twt_setup_conc_allowed(struct hdd_context *hdd_ctx,
 
 /**
  * hdd_twt_setup_session() - Process TWT setup operation in the
- * received vendor command and send it to firmware
+ * received vendor command and send it to firmare
  * @adapter: adapter pointer
  * @twt_param_attr: nl attributes
  *
@@ -2062,7 +2039,7 @@ static int hdd_twt_setup_session(struct hdd_adapter *adapter,
 {
 	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
 	struct hdd_station_ctx *hdd_sta_ctx =
-			WLAN_HDD_GET_STATION_CTX_PTR(adapter->deflink);
+			WLAN_HDD_GET_STATION_CTX_PTR(adapter);
 	struct wmi_twt_add_dialog_param params = {0};
 	struct nlattr *tb2[QCA_WLAN_VENDOR_ATTR_TWT_SETUP_MAX + 1];
 	uint32_t congestion_timeout = 0;
@@ -2072,7 +2049,7 @@ static int hdd_twt_setup_session(struct hdd_adapter *adapter,
 	if (ret)
 		return ret;
 
-	if (hdd_twt_setup_conc_allowed(hdd_ctx, adapter->deflink->vdev_id)) {
+	if (hdd_twt_setup_conc_allowed(hdd_ctx, adapter->vdev_id)) {
 		hdd_err_rl("TWT setup reject: SCC or MCC concurrency exists");
 		return -EAGAIN;
 	}
@@ -2080,7 +2057,7 @@ static int hdd_twt_setup_session(struct hdd_adapter *adapter,
 	qdf_mem_copy(params.peer_macaddr,
 		     hdd_sta_ctx->conn_info.bssid.bytes,
 		     QDF_MAC_ADDR_SIZE);
-	params.vdev_id = adapter->deflink->vdev_id;
+	params.vdev_id = adapter->vdev_id;
 
 	ret = wlan_cfg80211_nla_parse_nested(tb2,
 					     QCA_WLAN_VENDOR_ATTR_TWT_SETUP_MAX,
@@ -2147,86 +2124,6 @@ static int hdd_twt_setup_session(struct hdd_adapter *adapter,
 	ret = hdd_send_twt_add_dialog_cmd(adapter->hdd_ctx, &params);
 	if (ret < 0)
 		return ret;
-
-	return ret;
-}
-
-/**
- * hdd_twt_add_ac_config() - Get TWT AC parameter
- * value from QCA_WLAN_VENDOR_ATTR_CONFIG_TWT_PARAMS
- * @adapter: adapter pointer
- * @twt_ac_param: AC parameter
- *
- * Handles QCA_WLAN_VENDOR_ATTR_TWT_SET_PARAM_AP_AC_VALUE
- *
- * Return: 0 on success, negative value on failure.
- */
-static int hdd_twt_add_ac_config(struct hdd_adapter *adapter,
-				 enum qca_wlan_ac_type twt_ac_param)
-{
-	bool is_responder_en;
-	int ret = 0;
-	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
-
-	if (twt_ac_param < QCA_WLAN_AC_BE || twt_ac_param > QCA_WLAN_AC_VO) {
-		hdd_err_rl("Invalid AC parameter. Value: %d", twt_ac_param);
-		return -EINVAL;
-	}
-
-	ucfg_mlme_get_twt_responder(hdd_ctx->psoc, &is_responder_en);
-
-	if (adapter->device_mode == QDF_SAP_MODE && is_responder_en) {
-		ret = sme_cli_set_command(adapter->deflink->vdev_id,
-					  wmi_pdev_param_twt_ac_config,
-					  twt_ac_param, PDEV_CMD);
-	} else {
-		hdd_err_rl("Undesired device mode. Mode: %d and responder: %d",
-			   adapter->device_mode, is_responder_en);
-		return -EINVAL;
-	}
-
-	return ret;
-}
-
-/**
- * hdd_twt_set_param - Process TWT set parameter operation
- * in the received vendor command and send it to firmware
- * @adapter: adapter pointer
- * @twt_param_attr: nl attributes
- *
- * Handles QCA_WLAN_TWT_SET_PARAM
- *
- * Return: 0 on success, negative value on failure
- */
-static int hdd_twt_set_param(struct hdd_adapter *adapter,
-			     struct nlattr *twt_param_attr)
-{
-	struct nlattr *tb[QCA_WLAN_VENDOR_ATTR_TWT_SET_PARAM_MAX + 1];
-	int ret;
-	int cmd_id;
-	uint8_t twt_ac_param;
-
-	ret = wlan_cfg80211_nla_parse_nested
-					(tb,
-					 QCA_WLAN_VENDOR_ATTR_TWT_SET_PARAM_MAX,
-					 twt_param_attr,
-					 qca_wlan_vendor_twt_set_param_policy);
-	if (ret)
-		return ret;
-
-	cmd_id = QCA_WLAN_VENDOR_ATTR_TWT_SET_PARAM_AP_AC_VALUE;
-
-	if (tb[cmd_id]) {
-		twt_ac_param = nla_get_u8(tb[cmd_id]);
-		hdd_debug("TWT_AC_CONFIG_VALUE: %d", twt_ac_param);
-		ret = hdd_twt_add_ac_config(adapter, twt_ac_param);
-
-		if (ret) {
-			hdd_err("Fail to set TWT AC parameter, errno %d",
-				ret);
-			return ret;
-		}
-	}
 
 	return ret;
 }
@@ -2338,7 +2235,8 @@ static void
 hdd_twt_del_dialog_comp_cb(struct wlan_objmgr_psoc *psoc,
 			   struct wmi_twt_del_dialog_complete_event_param *params)
 {
-	struct wlan_hdd_link_info *link_info;
+	struct hdd_adapter *adapter =
+		wlan_hdd_get_adapter_from_vdev(psoc, params->vdev_id);
 	struct wireless_dev *wdev;
 	struct hdd_context *hdd_ctx;
 	struct sk_buff *twt_vendor_event;
@@ -2347,17 +2245,16 @@ hdd_twt_del_dialog_comp_cb(struct wlan_objmgr_psoc *psoc,
 
 	hdd_enter();
 
-	link_info = wlan_hdd_get_link_info_from_vdev(psoc, params->vdev_id);
-	if (!link_info) {
-		hdd_err("Invalid vdev");
+	if (!adapter) {
+		hdd_err("adapter is NULL");
 		return;
 	}
 
-	hdd_ctx = WLAN_HDD_GET_CTX(link_info->adapter);
+	hdd_ctx = WLAN_HDD_GET_CTX(adapter);
 	if (!hdd_ctx || cds_is_load_or_unload_in_progress())
 		return;
 
-	wdev = &link_info->adapter->wdev;
+	wdev = adapter->dev->ieee80211_ptr;
 
 	data_len = hdd_get_twt_event_len() + nla_total_size(sizeof(u8));
 	data_len += NLA_HDRLEN;
@@ -2389,17 +2286,16 @@ hdd_twt_del_dialog_comp_cb(struct wlan_objmgr_psoc *psoc,
 }
 
 void
-hdd_send_twt_del_all_sessions_to_userspace(struct wlan_hdd_link_info *link_info)
+hdd_send_twt_del_all_sessions_to_userspace(struct hdd_adapter *adapter)
 {
-	struct hdd_adapter *adapter = link_info->adapter;
 	struct wlan_objmgr_psoc *psoc = adapter->hdd_ctx->psoc;
 	struct hdd_station_ctx *hdd_sta_ctx = NULL;
 	struct wmi_twt_del_dialog_complete_event_param params;
 
-	hdd_sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(link_info);
-	if (!hdd_cm_is_vdev_associated(link_info)) {
+	hdd_sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter);
+	if (!hdd_cm_is_vdev_associated(adapter)) {
 		hdd_debug("Not associated, vdev %d mode %d",
-			   link_info->vdev_id, adapter->device_mode);
+			   adapter->vdev_id, adapter->device_mode);
 		return;
 	}
 
@@ -2407,13 +2303,12 @@ hdd_send_twt_del_all_sessions_to_userspace(struct wlan_hdd_link_info *link_info)
 					 &hdd_sta_ctx->conn_info.bssid,
 					 TWT_ALL_SESSIONS_DIALOG_ID)) {
 		hdd_debug("No active TWT sessions, vdev_id: %d dialog_id: %d",
-			  link_info->vdev_id,
-			  TWT_ALL_SESSIONS_DIALOG_ID);
+			  adapter->vdev_id, TWT_ALL_SESSIONS_DIALOG_ID);
 		return;
 	}
 
 	qdf_mem_zero(&params, sizeof(params));
-	params.vdev_id = link_info->vdev_id;
+	params.vdev_id = adapter->vdev_id;
 	params.dialog_id = TWT_ALL_SESSIONS_DIALOG_ID;
 	params.status = WMI_HOST_DEL_TWT_STATUS_UNKNOWN_ERROR;
 	qdf_mem_copy(params.peer_macaddr, hdd_sta_ctx->conn_info.bssid.bytes,
@@ -2550,7 +2445,7 @@ static int hdd_sap_twt_terminate_session(struct hdd_adapter *adapter,
 	bool is_associated;
 	struct qdf_mac_addr mac_addr;
 
-	params.vdev_id = adapter->deflink->vdev_id;
+	params.vdev_id = adapter->vdev_id;
 
 	ret = wlan_cfg80211_nla_parse_nested(tb,
 					     QCA_WLAN_VENDOR_ATTR_TWT_SETUP_MAX,
@@ -2627,10 +2522,10 @@ static int hdd_sta_twt_terminate_session(struct hdd_adapter *adapter,
 	QDF_STATUS status;
 	int id, ret;
 
-	hdd_sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter->deflink);
-	if (!hdd_cm_is_vdev_associated(adapter->deflink)) {
+	hdd_sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter);
+	if (!hdd_cm_is_vdev_associated(adapter)) {
 		hdd_err_rl("Invalid state, vdev %d mode %d",
-			   adapter->deflink->vdev_id, adapter->device_mode);
+			   adapter->vdev_id, adapter->device_mode);
 
 		/*
 		 * Return success, since STA is not associated and there is
@@ -2650,7 +2545,7 @@ static int hdd_sta_twt_terminate_session(struct hdd_adapter *adapter,
 	qdf_mem_copy(params.peer_macaddr,
 		     hdd_sta_ctx->conn_info.bssid.bytes,
 		     QDF_MAC_ADDR_SIZE);
-	params.vdev_id = adapter->deflink->vdev_id;
+	params.vdev_id = adapter->vdev_id;
 
 	ret = wlan_cfg80211_nla_parse_nested(tb,
 					     QCA_WLAN_VENDOR_ATTR_TWT_SETUP_MAX,
@@ -2700,7 +2595,7 @@ static int hdd_sta_twt_terminate_session(struct hdd_adapter *adapter,
 /**
  * hdd_twt_terminate_session - Process TWT terminate
  * operation in the received vendor command and
- * send it to firmware
+ * send it to firmare
  * @adapter: adapter pointer
  * @twt_param_attr: nl attributes
  *
@@ -2803,7 +2698,8 @@ static void hdd_twt_nudge_dialog_comp_cb(
 		struct wmi_twt_nudge_dialog_complete_event_param *params)
 {
 
-	struct wlan_hdd_link_info *link_info;
+	struct hdd_adapter *adapter =
+		wlan_hdd_get_adapter_from_vdev(psoc, params->vdev_id);
 	struct wireless_dev *wdev;
 	struct hdd_context *hdd_ctx;
 	struct sk_buff *twt_vendor_event;
@@ -2811,14 +2707,12 @@ static void hdd_twt_nudge_dialog_comp_cb(
 	QDF_STATUS status;
 
 	hdd_enter();
-
-	link_info = wlan_hdd_get_link_info_from_vdev(psoc, params->vdev_id);
-	if (!link_info || hdd_validate_adapter(link_info->adapter))
+	if (hdd_validate_adapter(adapter))
 		return;
 
-	hdd_ctx = WLAN_HDD_GET_CTX(link_info->adapter);
+	hdd_ctx = WLAN_HDD_GET_CTX(adapter);
 
-	wdev = &link_info->adapter->wdev;
+	wdev = adapter->dev->ieee80211_ptr;
 
 	hdd_debug("Nudge dialog_id:%d, status:%d vdev_id %d peer mac_addr "
 		  QDF_MAC_ADDR_FMT, params->dialog_id,
@@ -2917,7 +2811,8 @@ hdd_twt_pause_dialog_comp_cb(
 		struct wlan_objmgr_psoc *psoc,
 		struct wmi_twt_pause_dialog_complete_event_param *params)
 {
-	struct wlan_hdd_link_info *link_info;
+	struct hdd_adapter *adapter =
+		wlan_hdd_get_adapter_from_vdev(psoc, params->vdev_id);
 	struct wireless_dev *wdev;
 	struct hdd_context *hdd_ctx;
 	struct sk_buff *twt_vendor_event;
@@ -2926,18 +2821,17 @@ hdd_twt_pause_dialog_comp_cb(
 
 	hdd_enter();
 
-	link_info = wlan_hdd_get_link_info_from_vdev(psoc, params->vdev_id);
-	if (!link_info) {
-		hdd_err("Invalid vdev");
+	if (!adapter) {
+		hdd_err("adapter is NULL");
 		return;
 	}
 
-	hdd_ctx = WLAN_HDD_GET_CTX(link_info->adapter);
+	hdd_ctx = WLAN_HDD_GET_CTX(adapter);
 	status = wlan_hdd_validate_context(hdd_ctx);
 	if (QDF_IS_STATUS_ERROR(status))
 		return;
 
-	wdev = &link_info->adapter->wdev;
+	wdev = adapter->dev->ieee80211_ptr;
 
 	hdd_debug("pause dialog_id:%d, status:%d vdev_id %d peer mac_addr "
 		  QDF_MAC_ADDR_FMT, params->dialog_id,
@@ -3069,7 +2963,7 @@ static int hdd_twt_pause_session(struct hdd_adapter *adapter,
 				 struct nlattr *twt_param_attr)
 {
 	struct hdd_station_ctx *hdd_sta_ctx =
-		WLAN_HDD_GET_STATION_CTX_PTR(adapter->deflink);
+		WLAN_HDD_GET_STATION_CTX_PTR(adapter);
 	struct nlattr *tb[QCA_WLAN_VENDOR_ATTR_TWT_SETUP_MAX + 1];
 	struct wmi_twt_pause_dialog_cmd_param params = {0};
 	QDF_STATUS status;
@@ -3082,7 +2976,7 @@ static int hdd_twt_pause_session(struct hdd_adapter *adapter,
 
 	qdf_mem_copy(params.peer_macaddr, hdd_sta_ctx->conn_info.bssid.bytes,
 		     QDF_MAC_ADDR_SIZE);
-	params.vdev_id = adapter->deflink->vdev_id;
+	params.vdev_id = adapter->vdev_id;
 	params.dialog_id = 0;
 
 	if (twt_param_attr) {
@@ -3185,7 +3079,6 @@ int hdd_send_twt_nudge_dialog_cmd(struct hdd_context *hdd_ctx,
 
 		switch (ack_priv->status) {
 		case WMI_HOST_NUDGE_TWT_STATUS_INVALID_PARAM:
-		case WMI_HOST_NUDGE_TWT_STATUS_ALREADY_PAUSED:
 		case WMI_HOST_NUDGE_TWT_STATUS_UNKNOWN_ERROR:
 			ret = -EINVAL;
 			break;
@@ -3229,7 +3122,7 @@ static int hdd_twt_nudge_session(struct hdd_adapter *adapter,
 				 struct nlattr *twt_param_attr)
 {
 	struct hdd_station_ctx *hdd_sta_ctx =
-			WLAN_HDD_GET_STATION_CTX_PTR(adapter->deflink);
+			WLAN_HDD_GET_STATION_CTX_PTR(adapter);
 	struct nlattr *tb[QCA_WLAN_VENDOR_ATTR_TWT_NUDGE_MAX + 1];
 	struct wmi_twt_nudge_dialog_cmd_param params = {0};
 	QDF_STATUS status;
@@ -3247,7 +3140,7 @@ static int hdd_twt_nudge_session(struct hdd_adapter *adapter,
 		return -EOPNOTSUPP;
 	}
 
-	params.vdev_id = adapter->deflink->vdev_id;
+	params.vdev_id = adapter->vdev_id;
 
 	ret = wlan_cfg80211_nla_parse_nested(tb,
 				      QCA_WLAN_VENDOR_ATTR_TWT_NUDGE_MAX,
@@ -3371,6 +3264,7 @@ hdd_twt_resume_pack_resp_nlmsg(struct sk_buff *reply_skb,
  * hdd_twt_resume_dialog_comp_cb() - callback function
  * to get twt resume command complete event
  * @psoc: Pointer to global psoc
+ * @vdev_id: Vdev id
  * @params: Pointer to resume dialog complete event buffer
  *
  * Return: None
@@ -3379,7 +3273,8 @@ static void hdd_twt_resume_dialog_comp_cb(
 		struct wlan_objmgr_psoc *psoc,
 		struct wmi_twt_resume_dialog_complete_event_param *params)
 {
-	struct wlan_hdd_link_info *link_info;
+	struct hdd_adapter *adapter =
+		wlan_hdd_get_adapter_from_vdev(psoc, params->vdev_id);
 	struct hdd_context *hdd_ctx;
 	struct wireless_dev *wdev;
 	struct sk_buff *twt_vendor_event;
@@ -3388,18 +3283,17 @@ static void hdd_twt_resume_dialog_comp_cb(
 
 	hdd_enter();
 
-	link_info = wlan_hdd_get_link_info_from_vdev(psoc, params->vdev_id);
-	if (!link_info) {
-		hdd_err("Invalid vdev");
+	if (!adapter) {
+		hdd_err("adapter is NULL");
 		return;
 	}
 
-	hdd_ctx = WLAN_HDD_GET_CTX(link_info->adapter);
+	hdd_ctx = WLAN_HDD_GET_CTX(adapter);
 	status = wlan_hdd_validate_context(hdd_ctx);
 	if (QDF_IS_STATUS_ERROR(status))
 		return;
 
-	wdev = &link_info->adapter->wdev;
+	wdev = adapter->dev->ieee80211_ptr;
 
 	hdd_debug("TWT: resume dialog_id:%d status:%d vdev_id %d peer mac_addr "
 		  QDF_MAC_ADDR_FMT, params->dialog_id,
@@ -3526,7 +3420,7 @@ hdd_twt_pack_get_capabilities_resp(struct hdd_adapter *adapter)
 {
 	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
 	struct hdd_station_ctx *sta_ctx =
-		WLAN_HDD_GET_STATION_CTX_PTR(adapter->deflink);
+		WLAN_HDD_GET_STATION_CTX_PTR(adapter);
 	struct nlattr *config_attr;
 	struct sk_buff *reply_skb;
 	size_t skb_len = NLMSG_HDRLEN;
@@ -3535,7 +3429,6 @@ hdd_twt_pack_get_capabilities_resp(struct hdd_adapter *adapter)
 	uint8_t peer_cap = 0, self_cap = 0;
 	bool twt_req = false, twt_bcast_req = false;
 	bool is_twt_24ghz_allowed = true;
-	int ret;
 
 	/*
 	 * Length of attribute QCA_WLAN_VENDOR_ATTR_TWT_CAPABILITIES_SELF &
@@ -3560,20 +3453,14 @@ hdd_twt_pack_get_capabilities_resp(struct hdd_adapter *adapter)
 
 	/*
 	 * Userspace will query the TWT get capabilities before
-	 * issuing a get capabilities request. For legacy connection,
-	 * if the STA is connected, then check the "enable_twt_24ghz"
-	 * ini value to advertise the TWT requestor capability.
-	 * For MLO connection, TWT requestor capabilities are advertised
-	 * irrespective of connected band.
+	 * issuing a get capabilities request. If the STA is
+	 * connected, then check the "enable_twt_24ghz" ini
+	 * value to advertise the TWT requestor capability.
 	 */
-	if (!mlo_is_mld_sta(adapter->deflink->vdev)) {
-		connected_band = hdd_conn_get_connected_band(adapter->deflink);
-		if (connected_band == BAND_2G &&
-		    !ucfg_mlme_is_24ghz_twt_enabled(hdd_ctx->psoc))
-			is_twt_24ghz_allowed = false;
-	} else {
-		is_twt_24ghz_allowed = true;
-	}
+	connected_band = hdd_conn_get_connected_band(adapter);
+	if (connected_band == BAND_2G &&
+	    !ucfg_mlme_is_24ghz_twt_enabled(hdd_ctx->psoc))
+		is_twt_24ghz_allowed = false;
 
 	/* fill the self_capability bitmap  */
 	ucfg_mlme_get_twt_requestor(hdd_ctx->psoc, &twt_req);
@@ -3608,11 +3495,13 @@ hdd_twt_pack_get_capabilities_resp(struct hdd_adapter *adapter)
 
 	nla_nest_end(reply_skb, config_attr);
 
-	ret = wlan_cfg80211_vendor_cmd_reply(reply_skb);
-	return qdf_status_from_os_return(ret);
+	if (cfg80211_vendor_cmd_reply(reply_skb))
+		qdf_status = QDF_STATUS_E_INVAL;
 
 free_skb:
-	wlan_cfg80211_vendor_free_skb(reply_skb);
+	if (QDF_IS_STATUS_ERROR(qdf_status) && reply_skb)
+		kfree_skb(reply_skb);
+
 	return qdf_status;
 }
 
@@ -3642,9 +3531,9 @@ static int hdd_twt_get_capabilities(struct hdd_adapter *adapter,
 		return -EOPNOTSUPP;
 	}
 
-	if (!hdd_cm_is_vdev_associated(adapter->deflink)) {
+	if (!hdd_cm_is_vdev_associated(adapter)) {
 		hdd_err_rl("vdev %d not in connected state, mode %d",
-			   adapter->deflink->vdev_id, adapter->device_mode);
+			   adapter->vdev_id, adapter->device_mode);
 		return -EAGAIN;
 	}
 
@@ -3672,7 +3561,7 @@ static int hdd_twt_resume_session(struct hdd_adapter *adapter,
 				  struct nlattr *twt_param_attr)
 {
 	struct hdd_station_ctx *hdd_sta_ctx =
-			WLAN_HDD_GET_STATION_CTX_PTR(adapter->deflink);
+			WLAN_HDD_GET_STATION_CTX_PTR(adapter);
 	struct nlattr *tb[QCA_WLAN_VENDOR_ATTR_TWT_RESUME_MAX + 1];
 	struct wmi_twt_resume_dialog_cmd_param params = {0};
 	QDF_STATUS status;
@@ -3685,7 +3574,7 @@ static int hdd_twt_resume_session(struct hdd_adapter *adapter,
 
 	qdf_mem_copy(params.peer_macaddr, hdd_sta_ctx->conn_info.bssid.bytes,
 		     QDF_MAC_ADDR_SIZE);
-	params.vdev_id = adapter->deflink->vdev_id;
+	params.vdev_id = adapter->vdev_id;
 
 	ret = wlan_cfg80211_nla_parse_nested(tb,
 					     QCA_WLAN_VENDOR_ATTR_TWT_RESUME_MAX,
@@ -3784,9 +3673,9 @@ wmi_twt_get_stats_status_to_vendor_twt_status(enum WMI_HOST_GET_STATS_TWT_STATUS
 
 /**
  * hdd_twt_pack_get_stats_resp_nlmsg()- Packs and sends twt get stats response
- * @hdd_ctx: pointer to the hdd context
+ * hdd_ctx: pointer to the hdd context
  * @reply_skb: pointer to response skb buffer
- * @params: Pointer to twt session parameter buffer
+ * @params: Ponter to twt session parameter buffer
  * @num_session_stats: number of twt statistics
  *
  * Return: QDF_STATUS_SUCCESS on success, else other qdf error values
@@ -3907,7 +3796,7 @@ hdd_twt_pack_get_stats_resp_nlmsg(struct hdd_context *hdd_ctx,
 }
 
 /**
- * hdd_twt_clear_session_traffic_stats() - Parses twt nl attributes and
+ * hdd_twt_clear_session_traffic_stats() - Parses twt nl attrributes and
  * sends clear twt stats request for a single or all sessions
  * @adapter: hdd_adapter
  * @twt_param_attr: twt nl attributes
@@ -3918,7 +3807,7 @@ static int hdd_twt_clear_session_traffic_stats(struct hdd_adapter *adapter,
 					       struct nlattr *twt_param_attr)
 {
 	struct hdd_station_ctx *hdd_sta_ctx =
-				WLAN_HDD_GET_STATION_CTX_PTR(adapter->deflink);
+				WLAN_HDD_GET_STATION_CTX_PTR(adapter);
 	struct nlattr *tb[QCA_WLAN_VENDOR_ATTR_TWT_STATS_MAX + 1];
 	int ret, id;
 	uint32_t dialog_id;
@@ -3982,15 +3871,15 @@ static int hdd_twt_clear_session_traffic_stats(struct hdd_adapter *adapter,
 		return -EAGAIN;
 	}
 
-	ret = wlan_cfg80211_mc_twt_clear_infra_cp_stats(adapter->deflink->vdev,
+	ret = wlan_cfg80211_mc_twt_clear_infra_cp_stats(adapter->vdev,
 							dialog_id, peer_mac);
 
 	return ret;
 }
 
 /**
- * hdd_twt_request_session_traffic_stats() - Obtains twt session
- * traffic statistics and sends response to the user space
+ * hdd_twt_get_session_traffic_stats() - Obtains twt session traffic statistics
+ * and sends response to the user space
  * @adapter: hdd_adapter
  * @dialog_id: dialog id of the twt session
  * @peer_mac: Mac address of the peer
@@ -4010,12 +3899,12 @@ hdd_twt_request_session_traffic_stats(struct hdd_adapter *adapter,
 	if (!adapter || !peer_mac)
 		return status;
 
-	event = wlan_cfg80211_mc_twt_get_infra_cp_stats(adapter->deflink->vdev,
+	event = wlan_cfg80211_mc_twt_get_infra_cp_stats(adapter->vdev,
 							dialog_id,
 							peer_mac,
 							&errno);
 	if (!event)
-		return qdf_status_from_os_return(errno);
+		return errno;
 
 	skb_len = hdd_get_twt_get_stats_event_len();
 	reply_skb = wlan_cfg80211_vendor_cmd_alloc_reply_skb(
@@ -4023,8 +3912,7 @@ hdd_twt_request_session_traffic_stats(struct hdd_adapter *adapter,
 						skb_len);
 	if (!reply_skb) {
 		hdd_err("Get stats - alloc reply_skb failed");
-		status = QDF_STATUS_E_NOMEM;
-		goto free_event;
+		return -ENOMEM;
 	}
 
 	status = hdd_twt_pack_get_stats_resp_nlmsg(
@@ -4034,27 +3922,18 @@ hdd_twt_request_session_traffic_stats(struct hdd_adapter *adapter,
 						event->num_twt_infra_cp_stats);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		hdd_err("Get stats - Failed to pack nl response");
-		goto free_skb;
+		wlan_cfg80211_vendor_free_skb(reply_skb);
+		return qdf_status_to_os_return(status);
 	}
 
 	qdf_mem_free(event->twt_infra_cp_stats);
 	qdf_mem_free(event);
 
-	errno = wlan_cfg80211_vendor_cmd_reply(reply_skb);
-	return qdf_status_from_os_return(errno);
-
-free_skb:
-	wlan_cfg80211_vendor_free_skb(reply_skb);
-
-free_event:
-	qdf_mem_free(event->twt_infra_cp_stats);
-	qdf_mem_free(event);
-
-	return status;
+	return wlan_cfg80211_vendor_cmd_reply(reply_skb);
 }
 
 /**
- * hdd_twt_get_session_traffic_stats() - Parses twt nl attributes, obtains twt
+ * hdd_twt_get_session_stats() - Parses twt nl attrributes, obtains twt
  * session parameters based on dialog_id and returns to user via nl layer
  * @adapter: hdd_adapter
  * @twt_param_attr: twt nl attributes
@@ -4065,7 +3944,7 @@ static int hdd_twt_get_session_traffic_stats(struct hdd_adapter *adapter,
 					     struct nlattr *twt_param_attr)
 {
 	struct hdd_station_ctx *hdd_sta_ctx =
-				WLAN_HDD_GET_STATION_CTX_PTR(adapter->deflink);
+				WLAN_HDD_GET_STATION_CTX_PTR(adapter);
 	struct nlattr *tb[QCA_WLAN_VENDOR_ATTR_TWT_STATS_MAX + 1];
 	int ret, id;
 	QDF_STATUS qdf_status;
@@ -4168,7 +4047,8 @@ static void
 hdd_twt_notify_cb(struct wlan_objmgr_psoc *psoc,
 		  struct wmi_twt_notify_event_param *params)
 {
-	struct wlan_hdd_link_info *link_info;
+	struct hdd_adapter *adapter =
+		wlan_hdd_get_adapter_from_vdev(psoc, params->vdev_id);
 	struct wireless_dev *wdev;
 	struct sk_buff *twt_vendor_event;
 	size_t data_len;
@@ -4176,17 +4056,16 @@ hdd_twt_notify_cb(struct wlan_objmgr_psoc *psoc,
 
 	hdd_enter();
 
-	link_info = wlan_hdd_get_link_info_from_vdev(psoc, params->vdev_id);
-	if (!link_info || hdd_validate_adapter(link_info->adapter))
+	if (hdd_validate_adapter(adapter))
 		return;
 
-	wdev = &link_info->adapter->wdev;
+	wdev = adapter->dev->ieee80211_ptr;
 
 	data_len = NLA_HDRLEN;
 	data_len += nla_total_size(sizeof(u8));
 
 	twt_vendor_event = wlan_cfg80211_vendor_event_alloc(
-				wdev->wiphy, wdev,
+				adapter->wdev.wiphy, wdev,
 				data_len,
 				QCA_NL80211_VENDOR_SUBCMD_CONFIG_TWT_INDEX,
 				GFP_KERNEL);
@@ -4279,9 +4158,6 @@ static int hdd_twt_configure(struct hdd_adapter *adapter,
 	case QCA_WLAN_TWT_CLEAR_STATS:
 		ret = hdd_twt_clear_session_traffic_stats(adapter,
 							  twt_param_attr);
-		break;
-	case QCA_WLAN_TWT_SET_PARAM:
-		ret = hdd_twt_set_param(adapter, twt_param_attr);
 		break;
 	default:
 		hdd_err("Invalid TWT Operation");
@@ -4776,7 +4652,9 @@ void __hdd_twt_update_work_handler(struct hdd_context *hdd_ctx)
 	sta_count = policy_mgr_mode_specific_connection_count(hdd_ctx->psoc,
 							      PM_STA_MODE,
 							      NULL);
-	sap_count = policy_mgr_get_sap_mode_count(hdd_ctx->psoc, NULL);
+	sap_count = policy_mgr_mode_specific_connection_count(hdd_ctx->psoc,
+							      PM_SAP_MODE,
+							      NULL);
 	twt_arg.hdd_ctx = hdd_ctx;
 
 	hdd_debug("Total connection %d, sta_count %d, sap_count %d",
@@ -4789,7 +4667,6 @@ void __hdd_twt_update_work_handler(struct hdd_context *hdd_ctx)
 			hdd_send_twt_requestor_enable_cmd(hdd_ctx);
 		} else if (sap_count == 1) {
 			hdd_send_twt_responder_enable_cmd(hdd_ctx);
-			hdd_send_twt_requestor_disable_cmd(hdd_ctx, 0);
 			sme_twt_update_beacon_template(hdd_ctx->mac_handle);
 		}
 		break;
@@ -4805,8 +4682,8 @@ void __hdd_twt_update_work_handler(struct hdd_context *hdd_ctx)
 				hdd_err("2port concurrency,SAP/STA not in SCC");
 				return;
 			}
-		} else if (policy_mgr_current_concurrency_is_mcc(
-							hdd_ctx->psoc)) {
+		}
+		if (policy_mgr_current_concurrency_is_mcc(hdd_ctx->psoc)) {
 			status = wlan_objmgr_pdev_iterate_obj_list(
 					hdd_ctx->pdev,
 					WLAN_VDEV_OP,
@@ -4869,16 +4746,8 @@ void hdd_twt_update_work_handler(void *data)
 	int ret;
 
 	ret = osif_psoc_sync_op_start(wiphy_dev(hdd_ctx->wiphy), &psoc_sync);
-
-	if (ret == -EAGAIN) {
-		qdf_sleep(TWT_WORK_RESCHED_WAIT_TIME);
-		hdd_debug("rescheduling TWT work");
-		wlan_twt_concurrency_update(hdd_ctx);
+	if (ret)
 		return;
-	} else if (ret) {
-		hdd_err("can not handle TWT update %d", ret);
-		return;
-	}
 
 	__hdd_twt_update_work_handler(hdd_ctx);
 
@@ -5055,25 +4924,5 @@ int wlan_hdd_cfg80211_wifi_twt_config(struct wiphy *wiphy,
 	osif_vdev_sync_op_stop(vdev_sync);
 
 	return errno;
-}
-
-void wlan_hdd_resume_pmo_twt(struct hdd_context *hdd_ctx)
-{
-	wlan_twt_concurrency_update(hdd_ctx);
-}
-
-void wlan_hdd_suspend_pmo_twt(struct hdd_context *hdd_ctx)
-{
-	qdf_flush_work(&hdd_ctx->twt_en_dis_work);
-}
-
-bool wlan_hdd_is_twt_pmo_allowed(struct hdd_context *hdd_ctx)
-{
-	bool twt_pmo_allowed = false;
-
-	twt_pmo_allowed = ucfg_twt_get_pmo_allowed(hdd_ctx->psoc);
-	hdd_debug("twt_disabled_allowed %d ", twt_pmo_allowed);
-
-	return twt_pmo_allowed;
 }
 

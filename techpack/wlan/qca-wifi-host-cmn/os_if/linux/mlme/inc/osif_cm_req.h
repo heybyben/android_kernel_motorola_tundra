@@ -29,7 +29,6 @@
 #include "wlan_cm_public_struct.h"
 #include <net/cfg80211.h>
 #include "wlan_objmgr_vdev_obj.h"
-#include "wlan_osif_features.h"
 
 #define FEATURE_DRIVER_DISCONNECT_REASON				\
 	[QCA_NL80211_VENDOR_SUBCMD_DRIVER_DISCONNECT_REASON_INDEX] = {	\

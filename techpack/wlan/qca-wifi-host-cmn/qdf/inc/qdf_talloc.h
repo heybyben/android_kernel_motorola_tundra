@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2018 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -71,7 +70,7 @@
 
 /**
  * qdf_tfree() - free memory allocated using the *_talloc() function family
- * @ptr: double point to memory to free, set to NULL
+ * @inout_ptr: double point to memory to free, set to NULL
  *
  * Return: None
  */
@@ -95,7 +94,7 @@ do { \
 
 /**
  * qdf_talloc_assert_no_children() - assert @parent has not child allocations
- * @parent: the parent memory pointer to check
+ * @parent: the parent memory ponter to check
  *
  * Return: None
  */
@@ -131,7 +130,7 @@ void __qdf_tfree_fl(void *ptr, const char *func, const uint16_t line);
 
 /**
  * qdf_talloc_assert_no_children_fl() - assert @parent has not child allocations
- * @parent: the parent memory pointer to check
+ * @parent: the parent memory ponter to check
  * @func: name of the function requesting the assert
  * @line: line number of the call site in @func
  *
@@ -158,7 +157,7 @@ static inline void *__qdf_talloc_fl(const void *parent, const size_t size,
 static inline void
 __qdf_tfree_fl(void *ptr, const char *func, const uint16_t line)
 {
-	__k_free(ptr);
+	__free(ptr);
 }
 
 static inline void

@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -117,11 +116,11 @@
 				0, \
 				"HE Ofdma Ra")
 
-#define CFG_HE_MAX_AMPDU_LEN CFG_INI_UINT( \
+#define CFG_HE_MAX_AMPDU_LEN CFG_UINT( \
 				"he_max_ampdu_len", \
 				0, \
 				3, \
-				3, \
+				0, \
 				CFG_VALUE_OR_DEFAULT, \
 				"HE Max Ampdu Len")
 
@@ -201,7 +200,7 @@
 #define CFG_HE_DYNAMIC_SMPS CFG_BOOL( \
 				"he_dynamic_smps", \
 				0, \
-				"He Dynamic SMPS")
+				"He Dyanmic SMPS")
 
 #define CFG_HE_PUNCTURED_SOUNDING CFG_BOOL( \
 				"he_punctured_sounding", \
@@ -221,11 +220,11 @@
 				CFG_VALUE_OR_DEFAULT, \
 				"He Chan Width")
 
-#define CFG_HE_RX_PREAM_PUNC CFG_INI_UINT( \
+#define CFG_HE_RX_PREAM_PUNC CFG_UINT( \
 				"he_rx_pream_punc", \
 				0, \
 				0xF, \
-				0x3, \
+				0, \
 				CFG_VALUE_OR_DEFAULT, \
 				"He Rx Pream Punc")
 
@@ -609,44 +608,6 @@
 				CFG_VALUE_OR_DEFAULT, \
 				"He Rx Mcs Map 160")
 
-/*
- * <ini>
- * sap_he_rx_mcs_map_160 - configure SAP Rx HE-MCS Map for 160 MHz
- * @Min: 0
- * @Max: 0xFFFF
- * @Default: 0xFFFA
- *
- * This ini is used to configure SAP Rx HE-MCS Map for 160 MHz
- * 0:1 Max HE-MCS For 1 SS
- * 2:3 Max HE-MCS For 2 SS
- * 4:5 Max HE-MCS For 3 SS
- * 6:7 Max HE-MCS For 4 SS
- * 8:9 Max HE-MCS For 5 SS
- * 10:11 Max HE-MCS For 6 SS
- * 12:13 Max HE-MCS For 7 SS
- * 14:15 Max HE-MCS For 8 SS
- *
- * 0 indicates support for HE-MCS 0-7 for n spatial streams
- * 1 indicates support for HE-MCS 0-9 for n spatial streams
- * 2 indicates support for HE-MCS 0-11 for n spatial streams
- * 3 indicates that n spatial streams is not supported for HE PPDUs
- *
- * Related: he_rx_mcs_map_160
- *
- * Supported Feature: 11AX
- *
- * Usage: External
- *
- * </ini>
- */
-#define CFG_SAP_HE_RX_MCS_MAP_160 CFG_INI_UINT( \
-				"sap_he_rx_mcs_map_160", \
-				0, \
-				0xFFFF, \
-				0xFFFA, \
-				CFG_VALUE_OR_DEFAULT, \
-				"SAP He Rx Mcs Map 160")
-
 /* 11AX related INI configuration */
 /*
  * <ini>
@@ -787,7 +748,7 @@
 #define CFG_ENABLE_UL_MIMO CFG_INI_BOOL( \
 				"enable_ul_mimo", \
 				1, \
-				"He Enable Ul Mimo Name")
+				"He Enble Ul Mimo Name")
 
 /*
  * <ini>
@@ -893,29 +854,6 @@
 				CFG_VALUE_OR_DEFAULT, \
 				"He Configure MCS_12_13 bits")
 
-/*
- * <ini>
- * disable_mcs_12_13_sap - Bitmask to disable HE MCS 12 13 support for SAP
- * @Min: 0
- * @Max: 4095
- * @Default: 0
- *
- * This ini is used to disable HE MCS_12_13 for SAP.
- * Currently only support is present to disable 2.4 GHz 40 MHz SAP for value
- * 2 i.e. 2nd bit set.
- *
- * Related: NA
- *
- * Usage: External
- *
- * </ini>
- */
-#define CFG_DISABLE_MCS_12_13_SAP CFG_INI_UINT( \
-			"disable_mcs_12_13_sap", \
-			0, 4095, 0, \
-			CFG_VALUE_OR_DEFAULT, \
-			"Disable HE MCS_12_13 for SAP")
-
 #define CFG_HE_CAPS_ALL \
 	CFG(CFG_HE_CONTROL) \
 	CFG(CFG_HE_FRAGMENTATION) \
@@ -998,7 +936,6 @@
 	CFG(CFG_HE_RX_MCS_MAP_LT_80) \
 	CFG(CFG_HE_TX_MCS_MAP_LT_80) \
 	CFG(CFG_HE_RX_MCS_MAP_160) \
-	CFG(CFG_SAP_HE_RX_MCS_MAP_160) \
 	CFG(CFG_HE_TX_MCS_MAP_160) \
 	CFG(CFG_HE_RX_MCS_MAP_80_80) \
 	CFG(CFG_HE_TX_MCS_MAP_80_80) \
@@ -1007,8 +944,7 @@
 	CFG(CFG_ENABLE_UL_MIMO) \
 	CFG(CFG_ENABLE_UL_OFDMA) \
 	CFG(CFG_HE_STA_OBSSPD) \
-	CFG(CFG_HE_MCS_12_13_SUPPORT) \
-	CFG(CFG_DISABLE_MCS_12_13_SAP)
+	CFG(CFG_HE_MCS_12_13_SUPPORT)
 
 #endif /* __CFG_MLME_HE_CAPS_H */
 

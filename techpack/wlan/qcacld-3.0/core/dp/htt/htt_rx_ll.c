@@ -319,7 +319,7 @@ static qdf_nbuf_t htt_rx_buff_alloc(struct htt_pdev_t *pdev)
 }
 
 /**
- * htt_rx_ring_buf_attach() - return net buf to attach in ring
+ * htt_rx_ring_buf_attach() - retrun net buf to attach in ring
  * @pdev: pointer to device
  *
  * Return: nbuf or NULL
@@ -561,12 +561,6 @@ static int htt_rx_ring_size(struct htt_pdev_t *pdev)
 		size = HTT_RX_RING_SIZE_MAX;
 
 	size = qdf_get_pwr2(size);
-
-	if (!soc) {
-		QDF_TRACE(QDF_MODULE_ID_HTT, QDF_TRACE_LEVEL_ERROR,
-		  "Unable to get 2x2 cap soc is NULL ring size:%u selected ", size);
-		return size;
-	}
 
 	status = wlan_mlme_get_vht_enable2x2((void *)soc->psoc, &enable_2x2);
 	if (QDF_IS_STATUS_SUCCESS(status))
@@ -2104,7 +2098,7 @@ void *htt_rx_mpdu_desc_list_next_ll(htt_pdev_handle pdev, qdf_nbuf_t rx_ind_msg)
  * htt_rx_fill_ring_count() - replenish rx msdu buffer
  * @pdev: Handle (pointer) to HTT pdev.
  *
- * This function will replenish the rx buffer to the max number
+ * This funciton will replenish the rx buffer to the max number
  * that can be kept in the ring
  *
  * Return: None

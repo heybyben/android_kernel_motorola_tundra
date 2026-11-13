@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -86,7 +85,6 @@ typedef enum {
  * RTT - indicate RTT
  * DOT11AX - indicate 11ax
  * DOT11BE - indicate 11be
- * SECURE_NAN - indicate NAN Pairing protocol
  * WOW - indicate WOW
  * WLAN_ROAM_SCAN_OFFLOAD - indicate Roam scan offload
  * WLAN_PERIODIC_TX_PTRN - indicate WLAN_PERIODIC_TX_PTRN
@@ -118,9 +116,6 @@ enum cap_bitmap {
 #ifdef WLAN_FEATURE_11BE
 	DOT11BE = 14,
 #endif
-#ifdef WLAN_FEATURE_NAN
-	SECURE_NAN = 15,
-#endif
 	WOW = 22,
 	WLAN_ROAM_SCAN_OFFLOAD = 23,
 	WLAN_PERIODIC_TX_PTRN = 28,
@@ -150,7 +145,7 @@ typedef struct sSirMbMsg {
 	 * NOTE: data[1] is not a place holder to store data
 	 * instead to dereference the message body.
 	 */
-	QDF_FLEX_ARRAY(uint32_t, data);
+	uint32_t data[1];
 } tSirMbMsg, *tpSirMbMsg;
 
 /**
@@ -242,10 +237,8 @@ enum halmsgtype {
 
 	SIR_HAL_SWITCH_CHANNEL_RSP        = (SIR_HAL_ITC_MSG_TYPES_BEGIN + 35),
 	SIR_HAL_PWR_SAVE_CFG              = (SIR_HAL_ITC_MSG_TYPES_BEGIN + 36),
-/*
- * (SIR_HAL_ITC_MSG_TYPES_BEGIN + 37) to
- * (SIR_HAL_ITC_MSG_TYPES_BEGIN + 43) are unused
- */
+
+	SIR_HAL_IBSS_STA_ADD              = (SIR_HAL_ITC_MSG_TYPES_BEGIN + 43),
 	SIR_HAL_TIMER_ADJUST_ADAPTIVE_THRESHOLD_IND =
 					(SIR_HAL_ITC_MSG_TYPES_BEGIN + 44),
 	SIR_HAL_SET_LINK_STATE            = (SIR_HAL_ITC_MSG_TYPES_BEGIN + 45),
@@ -401,6 +394,7 @@ enum halmsgtype {
 #ifndef REMOVE_PKT_LOG
 	SIR_HAL_PKTLOG_ENABLE_REQ         = (SIR_HAL_ITC_MSG_TYPES_BEGIN + 164),
 #endif
+	SIR_HAL_START_SCAN_OFFLOAD_REQ    = (SIR_HAL_ITC_MSG_TYPES_BEGIN + 166),
 	SIR_HAL_UPDATE_CHAN_LIST_REQ      = (SIR_HAL_ITC_MSG_TYPES_BEGIN + 167),
 	SIR_CSA_OFFLOAD_EVENT             = (SIR_HAL_ITC_MSG_TYPES_BEGIN + 169),
 
@@ -550,8 +544,7 @@ enum halmsgtype {
 	SIR_HAL_SET_RSSI_MONITOR_REQ      = (SIR_HAL_ITC_MSG_TYPES_BEGIN + 333),
 	SIR_HAL_SET_IE_INFO               = (SIR_HAL_ITC_MSG_TYPES_BEGIN + 334),
 
-	/* SIR_HAL_ITC_MSG_TYPES_BEGIN + 335 is unused */
-	/* SIR_HAL_ITC_MSG_TYPES_BEGIN + 336 is unused */
+	SIR_HAL_LRO_CONFIG_CMD            = (SIR_HAL_ITC_MSG_TYPES_BEGIN + 335),
 
 	SIR_HAL_HT40_OBSS_SCAN_IND        = (SIR_HAL_ITC_MSG_TYPES_BEGIN + 337),
 
@@ -656,12 +649,7 @@ enum halmsgtype {
 	SIR_HAL_TWT_RESUME_DIALOG_REQUEST = (SIR_HAL_ITC_MSG_TYPES_BEGIN + 420),
 	SIR_HAL_PEER_CREATE_REQ           = (SIR_HAL_ITC_MSG_TYPES_BEGIN + 421),
 	SIR_HAL_TWT_NUDGE_DIALOG_REQUEST  = (SIR_HAL_ITC_MSG_TYPES_BEGIN + 422),
-	SIR_HAL_PASN_PEER_DELETE_REQUEST  = (SIR_HAL_ITC_MSG_TYPES_BEGIN + 423),
-	SIR_HAL_UPDATE_EDCA_PIFS_PARAM_IND = (SIR_HAL_ITC_MSG_TYPES_BEGIN + 424),
-#ifdef FEATURE_WLAN_APF
-	SIR_HAL_ENABLE_ACTIVE_APF_MODE_IND = (SIR_HAL_ITC_MSG_TYPES_BEGIN + 425),
-	SIR_HAL_DISABLE_ACTIVE_APF_MODE_IND = (SIR_HAL_ITC_MSG_TYPES_BEGIN + 426),
-#endif
+
 
 	SIR_HAL_MSG_TYPES_END               = (SIR_HAL_MSG_TYPES_BEGIN + 0x1FF),
 };
@@ -713,11 +701,11 @@ enum halmsgtype {
 #define SIR_LIM_WPS_OVERLAP_TIMEOUT      (SIR_LIM_TIMEOUT_MSG_START + 0x1D)
 #define SIR_LIM_FT_PREAUTH_RSP_TIMEOUT   (SIR_LIM_TIMEOUT_MSG_START + 0x1E)
 
-#define SIR_LIM_RRM_STA_STATS_RSP_TIMEOUT    (SIR_LIM_TIMEOUT_MSG_START + 0x24)
+/* currently unused                     (SIR_LIM_TIMEOUT_MSG_START + 0x24) */
 /* currently unused                     (SIR_LIM_TIMEOUT_MSG_START + 0x25) */
 
 #define SIR_LIM_DISASSOC_ACK_TIMEOUT       (SIR_LIM_TIMEOUT_MSG_START + 0x26)
-/*#define SIR_LIM_DEAUTH_ACK_TIMEOUT       (SIR_LIM_TIMEOUT_MSG_START + 0x27) */
+#define SIR_LIM_DEAUTH_ACK_TIMEOUT       (SIR_LIM_TIMEOUT_MSG_START + 0x27)
 #define SIR_LIM_PERIODIC_JOIN_PROBE_REQ_TIMEOUT \
 					 (SIR_LIM_TIMEOUT_MSG_START + 0x28)
 

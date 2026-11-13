@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2018-2019, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -27,7 +26,7 @@
 #include "qdf_status.h"
 #include "wlan_dsc_psoc.h"
 
-/*
+/**
  * struct dsc_vdev - opaque dsc vdev context
  */
 struct dsc_vdev;
@@ -66,7 +65,7 @@ void dsc_vdev_destroy(struct dsc_vdev **out_vdev);
  * Call dsc_vdev_trans_stop() to complete the transition.
  *
  * Return:
- *	QDF_STATUS_SUCCESS - transition started successfully
+ *	QDF_STATUS_SUCCESS - transition started succcessfully
  *	QDF_STATUS_E_INVAL - invalid request (causes debug panic)
  *	QDF_STATUS_E_AGAIN - transition cannot currently be started
  *	QDF_STATUS_E_ALREADY - transition with @desc already in flight
@@ -82,7 +81,7 @@ QDF_STATUS dsc_vdev_trans_start(struct dsc_vdev *vdev, const char *desc);
  * Call dsc_vdev_trans_stop() to complete the transition.
  *
  * Return:
- *	QDF_STATUS_SUCCESS - transition started successfully
+ *	QDF_STATUS_SUCCESS - transition started succcessfully
  *	QDF_STATUS_E_INVAL - invalid request (causes debug panic)
  *	QDF_STATUS_E_AGAIN - transition cannot currently be started
  *	QDF_STATUS_E_ALREADY - transition with @desc already queued or in flight
@@ -115,7 +114,7 @@ void dsc_vdev_assert_trans_protected(struct dsc_vdev *vdev);
  * @vdev: the vdev to start an operation on
  *
  * Return:
- *	QDF_STATUS_SUCCESS - operation started successfully
+ *	QDF_STATUS_SUCCESS - operation started succcessfully
  *	QDF_STATUS_E_INVAL - invalid request (causes debug panic)
  *	QDF_STATUS_E_AGAIN - operation cannot currently be started
  *	QDF_STATUS_E_NOMEM - out of memory
@@ -166,17 +165,5 @@ uint8_t dsc_vdev_get_cached_cmd(struct dsc_vdev *vdev);
  * Return: None
  */
 void dsc_vdev_cache_command(struct dsc_vdev *vdev, uint8_t cmd_id);
-
-/*
- * dsc_vdev_wait_for_uptree_ops() - Wait for any uptree operations
- * @vdev: The DSC vdev
- *
- * This function checks and waits for any uptree operations if there is any
- * uptree operation is in progress.
- *
- * Return: None.
- */
-
-void dsc_vdev_wait_for_uptree_ops(struct dsc_vdev *vdev);
 
 #endif /* __WLAN_DSC_VDEV_H */

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2019, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -38,7 +38,9 @@
 #include <wlan_cp_stats_utils_api.h>
 #include <wlan_cp_stats_ext_type.h>
 #include <wlan_cp_stats_public_structs.h>
-#include <wlan_twt_public_structs.h>
+#ifdef WLAN_FEATURE_MIB_STATS
+#include <wlan_cp_stats_mc_defs.h>
+#endif
 
 /* noise floor */
 #define CP_STATS_TGT_NOISE_FLOOR_DBM (-96)
@@ -51,14 +53,12 @@ typedef void (*get_infra_cp_stats_cb)(struct infra_cp_stats_event *ev,
 /**
  * struct psoc_cp_stats - defines cp stats at psoc object
  * @psoc_obj: pointer to psoc
- * @psoc_comp_priv_obj: component's private object pointers
+ * @psoc_comp_priv_obj[]: component's private object pointers
  * @psoc_cp_stats_lock: lock to protect object
  * @cmn_stats: stats common for AP and STA devices
  * @obj_stats: stats specific to AP or STA devices
  * @legacy_stats_cb: callback to update the stats received from FW through
  * asynchronous events.
- * @get_infra_cp_stats: callback to update infra CP stats
- * @infra_cp_stats_req_context: context to pass @get_infra_cp_stats
  */
 struct psoc_cp_stats {
 	struct wlan_objmgr_psoc *psoc_obj;
@@ -78,8 +78,8 @@ struct psoc_cp_stats {
  * struct pdev_cp_stats - defines cp stats at pdev object
  * @pdev_obj: pointer to pdev
  * @pdev_stats: pointer to ic/mc specific stats
- * @pdev_comp_priv_obj: component's private object pointers
- * @pdev_cp_stats_lock: lock to protect object
+ * @pdev_comp_priv_obj[]: component's private object pointers
+ * @pdev_cp_stats_lock:	lock to protect object
  */
 struct pdev_cp_stats {
 	struct wlan_objmgr_pdev  *pdev_obj;
@@ -92,27 +92,22 @@ struct pdev_cp_stats {
  * struct vdev_cp_stats - defines cp stats at vdev object
  * @vdev_obj: pointer to vdev
  * @vdev_stats: pointer to ic/mc specific stats
- * @vdev_comp_priv_obj: component's private object pointers
+ * @vdev_comp_priv_obj[]: component's private object pointers
  * @vdev_cp_stats_lock:	lock to protect object
- * @mcast_rx_pnerr_stats_inc: callback function to update rx PN error stats
  */
 struct vdev_cp_stats {
 	struct wlan_objmgr_vdev *vdev_obj;
 	vdev_ext_cp_stats_t *vdev_stats;
 	void *vdev_comp_priv_obj[WLAN_CP_STATS_MAX_COMPONENTS];
 	qdf_spinlock_t vdev_cp_stats_lock;
-	void (*mcast_rx_pnerr_stats_inc)(
-			struct wlan_objmgr_vdev *vdev,
-			uint64_t val);
 };
 
 /**
  * struct peer_cp_stats - defines cp stats at peer object
  * @peer_obj: pointer to peer
  * @peer_stats: pointer to ic/mc specific stats
- * @peer_comp_priv_obj: component's private object pointers
+ * @peer_comp_priv_obj[]: component's private object pointers
  * @peer_cp_stats_lock:	lock to protect object
- * @rx_pnerr_stats_inc: callback function to update rx PN error stats
  * @twt_param: Pointer to peer twt session parameters
  */
 struct peer_cp_stats {
@@ -120,18 +115,9 @@ struct peer_cp_stats {
 	peer_ext_cp_stats_t *peer_stats;
 	void *peer_comp_priv_obj[WLAN_CP_STATS_MAX_COMPONENTS];
 	qdf_spinlock_t peer_cp_stats_lock;
-	void (*rx_pnerr_stats_inc)(struct wlan_objmgr_peer *peer, uint32_t val);
 #if defined(WLAN_SUPPORT_TWT) && defined(WLAN_TWT_CONV_SUPPORTED)
-	struct twt_session_stats_info twt_param[WLAN_MAX_TWT_SESSIONS_PER_PEER];
+	struct twt_session_stats_info twt_param[TWT_PEER_MAX_SESSIONS];
 #endif
-};
-
-/**
- * struct cp_stats_cfg_params - define CP stats INI configuration parameters
- * @chipset_stats_enable: CP stats enable chipset stats logging from ini config
- */
-struct cp_stats_cfg_params {
-	bool chipset_stats_enable;
 };
 
 /**
@@ -139,7 +125,6 @@ struct cp_stats_cfg_params {
  * @csc_lock: lock to protect object
  * @psoc_obj: pointer to psoc
  * @psoc_cs: pointer to cp stats at psoc
- * @host_params: Structure for INI variables
  * @cp_stats_ctx_init: callback pointer to init cp stats global ctx
  * @cp_stats_ctx_deinit: callback pointer to deinit cp stats global ctx
  * @cp_stats_psoc_obj_init:callback pointer to init cp stats obj on psoc create
@@ -164,7 +149,6 @@ struct cp_stats_context {
 	qdf_spinlock_t csc_lock;
 	struct wlan_objmgr_psoc *psoc_obj;
 	struct psoc_cp_stats    *psoc_cs;
-	struct cp_stats_cfg_params host_params;
 	QDF_STATUS (*cp_stats_ctx_init)(struct cp_stats_context *ctx);
 	QDF_STATUS (*cp_stats_ctx_deinit)(struct cp_stats_context *ctx);
 	QDF_STATUS (*cp_stats_psoc_obj_init)(struct psoc_cp_stats *psoc_cs);

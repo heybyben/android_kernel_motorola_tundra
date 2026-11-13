@@ -116,7 +116,7 @@ static uint32_t osif_twt_get_event_len(void)
 /**
  * twt_add_status_to_vendor_twt_status() - convert from
  * HOST_ADD_TWT_STATUS to qca_wlan_vendor_twt_status
- * @status: HOST_ADD_TWT_STATUS value from firmware
+ * @status: HOST_ADD_TWT_STATUS value from firmare
  *
  * Return: qca_wlan_vendor_twt_status values corresponding
  * to HOST_ADD_TWT_STATUS.
@@ -163,7 +163,7 @@ twt_add_status_to_vendor_twt_status(enum HOST_ADD_TWT_STATUS status)
 /**
  * twt_del_status_to_vendor_twt_status() - convert from
  * HOST_DEL_TWT_STATUS to qca_wlan_vendor_twt_status
- * @status: HOST_DEL_TWT_STATUS value from firmware
+ * @status: HOST_DEL_TWT_STATUS value from firmare
  *
  * Return: qca_wlan_vendor_twt_status values corresponding
  * to HOST_DEL_TWT_STATUS.
@@ -268,8 +268,6 @@ twt_nudge_status_to_vendor_twt_status(enum HOST_TWT_NUDGE_STATUS status)
 		return QCA_WLAN_VENDOR_TWT_STATUS_NO_ACK;
 	case HOST_TWT_NUDGE_STATUS_UNKNOWN_ERROR:
 		return QCA_WLAN_VENDOR_TWT_STATUS_UNKNOWN_ERROR;
-	case HOST_TWT_NUDGE_STATUS_ALREADY_PAUSED:
-		return QCA_WLAN_VENDOR_TWT_STATUS_ALREADY_SUSPENDED;
 	case HOST_TWT_NUDGE_STATUS_CHAN_SW_IN_PROGRESS:
 		return QCA_WLAN_VENDOR_TWT_STATUS_CHANNEL_SWITCH_IN_PROGRESS;
 	default:
@@ -280,7 +278,7 @@ twt_nudge_status_to_vendor_twt_status(enum HOST_TWT_NUDGE_STATUS status)
 /**
  * twt_add_cmd_to_vendor_twt_resp_type() - convert from
  * HOST_TWT_COMMAND to qca_wlan_vendor_twt_setup_resp_type
- * @type: HOST_TWT_COMMAND value from firmware
+ * @status: HOST_TWT_COMMAND value from firmare
  *
  * Return: qca_wlan_vendor_twt_setup_resp_type values for valid
  * HOST_TWT_COMMAND value and -EINVAL for invalid value
@@ -802,12 +800,13 @@ osif_twt_send_get_capabilities_response(struct wlan_objmgr_psoc *psoc,
 
 	nla_nest_end(reply_skb, config_attr);
 
-	if (wlan_cfg80211_vendor_cmd_reply(reply_skb))
+	if (cfg80211_vendor_cmd_reply(reply_skb))
 		qdf_status = QDF_STATUS_E_INVAL;
-	return qdf_status;
 
 free_skb:
-	wlan_cfg80211_vendor_free_skb(reply_skb);
+	if (QDF_IS_STATUS_ERROR(qdf_status) && reply_skb)
+		kfree_skb(reply_skb);
+
 	return qdf_status;
 }
 
@@ -1554,7 +1553,6 @@ QDF_STATUS osif_twt_get_stats_response(struct wlan_objmgr_vdev *vdev,
 	struct wireless_dev *wdev;
 	QDF_STATUS status = QDF_STATUS_E_INVAL;
 	struct sk_buff *reply_skb;
-	int ret;
 
 	osif_priv = wlan_vdev_get_ospriv(vdev);
 	if (!osif_priv) {
@@ -1584,7 +1582,6 @@ QDF_STATUS osif_twt_get_stats_response(struct wlan_objmgr_vdev *vdev,
 		return qdf_status_to_os_return(status);
 	}
 
-	ret = wlan_cfg80211_vendor_cmd_reply(reply_skb);
-	return qdf_status_from_os_return(ret);
+	return wlan_cfg80211_vendor_cmd_reply(reply_skb);
 }
 

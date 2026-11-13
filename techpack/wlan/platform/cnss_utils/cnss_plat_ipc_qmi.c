@@ -936,7 +936,7 @@ static bool cnss_plat_ipc_is_valid_dt_node_found(void)
 {
 	struct device_node *dn = NULL;
 
-	for_each_compatible_node(dn, NULL, "qcom,cnss-qca6490") {
+	for_each_node_with_property(dn, "qcom,wlan") {
 		if (of_device_is_available(dn))
 			break;
 	}

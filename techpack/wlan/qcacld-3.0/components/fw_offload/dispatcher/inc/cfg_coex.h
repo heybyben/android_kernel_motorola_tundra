@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2012 - 2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -109,7 +109,7 @@
  * gSetBtLowRssiThreshold - Set BT low RSSI threshold for BTC mode switching
  * @Min: -100
  * @Max: 0
- * @Default: -65
+ * @Default: -80
  *
  * Usage: External
  *
@@ -119,7 +119,7 @@
 			"gSetBtLowRssiThreshold", \
 			-100, \
 			0, \
-			-65, \
+			-80, \
 			CFG_VALUE_OR_DEFAULT, \
 			"BT Low RSSI Threshold")
 
@@ -350,10 +350,7 @@
  * only below values can be set:
  * 0 - init WLAN 2.4G to support 2x2.
  *     It means chains of BT and WLAN 2.4G are shared, or BT is OFF.
- * 1 - init WLAN 2.4G as 1x1, chains of BT and WLAN 2.4G are separated,
- *     fixed FDD.
- * 2 - init WLAN 2.4G as 1x1, chains of BT and WLAN 2.4G are separated,
- *     hybrid mode
+ * 1 - init WLAN 2.4G as 1x1, chains of BT and WLAN 2.4G are separated.
  * 0xFF - no need to send init chain mode for BTC to firmware.
  *
  * Supported Feature: init chain mode for BTC

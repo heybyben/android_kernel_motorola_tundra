@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -65,418 +65,131 @@ uint8_t *util_find_extn_eid(uint8_t eid, uint8_t extn_eid,
 	return NULL;
 }
 
-static QDF_STATUS
-util_parse_multi_link_ctrl(uint8_t *mlieseqpayload,
-			   qdf_size_t mlieseqpayloadlen,
-			   uint8_t **link_info,
-			   qdf_size_t *link_info_len)
+static
+uint8_t *util_parse_multi_link_ctrl(uint8_t *element,
+				    qdf_size_t len,
+				    qdf_size_t *link_info_len)
 {
-	qdf_size_t parsed_payload_len;
+	qdf_size_t parsed_ie_len = 0;
+	struct wlan_ie_multilink *mlie_fixed;
 	uint16_t mlcontrol;
-	uint16_t presence_bm;
-	uint16_t cinfo_len = 0;
-	uint16_t exp_cinfo_len = 0;
+	uint16_t presencebm;
 
-	/* This helper returns the location(s) and length(s) of (sub)field(s)
-	 * inferable after parsing the Multi Link element Control field. These
-	 * location(s) and length(s) is/are in reference to the payload section
-	 * of the Multi Link element (after defragmentation, if applicable).
-	 * Here, the payload is the point after the element ID extension of the
-	 * Multi Link element, and includes the payloads of all subsequent
-	 * fragments (if any) but not the headers of those fragments.
-	 *
-	 * Currently, the helper returns the location and length of the Link
-	 * Info field in the Multi Link element sequence. Other (sub)field(s)
-	 * can be added later as required.
-	 */
-
-	if (!mlieseqpayload) {
-		mlo_err("ML seq payload pointer is NULL");
-		return QDF_STATUS_E_NULL_VALUE;
+	if (!element) {
+		mlo_err("Pointer to element is NULL");
+		return NULL;
 	}
 
-	if (!mlieseqpayloadlen) {
-		mlo_err("ML seq payload len is 0");
-		return QDF_STATUS_E_INVAL;
+	if (!len) {
+		mlo_err("Length is zero");
+		return NULL;
 	}
 
-	if (mlieseqpayloadlen < WLAN_ML_CTRL_SIZE) {
-		mlo_err_rl("ML seq payload len %zu < ML Control size %u",
-			   mlieseqpayloadlen, WLAN_ML_CTRL_SIZE);
-		return QDF_STATUS_E_PROTO;
+	if (len < sizeof(struct wlan_ie_multilink)) {
+		mlo_err_rl("Length %zu octets is smaller than required for the fixed portion of Multi-Link element (%zu octets)",
+			   len, sizeof(struct wlan_ie_multilink));
+		return NULL;
 	}
 
-	parsed_payload_len = 0;
+	mlie_fixed = (struct wlan_ie_multilink *)element;
+	mlcontrol = le16toh(mlie_fixed->mlcontrol);
+	presencebm = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_PBM_IDX,
+				  WLAN_ML_CTRL_PBM_BITS);
 
-	qdf_mem_copy(&mlcontrol, mlieseqpayload, WLAN_ML_CTRL_SIZE);
-	mlcontrol = qdf_le16_to_cpu(mlcontrol);
-	parsed_payload_len += WLAN_ML_CTRL_SIZE;
+	parsed_ie_len += sizeof(*mlie_fixed);
 
-	presence_bm = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_PBM_IDX,
-				   WLAN_ML_CTRL_PBM_BITS);
-
-	if (mlieseqpayloadlen <
-			(parsed_payload_len + WLAN_ML_BV_CINFO_LENGTH_SIZE)) {
-		mlo_err_rl("ML seq payload len %zu insufficient for common info length size %u after parsed payload len %zu.",
-			   mlieseqpayloadlen,
-			   WLAN_ML_BV_CINFO_LENGTH_SIZE,
-			   parsed_payload_len);
-		return QDF_STATUS_E_PROTO;
-	}
-
-	cinfo_len = *(mlieseqpayload + parsed_payload_len);
-
-	if (cinfo_len >
-			(mlieseqpayloadlen - parsed_payload_len)) {
-		mlo_err_rl("ML seq common info len %u larger than ML seq payload len %zu after parsed payload len %zu.",
-			   cinfo_len,
-			   mlieseqpayloadlen,
-			   parsed_payload_len);
-		return QDF_STATUS_E_PROTO;
-	}
-
-	parsed_payload_len += WLAN_ML_BV_CINFO_LENGTH_SIZE;
-
-	if (mlieseqpayloadlen <
-			(parsed_payload_len + QDF_MAC_ADDR_SIZE)) {
-		mlo_err_rl("ML seq payload len %zu insufficient for MAC address size %u after parsed payload len %zu.",
-			   mlieseqpayloadlen,
-			   QDF_MAC_ADDR_SIZE,
-			   parsed_payload_len);
-		return QDF_STATUS_E_PROTO;
-	}
-
-	parsed_payload_len += QDF_MAC_ADDR_SIZE;
+	/* Check if MLD MAC address is present */
+	if (presencebm & WLAN_ML_BV_CTRL_PBM_MLDMACADDR_P)
+		parsed_ie_len += QDF_MAC_ADDR_SIZE;
 
 	/* Check if Link ID info is present */
-	if (presence_bm & WLAN_ML_BV_CTRL_PBM_LINKIDINFO_P) {
-		if (mlieseqpayloadlen <
-				(parsed_payload_len +
-				 WLAN_ML_BV_CINFO_LINKIDINFO_SIZE)) {
-			mlo_err_rl("ML seq payload len %zu insufficient for Link ID info size %u after parsed payload len %zu.",
-				   mlieseqpayloadlen,
-				   WLAN_ML_BV_CINFO_LINKIDINFO_SIZE,
-				   parsed_payload_len);
-			return QDF_STATUS_E_PROTO;
-		}
-
-		parsed_payload_len += WLAN_ML_BV_CINFO_LINKIDINFO_SIZE;
-	}
+	if (presencebm & WLAN_ML_BV_CTRL_PBM_LINKIDINFO_P)
+		parsed_ie_len += WLAN_ML_BV_CINFO_LINKIDINFO_SIZE;
 
 	/* Check if BSS parameter change count is present */
-	if (presence_bm & WLAN_ML_BV_CTRL_PBM_BSSPARAMCHANGECNT_P) {
-		if (mlieseqpayloadlen <
-				(parsed_payload_len +
-				 WLAN_ML_BSSPARAMCHNGCNT_SIZE)) {
-			mlo_err_rl("ML seq payload len %zu insufficient for BSS parameter change count size %u after parsed payload len %zu.",
-				   mlieseqpayloadlen,
-				   WLAN_ML_BSSPARAMCHNGCNT_SIZE,
-				   parsed_payload_len);
-			return QDF_STATUS_E_PROTO;
-		}
-
-		parsed_payload_len += WLAN_ML_BSSPARAMCHNGCNT_SIZE;
-	}
+	if (presencebm & WLAN_ML_BV_CTRL_PBM_BSSPARAMCHANGECNT_P)
+		parsed_ie_len += WLAN_ML_BV_CINFO_BSSPARAMCHNGCNT_SIZE;
 
 	/* Check if Medium Sync Delay Info is present */
-	if (presence_bm & WLAN_ML_BV_CTRL_PBM_MEDIUMSYNCDELAYINFO_P) {
-		if (mlieseqpayloadlen <
-				(parsed_payload_len +
-				 WLAN_ML_BV_CINFO_MEDMSYNCDELAYINFO_SIZE)) {
-			mlo_err_rl("ML seq payload len %zu insufficient for Medium Sync Delay Info size %u after parsed payload len %zu.",
-				   mlieseqpayloadlen,
-				   WLAN_ML_BV_CINFO_MEDMSYNCDELAYINFO_SIZE,
-				   parsed_payload_len);
-			return QDF_STATUS_E_PROTO;
-		}
-
-		parsed_payload_len += WLAN_ML_BV_CINFO_MEDMSYNCDELAYINFO_SIZE;
-	}
+	if (presencebm & WLAN_ML_BV_CTRL_PBM_MEDIUMSYNCDELAYINFO_P)
+		parsed_ie_len += WLAN_ML_BV_CINFO_MEDMSYNCDELAYINFO_SIZE;
 
 	/* Check if EML cap is present */
-	if (presence_bm & WLAN_ML_BV_CTRL_PBM_EMLCAP_P) {
-		if (mlieseqpayloadlen <
-				(parsed_payload_len +
-				 WLAN_ML_BV_CINFO_EMLCAP_SIZE)) {
-			mlo_err_rl("ML seq payload len %zu insufficient for EML cap size %u after parsed payload len %zu.",
-				   mlieseqpayloadlen,
-				   WLAN_ML_BV_CINFO_EMLCAP_SIZE,
-				   parsed_payload_len);
-			return QDF_STATUS_E_PROTO;
-		}
-
-		parsed_payload_len += WLAN_ML_BV_CINFO_EMLCAP_SIZE;
-	}
+	if (presencebm & WLAN_ML_BV_CTRL_PBM_EMLCAP_P)
+		parsed_ie_len += WLAN_ML_BV_CINFO_EMLCAP_SIZE;
 
 	/* Check if MLD cap is present */
-	if (presence_bm & WLAN_ML_BV_CTRL_PBM_MLDCAPANDOP_P) {
-		if (mlieseqpayloadlen <
-				(parsed_payload_len +
-				 WLAN_ML_BV_CINFO_MLDCAPANDOP_SIZE)) {
-			mlo_err_rl("ML seq payload len %zu insufficient for MLD cap size %u after parsed payload len %zu.",
-				   mlieseqpayloadlen,
-				   WLAN_ML_BV_CINFO_MLDCAPANDOP_SIZE,
-				   parsed_payload_len);
-			return QDF_STATUS_E_PROTO;
-		}
-
-		parsed_payload_len += WLAN_ML_BV_CINFO_MLDCAPANDOP_SIZE;
-	}
-
-	/* Check if MLD ID is present */
-	if (presence_bm & WLAN_ML_BV_CTRL_PBM_MLDID_P) {
-		if (mlieseqpayloadlen <
-				(parsed_payload_len +
-				 WLAN_ML_BV_CINFO_MLDID_SIZE)) {
-			mlo_err_rl("ML seq payload len %zu insufficient for MLD ID size %u after parsed payload len %zu.",
-				   mlieseqpayloadlen,
-				   WLAN_ML_BV_CINFO_MLDID_SIZE,
-				   parsed_payload_len);
-			return QDF_STATUS_E_PROTO;
-		}
-
-		parsed_payload_len += WLAN_ML_BV_CINFO_MLDID_SIZE;
-	}
-
-	/* Check if Ext MLD CAP OP is present */
-	if (presence_bm & WLAN_ML_BV_CTRL_PBM_EXT_MLDCAPANDOP_P) {
-		if (mlieseqpayloadlen <
-				(parsed_payload_len +
-				 WLAN_ML_BV_CINFO_EXT_MLDCAPANDOP_SIZE)) {
-			mlo_err_rl("ML seq payload len %zu insufficient for Ext MLD CAP OP size %u after parsed payload len %zu.",
-				   mlieseqpayloadlen,
-				   WLAN_ML_BV_CINFO_EXT_MLDCAPANDOP_SIZE,
-				   parsed_payload_len);
-			return QDF_STATUS_E_PROTO;
-		}
-
-		parsed_payload_len += WLAN_ML_BV_CINFO_EXT_MLDCAPANDOP_SIZE;
-	}
-
-	exp_cinfo_len = parsed_payload_len - WLAN_ML_CTRL_SIZE;
-	if (cinfo_len >= exp_cinfo_len) {
-		/* If common info length received is greater,
-		 *  skip through the additional bytes
-		 */
-		parsed_payload_len += (cinfo_len - exp_cinfo_len);
-		mlo_debug("ML seq common info len %u, parsed payload length %zu, expected common info len %u",
-			  cinfo_len, parsed_payload_len, exp_cinfo_len);
-	} else {
-		/* If cinfo_len < exp_cinfo_len return error */
-		mlo_err_rl("ML seq common info len %u doesn't match with expected common info len %u",
-			   cinfo_len, exp_cinfo_len);
-		return QDF_STATUS_E_PROTO;
-	}
+	if (presencebm & WLAN_ML_BV_CTRL_PBM_MLDCAP_P)
+		parsed_ie_len += WLAN_ML_BV_CINFO_MLDCAP_SIZE;
 
 	if (link_info_len) {
-		*link_info_len = mlieseqpayloadlen - parsed_payload_len;
-		mlo_debug("link_info_len:%zu, parsed_payload_len:%zu",
-			  *link_info_len, parsed_payload_len);
+		*link_info_len = len - parsed_ie_len;
+		mlo_debug("link_info_len:%zu, parsed_ie_len:%zu",
+			  *link_info_len, parsed_ie_len);
 	}
 
-	if (mlieseqpayloadlen == parsed_payload_len) {
-		if (link_info)
-			*link_info = NULL;
-		return QDF_STATUS_SUCCESS;
-	}
-
-	if (link_info)
-		*link_info = mlieseqpayload + parsed_payload_len;
-
-	return QDF_STATUS_SUCCESS;
+	return &element[parsed_ie_len];
 }
 
-static QDF_STATUS
-util_parse_prv_multi_link_ctrl(uint8_t *mlieseqpayload,
-			       qdf_size_t mlieseqpayloadlen,
-			       uint8_t **link_info,
-			       qdf_size_t *link_info_len)
+static
+uint8_t *util_parse_bvmlie_perstaprofile(uint8_t *subelement,
+					 qdf_size_t len,
+					 bool is_staprof_reqd,
+					 qdf_size_t *staprof_len,
+					 uint8_t *linkid,
+					 bool *is_macaddr_valid,
+					 struct qdf_mac_addr *macaddr)
 {
-	qdf_size_t parsed_payload_len;
-	uint16_t mlcontrol;
-	uint16_t presence_bm;
-	uint16_t cinfo_len = 0;
-	uint16_t exp_cinfo_len = 0;
-
-	/* This helper returns the location(s) and length(s) of (sub)field(s)
-	 * inferable after parsing the Multi Link element Control field. These
-	 * location(s) and length(s) is/are in reference to the payload section
-	 * of the Multi Link element (after defragmentation, if applicable).
-	 * Here, the payload is the point after the element ID extension of the
-	 * Multi Link element, and includes the payloads of all subsequent
-	 * fragments (if any) but not the headers of those fragments.
-	 *
-	 * Currently, the helper returns the location and length of the Link
-	 * Info field in the Multi Link element sequence. Other (sub)field(s)
-	 * can be added later as required.
-	 */
-
-	if (!mlieseqpayload) {
-		mlo_err("ML seq payload pointer is NULL");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	if (!mlieseqpayloadlen) {
-		mlo_err("ML seq payload len is 0");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	if (mlieseqpayloadlen < WLAN_ML_CTRL_SIZE) {
-		mlo_err_rl("ML seq payload len %zu < ML Control size %u",
-			   mlieseqpayloadlen, WLAN_ML_CTRL_SIZE);
-		return QDF_STATUS_E_PROTO;
-	}
-
-	parsed_payload_len = 0;
-
-	qdf_mem_copy(&mlcontrol, mlieseqpayload, WLAN_ML_CTRL_SIZE);
-	mlcontrol = qdf_le16_to_cpu(mlcontrol);
-	parsed_payload_len += WLAN_ML_CTRL_SIZE;
-
-	presence_bm = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_PBM_IDX,
-				   WLAN_ML_CTRL_PBM_BITS);
-
-	if (mlieseqpayloadlen <
-			(parsed_payload_len + WLAN_ML_PRV_CINFO_LENGTH_SIZE)) {
-		mlo_err_rl("ML seq payload len %zu insufficient for common info length size %u after parsed payload len %zu.",
-			   mlieseqpayloadlen,
-			   WLAN_ML_PRV_CINFO_LENGTH_SIZE,
-			   parsed_payload_len);
-		return QDF_STATUS_E_PROTO;
-	}
-
-	cinfo_len = *(mlieseqpayload + parsed_payload_len);
-	parsed_payload_len += WLAN_ML_PRV_CINFO_LENGTH_SIZE;
-
-	/* Check if MLD ID is present */
-	if (presence_bm & WLAN_ML_PRV_CTRL_PBM_MLDID_P) {
-		if (mlieseqpayloadlen <
-				(parsed_payload_len +
-				 WLAN_ML_PRV_CINFO_MLDID_SIZE)) {
-			mlo_err_rl("ML seq payload len %zu insufficient for MLD ID size %u after parsed payload len %zu.",
-				   mlieseqpayloadlen,
-				   WLAN_ML_PRV_CINFO_MLDID_SIZE,
-				   parsed_payload_len);
-			return QDF_STATUS_E_PROTO;
-		}
-
-		parsed_payload_len += WLAN_ML_PRV_CINFO_MLDID_SIZE;
-	}
-
-	exp_cinfo_len = parsed_payload_len - WLAN_ML_CTRL_SIZE;
-	if (cinfo_len != exp_cinfo_len) {
-		mlo_err_rl("ML seq common info len %u doesn't match with expected common info len %u",
-			   cinfo_len, exp_cinfo_len);
-		return QDF_STATUS_E_PROTO;
-	}
-
-	if (link_info_len) {
-		*link_info_len = mlieseqpayloadlen - parsed_payload_len;
-		mlo_debug("link_info_len:%zu, parsed_payload_len:%zu",
-			  *link_info_len, parsed_payload_len);
-	}
-
-	if (mlieseqpayloadlen == parsed_payload_len) {
-		mlo_debug("No Link Info field present");
-		if (link_info)
-			*link_info = NULL;
-		return QDF_STATUS_SUCCESS;
-	}
-
-	if (link_info)
-		*link_info = mlieseqpayload + parsed_payload_len;
-
-	return QDF_STATUS_SUCCESS;
-}
-
-static QDF_STATUS
-util_parse_bvmlie_perstaprofile_stactrl(uint8_t *subelempayload,
-					qdf_size_t subelempayloadlen,
-					uint8_t *linkid,
-					uint16_t *beaconinterval,
-					bool *is_beaconinterval_valid,
-					uint64_t *tsfoffset,
-					bool *is_tsfoffset_valid,
-					bool *is_complete_profile,
-					bool *is_macaddr_valid,
-					struct qdf_mac_addr *macaddr,
-					bool is_staprof_reqd,
-					uint8_t **staprof,
-					qdf_size_t *staprof_len,
-					struct mlo_nstr_info *nstr_info,
-					bool *is_nstrlp_present)
-{
-	qdf_size_t parsed_payload_len = 0;
+	qdf_size_t subelement_len = 0;
+	struct wlan_ml_bv_linfo_perstaprof *perstaprof_fixed;
 	uint16_t stacontrol;
 	uint8_t completeprofile;
 	uint8_t nstrlppresent;
 	enum wlan_ml_bv_linfo_perstaprof_stactrl_nstrbmsz nstrbmsz;
-	qdf_size_t nstrlpoffset = 0;
-	uint8_t link_id;
 
-	/* This helper returns the location(s) and where required, the length(s)
-	 * of (sub)field(s) inferable after parsing the STA Control field in the
-	 * per-STA profile subelement. These location(s) and length(s) is/are in
-	 * reference to the payload section of the per-STA profile subelement
-	 * (after defragmentation, if applicable).  Here, the payload is the
-	 * point after the subelement length in the subelement, and includes the
-	 * payloads of all subsequent fragments (if any) but not the headers of
-	 * those fragments.
-	 *
-	 * Currently, the helper returns the link ID, MAC address, and STA
-	 * profile. More (sub)fields can be added when required.
-	 */
-
-	if (!subelempayload) {
-		mlo_err("Pointer to subelement payload is NULL");
-		return QDF_STATUS_E_NULL_VALUE;
+	if (!subelement) {
+		mlo_err("Pointer to subelement is NULL");
+		return NULL;
 	}
 
-	if (!subelempayloadlen) {
-		mlo_err("Length of subelement payload is zero");
-		return QDF_STATUS_E_INVAL;
+	if (!len) {
+		mlo_err("Length is zero");
+		return NULL;
 	}
 
-	if (subelempayloadlen < WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_SIZE) {
-		mlo_err_rl("Subelement payload length %zu octets is smaller than STA control field of per-STA profile subelement %u octets",
-			   subelempayloadlen,
-			   WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_SIZE);
-		return QDF_STATUS_E_PROTO;
+	if (subelement[0] != WLAN_ML_BV_LINFO_SUBELEMID_PERSTAPROFILE) {
+		mlo_err_rl("Pointer to subelement does not point to per-STA profile");
+		return NULL;
 	}
 
-	parsed_payload_len = 0;
+	if (len < sizeof(struct wlan_ml_bv_linfo_perstaprof)) {
+		mlo_err_rl("len %zu octets is smaller than that required for the fixed portion of per-STA profile (%zu octets)",
+			   len, sizeof(struct wlan_ml_bv_linfo_perstaprof));
+		return NULL;
+	}
 
-	qdf_mem_copy(&stacontrol,
-		     subelempayload,
-		     WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_SIZE);
-	stacontrol = le16toh(stacontrol);
-	parsed_payload_len += WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_SIZE;
+	perstaprof_fixed = (struct wlan_ml_bv_linfo_perstaprof *)subelement;
 
-	link_id = QDF_GET_BITS(stacontrol,
-			       WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_LINKID_IDX,
-			       WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_LINKID_BITS);
-	if (linkid)
-		*linkid = link_id;
+	subelement_len = sizeof(*perstaprof_fixed);
+
+	stacontrol = le16toh(perstaprof_fixed->stacontrol);
+
+	if (linkid) {
+		*linkid = QDF_GET_BITS(stacontrol,
+				       WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_LINKID_IDX,
+				       WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_LINKID_BITS);
+	}
 
 	/* Check if this a complete profile */
 	completeprofile = QDF_GET_BITS(stacontrol,
 				       WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_CMPLTPROF_IDX,
 				       WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_CMPLTPROF_BITS);
 
-	if (completeprofile && is_complete_profile)
-		*is_complete_profile = true;
-
-	/* Check STA Info Length */
-	if (subelempayloadlen <
-		parsed_payload_len + WLAN_ML_BV_LINFO_PERSTAPROF_STAINFO_LENGTH_SIZE) {
-		mlo_err_rl("Length of subelement payload %zu octets not sufficient to contain STA Info Length of size %u octets after parsed payload length of %zu octets.",
-			   subelempayloadlen,
-			   WLAN_ML_BV_LINFO_PERSTAPROF_STAINFO_LENGTH_SIZE,
-			   parsed_payload_len);
-		return QDF_STATUS_E_PROTO;
-	}
-
-	parsed_payload_len += WLAN_ML_BV_LINFO_PERSTAPROF_STAINFO_LENGTH_SIZE;
+	/*  We increment the measured length of the per-STA profile by checking
+	 *  for the presence of individual fields. We validate this length
+	 *  against the total length of the sublement only at the end, except in
+	 *  cases where we are actually about to access a given field.
+	 */
 
 	if (is_macaddr_valid)
 		*is_macaddr_valid = false;
@@ -485,105 +198,44 @@ util_parse_bvmlie_perstaprofile_stactrl(uint8_t *subelempayload,
 	if (QDF_GET_BITS(stacontrol,
 			 WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_MACADDRP_IDX,
 			 WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_MACADDRP_BITS)) {
-		if (subelempayloadlen <
-				(parsed_payload_len + QDF_MAC_ADDR_SIZE)) {
-			mlo_err_rl("Length of subelement payload %zu octets not sufficient to contain MAC address of size %u octets after parsed payload length of %zu octets.",
-				   subelempayloadlen,
-				   QDF_MAC_ADDR_SIZE,
-				   parsed_payload_len);
-			return QDF_STATUS_E_PROTO;
-		}
-
 		if (macaddr) {
+			/* Explicityly check if the length is sufficient to hold
+			 * the STA MAC address, since we are about to attempt to
+			 * access the STA MAC address.
+			 */
+			if (len < (subelement_len + QDF_MAC_ADDR_SIZE)) {
+				mlo_err_rl("len %zu octets is smaller than min size of per-STA profile required to accommodate STA MAC address (%zu octets)",
+					   len,
+					   (subelement_len + QDF_MAC_ADDR_SIZE));
+				return NULL;
+			}
+
 			qdf_mem_copy(macaddr->bytes,
-				     subelempayload + parsed_payload_len,
+				     subelement + subelement_len,
 				     QDF_MAC_ADDR_SIZE);
 
 			mlo_nofl_debug("Copied MAC address: " QDF_MAC_ADDR_FMT,
-				       QDF_MAC_ADDR_REF(macaddr->bytes));
+				       subelement + subelement_len);
 
 			if (is_macaddr_valid)
 				*is_macaddr_valid = true;
 		}
 
-		parsed_payload_len += QDF_MAC_ADDR_SIZE;
+		subelement_len += QDF_MAC_ADDR_SIZE;
 	}
 
 	/* Check Beacon Interval present bit */
 	if (QDF_GET_BITS(stacontrol,
 			 WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_BCNINTP_IDX,
-			 WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_BCNINTP_BITS)) {
-		if (subelempayloadlen <
-				(parsed_payload_len +
-				 WLAN_BEACONINTERVAL_LEN)) {
-			mlo_err_rl("Length of subelement payload %zu octets not sufficient to contain Beacon Interval of size %u octets after parsed payload length of %zu octets.",
-				   subelempayloadlen,
-				   WLAN_BEACONINTERVAL_LEN,
-				   parsed_payload_len);
-			return QDF_STATUS_E_PROTO;
-		}
-
-		if (beaconinterval) {
-			qdf_mem_copy(beaconinterval,
-				     subelempayload + parsed_payload_len,
-				     WLAN_BEACONINTERVAL_LEN);
-			*beaconinterval = qdf_le16_to_cpu(*beaconinterval);
-
-			if (is_beaconinterval_valid)
-				*is_beaconinterval_valid = true;
-		}
-		parsed_payload_len += WLAN_BEACONINTERVAL_LEN;
-	}
-
-	/* Check TSF Offset present bit */
-	if (QDF_GET_BITS(stacontrol,
-			 WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_TSFOFFSETP_IDX,
-			 WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_TSFOFFSETP_BITS)) {
-		if (!completeprofile) {
-			mlo_err_rl("TSF offset is expected only for complete profiles");
-			return QDF_STATUS_E_PROTO;
-		}
-
-		if (subelempayloadlen <
-				(parsed_payload_len +
-				 WLAN_ML_TSF_OFFSET_SIZE)) {
-			mlo_err_rl("Length of subelement payload %zu octets not sufficient to contain TSF Offset of size %u octets after parsed payload length of %zu octets.",
-				   subelempayloadlen,
-				   WLAN_ML_TSF_OFFSET_SIZE,
-				   parsed_payload_len);
-			return QDF_STATUS_E_PROTO;
-		}
-
-		if (tsfoffset) {
-			qdf_mem_copy(tsfoffset,
-				     subelempayload + parsed_payload_len,
-				     WLAN_TIMESTAMP_LEN);
-			*tsfoffset = qdf_le64_to_cpu(*tsfoffset);
-
-			if (is_tsfoffset_valid)
-				*is_tsfoffset_valid = true;
-		}
-
-		parsed_payload_len += WLAN_ML_TSF_OFFSET_SIZE;
-	}
+			 WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_BCNINTP_BITS))
+		subelement_len += WLAN_BEACONINTERVAL_LEN;
 
 	/* Check DTIM Info present bit */
 	if (QDF_GET_BITS(stacontrol,
 			 WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_DTIMINFOP_IDX,
-			 WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_DTIMINFOP_BITS)) {
-		if (subelempayloadlen <
-				(parsed_payload_len +
-				 sizeof(struct wlan_ml_bv_linfo_perstaprof_stainfo_dtiminfo))) {
-			mlo_err_rl("Length of subelement payload %zu octets not sufficient to contain DTIM Info of size %zu octets after parsed payload length of %zu octets.",
-				   subelempayloadlen,
-				   sizeof(struct wlan_ml_bv_linfo_perstaprof_stainfo_dtiminfo),
-				   parsed_payload_len);
-			return QDF_STATUS_E_PROTO;
-		}
-
-		parsed_payload_len +=
+			 WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_DTIMINFOP_BITS))
+		subelement_len +=
 			sizeof(struct wlan_ml_bv_linfo_perstaprof_stainfo_dtiminfo);
-	}
 
 	/* Check NTSR Link pair present bit */
 	nstrlppresent =
@@ -592,7 +244,6 @@ util_parse_bvmlie_perstaprofile_stactrl(uint8_t *subelempayload,
 			     WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_NSTRLINKPRP_BITS);
 
 	if (completeprofile && nstrlppresent) {
-		nstrlpoffset = parsed_payload_len;
 		/* Check NTSR Bitmap Size bit */
 		nstrbmsz =
 			QDF_GET_BITS(stacontrol,
@@ -600,64 +251,17 @@ util_parse_bvmlie_perstaprofile_stactrl(uint8_t *subelempayload,
 				     WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_NSTRBMSZ_BITS);
 
 		if (nstrbmsz == WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_NSTRBMSZ_1_OCTET) {
-			if (subelempayloadlen <
-					(parsed_payload_len + 1)) {
-				mlo_err_rl("Length of subelement payload %zu octets not sufficient to contain NTSR Bitmap of size 1 octet after parsed payload length of %zu octets.",
-					   subelempayloadlen,
-					   parsed_payload_len);
-				return QDF_STATUS_E_PROTO;
-			}
-
-			parsed_payload_len += 1;
+			subelement_len += 1;
 		} else if (nstrbmsz == WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_NSTRBMSZ_2_OCTETS) {
-			if (subelempayloadlen <
-					(parsed_payload_len + 2)) {
-				mlo_err_rl("Length of subelement payload %zu octets not sufficient to contain NTSR Bitmap  of size 2 octets after parsed payload length of %zu octets.",
-					   subelempayloadlen,
-					   parsed_payload_len);
-				return QDF_STATUS_E_PROTO;
-			}
-
-			parsed_payload_len += 2;
+			subelement_len += 2;
 		} else {
 			/* Though an invalid value cannot occur if only 1 bit is
 			 * used, we check for it in a generic manner in case the
 			 * number of bits is increased in the future.
 			 */
 			mlo_err_rl("Invalid NSTR Bitmap size %u", nstrbmsz);
-			return QDF_STATUS_E_PROTO;
+			return NULL;
 		}
-		if (nstr_info) {
-			nstr_info->nstr_lp_present = nstrlppresent;
-			nstr_info->nstr_bmp_size = nstrbmsz;
-			*is_nstrlp_present = true;
-			nstr_info->link_id = link_id;
-
-			if (nstrbmsz == WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_NSTRBMSZ_1_OCTET) {
-				nstr_info->nstr_lp_bitmap =
-					*(uint8_t *)(subelempayload + nstrlpoffset);
-			} else if (nstrbmsz == WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_NSTRBMSZ_2_OCTETS) {
-				nstr_info->nstr_lp_bitmap =
-					qdf_le16_to_cpu(*(uint16_t *)(subelempayload + nstrlpoffset));
-			}
-		}
-	}
-
-	/* Check BSS Parameters Change Count Present bit */
-	if (QDF_GET_BITS(stacontrol,
-			 WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_BSSPARAMCHNGCNTP_IDX,
-			 WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_BSSPARAMCHNGCNTP_BITS)) {
-		if (subelempayloadlen <
-				(parsed_payload_len +
-				 WLAN_ML_BSSPARAMCHNGCNT_SIZE)) {
-			mlo_err_rl("Length of subelement payload %zu octets not sufficient to contain BSS Parameters Change Count of size %u octets after parsed payload length of %zu octets.",
-				   subelempayloadlen,
-				   WLAN_ML_BSSPARAMCHNGCNT_SIZE,
-				   parsed_payload_len);
-			return QDF_STATUS_E_PROTO;
-		}
-
-		parsed_payload_len += WLAN_ML_BSSPARAMCHNGCNT_SIZE;
 	}
 
 	/* Note: Some implementation versions of hostapd/wpa_supplicant may
@@ -665,108 +269,28 @@ util_parse_bvmlie_perstaprofile_stactrl(uint8_t *subelempayload,
 	 * indicate whether a STA profile is required to be found. This may be
 	 * revisited as upstreaming progresses.
 	 */
-	if (!is_staprof_reqd)
-		return QDF_STATUS_SUCCESS;
+	if (!is_staprof_reqd) {
+		if (len < subelement_len) {
+			mlo_err_rl("len %zu < subelement_len %zu",
+				   len,
+				   subelement_len);
+			return NULL;
+		}
 
-	if (subelempayloadlen == parsed_payload_len) {
-		mlo_err_rl("Subelement payload length %zu == parsed payload length %zu. Unable to get STA profile.",
-			   subelempayloadlen,
-			   parsed_payload_len);
-		return QDF_STATUS_E_PROTO;
+		return &subelement[subelement_len - 1];
+	}
+
+	if (len <= subelement_len) {
+		mlo_err_rl("len %zu <= subelement_len %zu",
+			   len,
+			   subelement_len);
+		return NULL;
 	}
 
 	if (staprof_len)
-		*staprof_len = subelempayloadlen - parsed_payload_len;
+		*staprof_len = len - subelement_len;
 
-	if (staprof)
-		*staprof = subelempayload + parsed_payload_len;
-
-	return QDF_STATUS_SUCCESS;
-}
-
-static QDF_STATUS
-util_parse_prvmlie_perstaprofile_stactrl(uint8_t *subelempayload,
-					 qdf_size_t subelempayloadlen,
-					 uint8_t *linkid,
-					 bool is_staprof_reqd,
-					 uint8_t **staprof,
-					 qdf_size_t *staprof_len)
-{
-	qdf_size_t parsed_payload_len = 0;
-	uint16_t stacontrol;
-	uint8_t completeprofile;
-
-	/* This helper returns the location(s) and where required, the length(s)
-	 * of (sub)field(s) inferable after parsing the STA Control field in the
-	 * per-STA profile subelement. These location(s) and length(s) is/are in
-	 * reference to the payload section of the per-STA profile subelement
-	 * (after defragmentation, if applicable).  Here, the payload is the
-	 * point after the subelement length in the subelement, and includes the
-	 * payloads of all subsequent fragments (if any) but not the headers of
-	 * those fragments.
-	 *
-	 * Currently, the helper returns the link ID, MAC address, and STA
-	 * profile. More (sub)fields can be added when required.
-	 */
-
-	if (!subelempayload) {
-		mlo_err("Pointer to subelement payload is NULL");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	if (!subelempayloadlen) {
-		mlo_err("Length of subelement payload is zero");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	if (subelempayloadlen < WLAN_ML_PRV_LINFO_PERSTAPROF_STACTRL_SIZE) {
-		mlo_err_rl("Subelement payload length %zu octets is smaller than STA control field of per-STA profile subelement %u octets",
-			   subelempayloadlen,
-			   WLAN_ML_PRV_LINFO_PERSTAPROF_STACTRL_SIZE);
-		return QDF_STATUS_E_PROTO;
-	}
-
-	parsed_payload_len = 0;
-
-	qdf_mem_copy(&stacontrol,
-		     subelempayload,
-		     WLAN_ML_PRV_LINFO_PERSTAPROF_STACTRL_SIZE);
-	stacontrol = qdf_le16_to_cpu(stacontrol);
-	parsed_payload_len += WLAN_ML_PRV_LINFO_PERSTAPROF_STACTRL_SIZE;
-
-	if (linkid) {
-		*linkid = QDF_GET_BITS(stacontrol,
-				       WLAN_ML_PRV_LINFO_PERSTAPROF_STACTRL_LINKID_IDX,
-				       WLAN_ML_PRV_LINFO_PERSTAPROF_STACTRL_LINKID_BITS);
-	}
-
-	/* Check if this a complete profile */
-	completeprofile = QDF_GET_BITS(stacontrol,
-				       WLAN_ML_PRV_LINFO_PERSTAPROF_STACTRL_CMPLTPROF_IDX,
-				       WLAN_ML_PRV_LINFO_PERSTAPROF_STACTRL_CMPLTPROF_BITS);
-
-	/* Note: Some implementation versions of hostapd/wpa_supplicant may
-	 * provide a per-STA profile without STA profile. Let the caller
-	 * indicate whether a STA profile is required to be found. This may be
-	 * revisited as upstreaming progresses.
-	 */
-	if (!is_staprof_reqd)
-		return QDF_STATUS_SUCCESS;
-
-	if (subelempayloadlen == parsed_payload_len) {
-		mlo_err_rl("Subelement payload length %zu == parsed payload length %zu. Unable to get STA profile.",
-			   subelempayloadlen,
-			   parsed_payload_len);
-		return QDF_STATUS_E_PROTO;
-	}
-
-	if (staprof_len)
-		*staprof_len = subelempayloadlen - parsed_payload_len;
-
-	if (staprof)
-		*staprof = subelempayload + parsed_payload_len;
-
-	return QDF_STATUS_SUCCESS;
+	return &subelement[subelement_len];
 }
 
 static
@@ -801,39 +325,17 @@ uint8_t *util_get_successorfrag(uint8_t *currie, uint8_t *frame, qdf_size_t len)
 	return nextie;
 }
 
-static QDF_STATUS
-util_parse_partner_info_from_linkinfo(uint8_t *linkinfo,
-				      qdf_size_t linkinfo_len,
-				      struct mlo_partner_info *partner_info,
-				      uint8_t subtype)
+static
+QDF_STATUS util_parse_partner_info_from_linkinfo(uint8_t *linkinfo,
+						 qdf_size_t linkinfo_len,
+						 struct mlo_partner_info *partner_info)
 {
 	uint8_t linkid;
 	struct qdf_mac_addr macaddr;
-	struct mlo_nstr_info nstr_info = {0};
 	bool is_macaddr_valid;
-	uint8_t *linkinfo_currpos;
-	qdf_size_t linkinfo_remlen;
-	bool is_subelemfragseq;
-	uint8_t subelemid;
-	qdf_size_t subelemseqtotallen;
-	qdf_size_t subelemseqpayloadlen;
-	qdf_size_t defragpayload_len;
-	QDF_STATUS ret;
-	bool is_nstrlp_present = false;
-	uint8_t *sta_prof_currpos;
-	qdf_size_t sta_prof_remlen;
-
-	/* This helper function parses partner info from the per-STA profiles
-	 * present (if any) in the Link Info field in the payload of a Multi
-	 * Link element (after defragmentation if required). The caller should
-	 * pass a copy of the payload so that inline defragmentation of
-	 * subelements can be carried out if required. The subelement
-	 * defragmentation (if applicable) in this Control Path helper is
-	 * required for maintainability, accuracy and eliminating current and
-	 * future per-field-access multi-level fragment boundary checks and
-	 * adjustments, given the complex format of Multi Link elements. It is
-	 * also most likely to be required mainly at the client side.
-	 */
+	uint8_t *currpos;
+	qdf_size_t currlen;
+	uint8_t *endofstainfo;
 
 	if (!linkinfo) {
 		mlo_err("linkinfo is NULL");
@@ -851,114 +353,41 @@ util_parse_partner_info_from_linkinfo(uint8_t *linkinfo,
 	}
 
 	partner_info->num_partner_links = 0;
-	linkinfo_currpos = linkinfo;
-	linkinfo_remlen = linkinfo_len;
+	currpos = linkinfo;
+	currlen = linkinfo_len;
 
-	while (linkinfo_remlen) {
-		if (linkinfo_remlen <  sizeof(struct subelem_header)) {
-			mlo_err_rl("Remaining length in link info %zu octets is smaller than subelement header length %zu octets",
-				   linkinfo_remlen,
-				   sizeof(struct subelem_header));
+	while (currlen) {
+		if (currlen <  MIN_IE_LEN) {
+			mlo_err_rl("currlen %zu is smaller than minimum IE length %u",
+				   currlen, MIN_IE_LEN);
 			return QDF_STATUS_E_PROTO;
 		}
 
-		subelemid = linkinfo_currpos[ID_POS];
-		is_subelemfragseq = false;
-		subelemseqtotallen = 0;
-		subelemseqpayloadlen = 0;
-
-		ret = wlan_get_subelem_fragseq_info(WLAN_ML_LINFO_SUBELEMID_FRAGMENT,
-						    linkinfo_currpos,
-						    linkinfo_remlen,
-						    &is_subelemfragseq,
-						    &subelemseqtotallen,
-						    &subelemseqpayloadlen);
-		if (QDF_IS_STATUS_ERROR(ret))
-			return ret;
-
-		if (is_subelemfragseq) {
-			if (!subelemseqpayloadlen) {
-				mlo_err_rl("Subelement fragment sequence payload is reported as 0, investigate");
-				return QDF_STATUS_E_FAILURE;
-			}
-
-			mlo_debug("Subelement fragment sequence found with payload len %zu",
-				  subelemseqpayloadlen);
-
-			ret = wlan_defrag_subelem_fragseq(true,
-							  WLAN_ML_LINFO_SUBELEMID_FRAGMENT,
-							  linkinfo_currpos,
-							  linkinfo_remlen,
-							  NULL,
-							  0,
-							  &defragpayload_len);
-			if (QDF_IS_STATUS_ERROR(ret))
-				return ret;
-
-			if (defragpayload_len != subelemseqpayloadlen) {
-				mlo_err_rl("Length of defragmented payload %zu octets is not equal to length of subelement fragment sequence payload %zu octets",
-					   defragpayload_len,
-					   subelemseqpayloadlen);
-				return QDF_STATUS_E_FAILURE;
-			}
-
-			/* Adjust linkinfo_remlen to reflect removal of all
-			 * subelement headers except the header of the lead
-			 * subelement.
-			 */
-			linkinfo_remlen -= (subelemseqtotallen -
-					    subelemseqpayloadlen -
-					    sizeof(struct subelem_header));
-		} else {
-			if (linkinfo_remlen <
-				(sizeof(struct subelem_header) +
-				 linkinfo_currpos[TAG_LEN_POS])) {
-				mlo_err_rl("Remaining length in link info %zu octets is smaller than total size of current subelement %zu octets",
-					   linkinfo_remlen,
-					   sizeof(struct subelem_header) +
-					   linkinfo_currpos[TAG_LEN_POS]);
-				return QDF_STATUS_E_PROTO;
-			}
-
-			subelemseqpayloadlen = linkinfo_currpos[TAG_LEN_POS];
+		if (currlen <  (MIN_IE_LEN + currpos[TAG_LEN_POS])) {
+			mlo_err_rl("currlen %zu is smaller than length of current IE %u",
+				   currlen, MIN_IE_LEN + currpos[TAG_LEN_POS]);
+			return QDF_STATUS_E_PROTO;
 		}
 
-		if (subelemid == WLAN_ML_LINFO_SUBELEMID_PERSTAPROFILE) {
+		if (currpos[ID_POS] ==
+				WLAN_ML_BV_LINFO_SUBELEMID_PERSTAPROFILE) {
 			is_macaddr_valid = false;
-			sta_prof_remlen = 0;
-			sta_prof_currpos = NULL;
 
-			ret = util_parse_bvmlie_perstaprofile_stactrl(linkinfo_currpos +
-								      sizeof(struct subelem_header),
-								      subelemseqpayloadlen,
-								      &linkid,
-								      NULL,
-								      NULL,
-								      NULL,
-								      NULL,
-								      NULL,
-								      &is_macaddr_valid,
-								      &macaddr,
-								      true,
-								      &sta_prof_currpos,
-								      &sta_prof_remlen,
-								      &nstr_info,
-								      &is_nstrlp_present);
-			if (QDF_IS_STATUS_ERROR(ret)) {
-				return ret;
-			}
+			/* Per-STA profile fragmentation support may be added
+			 * once support for this is introduced in the standard.
+			 */
+			endofstainfo =
+				util_parse_bvmlie_perstaprofile(currpos,
+								currlen,
+								false,
+								NULL,
+								&linkid,
+								&is_macaddr_valid,
+								&macaddr);
 
-			if (is_nstrlp_present) {
-				if (partner_info->num_nstr_info_links >=
-					QDF_ARRAY_SIZE(partner_info->nstr_info)) {
-					mlo_err_rl("Insufficient size %zu of array for nstr link info",
-						   QDF_ARRAY_SIZE(partner_info->nstr_info));
-					return QDF_STATUS_E_NOMEM;
-				}
-				qdf_mem_copy(&partner_info->nstr_info[partner_info->num_nstr_info_links],
-					     &nstr_info, sizeof(nstr_info));
-				partner_info->num_nstr_info_links++;
-				is_nstrlp_present = false;
+			if (!endofstainfo) {
+				mlo_err_rl("Error in parsing per-STA profile");
+				return QDF_STATUS_E_EMPTY;
 			}
 
 			if (is_macaddr_valid) {
@@ -975,21 +404,6 @@ util_parse_partner_info_from_linkinfo(uint8_t *linkinfo,
 					     &macaddr,
 					     sizeof(partner_info->partner_link_info[partner_info->num_partner_links].link_addr));
 
-				if (subtype == WLAN_FC0_STYPE_ASSOC_RESP) {
-					if (sta_prof_remlen <
-					    (WLAN_CAPABILITYINFO_LEN + WLAN_STATUSCODE_LEN)) {
-						mlo_err_rl("Remaining length of STA profile %zu octets is less than length of Capability Info + length of Status Code %u",
-							   sta_prof_remlen,
-							   WLAN_CAPABILITYINFO_LEN +
-							   WLAN_STATUSCODE_LEN);
-						return QDF_STATUS_E_PROTO;
-						}
-						qdf_mem_copy(&partner_info->partner_link_info[partner_info->num_partner_links].link_status_code,
-							     sta_prof_currpos + WLAN_CAPABILITYINFO_LEN,
-							     (WLAN_STATUSCODE_LEN));
-						mlo_debug("partner link status code %d",
-							  partner_info->partner_link_info[partner_info->num_partner_links].link_status_code);
-				}
 				partner_info->num_partner_links++;
 			} else {
 				mlo_warn_rl("MAC address not found in STA Info field of per-STA profile with link ID %u",
@@ -997,165 +411,12 @@ util_parse_partner_info_from_linkinfo(uint8_t *linkinfo,
 			}
 		}
 
-		linkinfo_remlen -= (sizeof(struct subelem_header) +
-				    subelemseqpayloadlen);
-		linkinfo_currpos += (sizeof(struct subelem_header) +
-				     subelemseqpayloadlen);
+		currlen -= (MIN_IE_LEN + currpos[TAG_LEN_POS]);
+		currpos += (MIN_IE_LEN + currpos[TAG_LEN_POS]);
 	}
 
 	mlo_debug("Number of ML partner links found=%u",
 		  partner_info->num_partner_links);
-
-	return QDF_STATUS_SUCCESS;
-}
-
-static QDF_STATUS
-util_parse_probereq_info_from_linkinfo(uint8_t *linkinfo,
-				       qdf_size_t linkinfo_len,
-				       struct mlo_probereq_info *probereq_info)
-{
-	uint8_t linkid;
-	uint8_t *linkinfo_currpos;
-	qdf_size_t linkinfo_remlen;
-	bool is_subelemfragseq;
-	uint8_t subelemid;
-	qdf_size_t subelemseqtotallen;
-	qdf_size_t subelemseqpayloadlen;
-	qdf_size_t defragpayload_len;
-	QDF_STATUS ret;
-
-	/* This helper function parses probe request info from the per-STA prof
-	 * present (if any) in the Link Info field in the payload of a Multi
-	 * Link element (after defragmentation if required). The caller should
-	 * pass a copy of the payload so that inline defragmentation of
-	 * subelements can be carried out if required. The subelement
-	 * defragmentation (if applicable) in this Control Path helper is
-	 * required for maintainability, accuracy and eliminating current and
-	 * future per-field-access multi-level fragment boundary checks and
-	 * adjustments, given the complex format of Multi Link elements. It is
-	 * also most likely to be required mainly at the client side.
-	 */
-
-	if (!linkinfo) {
-		mlo_err("linkinfo is NULL");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	if (!linkinfo_len) {
-		mlo_err("linkinfo_len is zero");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	if (!probereq_info) {
-		mlo_err("ML probe req info is NULL");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	probereq_info->num_links = 0;
-	linkinfo_currpos = linkinfo;
-	linkinfo_remlen = linkinfo_len;
-
-	while (linkinfo_remlen) {
-		if (linkinfo_remlen <  sizeof(struct subelem_header)) {
-			mlo_err_rl("Remaining length in link info %zu octets is smaller than subelement header length %zu octets",
-				   linkinfo_remlen,
-				   sizeof(struct subelem_header));
-			return QDF_STATUS_E_PROTO;
-		}
-
-		subelemid = linkinfo_currpos[ID_POS];
-		is_subelemfragseq = false;
-		subelemseqtotallen = 0;
-		subelemseqpayloadlen = 0;
-
-		ret = wlan_get_subelem_fragseq_info(WLAN_ML_LINFO_SUBELEMID_FRAGMENT,
-						    linkinfo_currpos,
-						    linkinfo_remlen,
-						    &is_subelemfragseq,
-						    &subelemseqtotallen,
-						    &subelemseqpayloadlen);
-		if (QDF_IS_STATUS_ERROR(ret))
-			return ret;
-
-		if (is_subelemfragseq) {
-			if (!subelemseqpayloadlen) {
-				mlo_err_rl("Subelement fragment sequence payload is reported as 0, investigate");
-				return QDF_STATUS_E_FAILURE;
-			}
-
-			mlo_debug("Subelement fragment sequence found with payload len %zu",
-				  subelemseqpayloadlen);
-
-			ret = wlan_defrag_subelem_fragseq(true,
-							  WLAN_ML_LINFO_SUBELEMID_FRAGMENT,
-							  linkinfo_currpos,
-							  linkinfo_remlen,
-							  NULL,
-							  0,
-							  &defragpayload_len);
-			if (QDF_IS_STATUS_ERROR(ret))
-				return ret;
-
-			if (defragpayload_len != subelemseqpayloadlen) {
-				mlo_err_rl("Length of defragmented payload %zu octets is not equal to length of subelement fragment sequence payload %zu octets",
-					   defragpayload_len,
-					   subelemseqpayloadlen);
-				return QDF_STATUS_E_FAILURE;
-			}
-
-			/* Adjust linkinfo_remlen to reflect removal of all
-			 * subelement headers except the header of the lead
-			 * subelement.
-			 */
-			linkinfo_remlen -= (subelemseqtotallen -
-					    subelemseqpayloadlen -
-					    sizeof(struct subelem_header));
-		} else {
-			if (linkinfo_remlen <
-				(sizeof(struct subelem_header) +
-				 linkinfo_currpos[TAG_LEN_POS])) {
-				mlo_err_rl("Remaining length in link info %zu octets is smaller than total size of current subelement %zu octets",
-					   linkinfo_remlen,
-					   sizeof(struct subelem_header) +
-					   linkinfo_currpos[TAG_LEN_POS]);
-				return QDF_STATUS_E_PROTO;
-			}
-
-			subelemseqpayloadlen = linkinfo_currpos[TAG_LEN_POS];
-		}
-
-		if (subelemid == WLAN_ML_LINFO_SUBELEMID_PERSTAPROFILE) {
-			ret = util_parse_prvmlie_perstaprofile_stactrl(linkinfo_currpos +
-								      sizeof(struct subelem_header),
-								      subelemseqpayloadlen,
-								      &linkid,
-								      false,
-								      NULL,
-								      NULL);
-			if (QDF_IS_STATUS_ERROR(ret))
-				return ret;
-
-			if (probereq_info->num_links >=
-				QDF_ARRAY_SIZE(probereq_info->link_id)) {
-				mlo_err_rl("Insufficient size %zu of array for probe req link id",
-					   QDF_ARRAY_SIZE(probereq_info->link_id));
-				return QDF_STATUS_E_NOMEM;
-			}
-
-			probereq_info->link_id[probereq_info->num_links] = linkid;
-
-			probereq_info->num_links++;
-			mlo_debug("LINK ID requested is = %u", linkid);
-		}
-
-		linkinfo_remlen -= (sizeof(struct subelem_header) +
-				    subelemseqpayloadlen);
-		linkinfo_currpos += (sizeof(struct subelem_header) +
-				     subelemseqpayloadlen);
-	}
-
-	mlo_debug("Number of ML probe request links found=%u",
-		  probereq_info->num_links);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1170,7 +431,7 @@ QDF_STATUS util_get_noninheritlists(uint8_t *buff, qdf_size_t buff_len,
 	uint8_t *ninherit_ie;
 	qdf_size_t unparsed_len;
 
-	/* Note: This functionality provided by this helper may be combined with
+	/* Note: This funtionality provided by this helper may be combined with
 	 * other, older non-inheritance parsing helper functionality and exposed
 	 * as a common API as part of future efforts once the older
 	 * functionality can be made generic.
@@ -1325,7 +586,7 @@ QDF_STATUS util_eval_ie_in_noninheritlist(uint8_t *ie, qdf_size_t total_ie_len,
 	 * should ignore it.
 	 */
 
-	/* Note: The functionality provided by this helper may be combined with
+	/* Note: The funtionality provided by this helper may be combined with
 	 * other, older non-inheritance parsing helper functionality and exposed
 	 * as a common API as part of future efforts once the older
 	 * functionality can be made generic.
@@ -1416,15 +677,6 @@ QDF_STATUS util_eval_ie_in_noninheritlist(uint8_t *ie, qdf_size_t total_ie_len,
 	return QDF_STATUS_SUCCESS;
 }
 
-#if defined (SAP_MULTI_LINK_EMULATION)
-static inline
-QDF_STATUS util_validate_reportingsta_ie(const uint8_t *reportingsta_ie,
-					 const uint8_t *frame_iesection,
-					 const qdf_size_t frame_iesection_len)
-{
-	return QDF_STATUS_SUCCESS;
-}
-#else
 static inline
 QDF_STATUS util_validate_reportingsta_ie(const uint8_t *reportingsta_ie,
 					 const uint8_t *frame_iesection,
@@ -1478,7 +730,7 @@ QDF_STATUS util_validate_reportingsta_ie(const uint8_t *reportingsta_ie,
 
 	if ((reportingsta_ie[ID_POS] == WLAN_ELEMID_VENDOR) &&
 	    (reportingsta_ie_size < (PAYLOAD_START_POS + OUI_LEN))) {
-		mlo_err_rl("Total length %zu of element for reporting STA is smaller than minimum required of %u to access vendor EID",
+		mlo_err_rl("Total length %zu of element for reporting STA is smaller than minimum required to access vendor EID %u",
 			   reportingsta_ie_size, PAYLOAD_START_POS + OUI_LEN);
 		return QDF_STATUS_E_PROTO;
 	}
@@ -1501,7 +753,6 @@ QDF_STATUS util_validate_reportingsta_ie(const uint8_t *reportingsta_ie,
 
 	return QDF_STATUS_SUCCESS;
 }
-#endif
 
 static inline
 QDF_STATUS util_validate_sta_prof_ie(const uint8_t *sta_prof_ie,
@@ -1573,321 +824,18 @@ QDF_STATUS util_validate_sta_prof_ie(const uint8_t *sta_prof_ie,
 	return QDF_STATUS_SUCCESS;
 }
 
-#ifdef CONN_MGR_ADV_FEATURE
-/**
- * util_add_mlie_for_prb_rsp_gen - Add the basic variant Multi-Link element
- * when generating link specific probe response.
- * @reportingsta_ie: Pointer to the reportingsta ie
- * @reportingsta_ie_len: Length for reporting sta ie
- * @plink_frame_currpos: Pointer to Link frame current pos
- * @plink_frame_currlen: Current length of link frame.
- * @link_frame_maxsize: Maximum size of the frame to be generated
- * @linkid: Link Id value
- *
- * Add the basic variant Multi-Link element when
- * generating link specific probe response.
- *
- * Return: QDF_STATUS_SUCCESS in the case of success, QDF_STATUS value giving
- * the reason for error in the case of failure
- */
-static QDF_STATUS
-util_add_mlie_for_prb_rsp_gen(const uint8_t *reportingsta_ie,
-			      qdf_size_t reportingsta_ie_len,
-			      uint8_t **plink_frame_currpos,
-			      qdf_size_t *plink_frame_currlen,
-			      qdf_size_t link_frame_maxsize,
-			      uint8_t linkid)
-{
-	uint8_t mlie_len = 0;
-	uint8_t common_info_len = 0;
-	struct wlan_ie_multilink ml_ie_ff;
-	uint16_t mlcontrol;
-	uint16_t presencebm;
-	uint8_t *mlie_frame = NULL;
-	uint8_t link_id_offset = sizeof(struct wlan_ie_multilink) +
-				QDF_MAC_ADDR_SIZE +
-				WLAN_ML_BV_CINFO_LENGTH_SIZE;
-	uint8_t *link_frame_currpos = *plink_frame_currpos;
-	qdf_size_t link_frame_currlen = *plink_frame_currlen;
-	QDF_STATUS status = QDF_STATUS_SUCCESS;
-
-	status = util_get_mlie_common_info_len((uint8_t *)reportingsta_ie,
-					       reportingsta_ie_len,
-					       &common_info_len);
-	if (QDF_IS_STATUS_ERROR(status) ||
-	    common_info_len > reportingsta_ie_len ||
-	    (reportingsta_ie_len - common_info_len <
-	     sizeof(struct wlan_ie_multilink))) {
-		mlo_err("Failed to parse common info, mlie len %d common info len %d",
-			reportingsta_ie_len, common_info_len);
-		return status;
-	}
-
-	/* common info len + bvmlie fixed fields */
-	mlie_len = common_info_len + sizeof(struct wlan_ie_multilink);
-
-	mlo_debug_rl("mlie_len %d, common_info_len %d, link_id_offset %d",
-		     mlie_len,
-		     common_info_len,
-		     link_id_offset);
-
-	/*
-	 * Validate the buffer available before copying ML IE.
-	 * Incase if mlie_len is modified at later place, move this validation
-	 * there to make sure no buffer overflow happens.
-	 */
-	if ((link_frame_maxsize - link_frame_currlen) < mlie_len) {
-		mlo_err("Insufficient space in link specific frame for ML IE. Required: %u octets, available: %zu octets",
-			mlie_len, (link_frame_maxsize - link_frame_currlen));
-		return QDF_STATUS_E_NOMEM;
-	}
-
-	mlie_frame = qdf_mem_malloc(mlie_len);
-	if (!mlie_frame)
-		return QDF_STATUS_E_NOMEM;
-
-	/* Copy ml ie fixed fields */
-	qdf_mem_copy(&ml_ie_ff,
-		     reportingsta_ie,
-		     sizeof(struct wlan_ie_multilink));
-
-	ml_ie_ff.elem_len = mlie_len - sizeof(struct ie_header);
-
-	mlcontrol = qdf_le16_to_cpu(ml_ie_ff.mlcontrol);
-	presencebm = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_PBM_IDX,
-				  WLAN_ML_CTRL_PBM_BITS);
-	qdf_set_bit(WLAN_ML_BV_CTRL_PBM_LINKIDINFO_P,
-		    (unsigned long *)&presencebm);
-
-	QDF_SET_BITS(ml_ie_ff.mlcontrol,
-		     WLAN_ML_CTRL_PBM_IDX,
-		     WLAN_ML_CTRL_PBM_BITS,
-		     presencebm);
-
-	qdf_mem_copy(mlie_frame,
-		     &ml_ie_ff,
-		     sizeof(struct wlan_ie_multilink));
-
-	qdf_mem_copy(mlie_frame + sizeof(struct wlan_ie_multilink),
-		     reportingsta_ie + sizeof(struct wlan_ie_multilink),
-		     mlie_len - sizeof(struct wlan_ie_multilink));
-
-	if (linkid == 0xFF || mlie_len <= link_id_offset) {
-		qdf_mem_free(mlie_frame);
-		mlo_err("Failed to process link id, link_id %d", linkid);
-		return QDF_STATUS_E_INVAL;
-	}
-	mlie_frame[link_id_offset] = (mlie_frame[link_id_offset] & ~0x0f) |
-				   (linkid & 0x0f);
-	qdf_mem_copy(link_frame_currpos,
-		     mlie_frame,
-		     mlie_len);
-
-	mlo_debug("Add mlie for link id %d", linkid);
-	QDF_TRACE_HEX_DUMP(QDF_MODULE_ID_PE, QDF_TRACE_LEVEL_DEBUG,
-			   mlie_frame, mlie_len);
-
-	link_frame_currpos += mlie_len;
-	link_frame_currlen += mlie_len;
-	*plink_frame_currpos = link_frame_currpos;
-	*plink_frame_currlen = link_frame_currlen;
-	qdf_mem_free(mlie_frame);
-
-	return QDF_STATUS_SUCCESS;
-}
-#else
-static QDF_STATUS
-util_add_mlie_for_prb_rsp_gen(const uint8_t *reportingsta_ie,
-			      qdf_size_t reportingsta_ie_len,
-			      uint8_t **plink_frame_currpos,
-			      qdf_size_t *plink_frame_currlen,
-			      qdf_size_t link_frame_maxsize,
-			      uint8_t linkid)
-{
-	return QDF_STATUS_SUCCESS;
-}
-#endif
-
-/**
- * util_find_bvmlie_persta_prof_for_linkid() - get per sta profile per link id
- * @req_link_id: link id
- * @linkinfo: the pointer of link info
- * @linkinfo_len: the length of link info
- * @persta_prof_frame: the pointer to store the address of sta profile
- * @persta_prof_len: the sta profile length
- *
- * This helper function parses partner info from the per-STA profiles
- * present (if any) in the Link Info field in the payload of a Multi
- * Link element (after defragmentation if required). The caller should
- * pass a copy of the payload so that inline defragmentation of
- * subelements can be carried out if required. The subelement
- * defragmentation (if applicable) in this Control Path helper is
- * required for maintainability, accuracy and eliminating current and
- * future per-field-access multi-level fragment boundary checks and
- * adjustments, given the complex format of Multi Link elements. It is
- * also most likely to be required mainly at the client side.
- *
- * Return: QDF_STATUS
- */
-static QDF_STATUS
-util_find_bvmlie_persta_prof_for_linkid(uint8_t req_link_id,
-					uint8_t *linkinfo,
-					qdf_size_t linkinfo_len,
-					uint8_t **persta_prof_frame,
-					qdf_size_t *persta_prof_len)
-{
-	uint8_t linkid;
-	struct qdf_mac_addr macaddr;
-	bool is_macaddr_valid;
-	uint8_t *linkinfo_currpos;
-	qdf_size_t linkinfo_remlen;
-	bool is_subelemfragseq;
-	uint8_t subelemid;
-	qdf_size_t subelemseqtotallen;
-	qdf_size_t subelemseqpayloadlen;
-	qdf_size_t defragpayload_len;
-	QDF_STATUS ret;
-
-	if (!linkinfo) {
-		mlo_err("linkinfo is NULL");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	if (!linkinfo_len) {
-		mlo_err("linkinfo_len is zero");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	if (!persta_prof_frame) {
-		mlo_err("Pointer to per-STA prof frame is NULL");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	if (!persta_prof_len) {
-		mlo_err("Length to per-STA prof frame is 0");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	linkinfo_currpos = linkinfo;
-	linkinfo_remlen = linkinfo_len;
-
-	while (linkinfo_remlen) {
-		if (linkinfo_remlen <  sizeof(struct subelem_header)) {
-			mlo_err_rl("Remaining length in link info %zu octets is smaller than subelement header length %zu octets",
-				   linkinfo_remlen,
-				   sizeof(struct subelem_header));
-			return QDF_STATUS_E_PROTO;
-		}
-
-		subelemid = linkinfo_currpos[ID_POS];
-		is_subelemfragseq = false;
-		subelemseqtotallen = 0;
-		subelemseqpayloadlen = 0;
-
-		ret = wlan_get_subelem_fragseq_info(WLAN_ML_LINFO_SUBELEMID_FRAGMENT,
-						    linkinfo_currpos,
-						    linkinfo_remlen,
-						    &is_subelemfragseq,
-						    &subelemseqtotallen,
-						    &subelemseqpayloadlen);
-		if (QDF_IS_STATUS_ERROR(ret))
-			return ret;
-
-		if (is_subelemfragseq) {
-			if (!subelemseqpayloadlen) {
-				mlo_err_rl("Subelement fragment sequence payload is reported as 0, investigate");
-				return QDF_STATUS_E_FAILURE;
-			}
-
-			mlo_debug("Subelement fragment sequence found with payload len %zu",
-				  subelemseqpayloadlen);
-
-			ret = wlan_defrag_subelem_fragseq(true,
-							  WLAN_ML_LINFO_SUBELEMID_FRAGMENT,
-							  linkinfo_currpos,
-							  linkinfo_remlen,
-							  NULL,
-							  0,
-							  &defragpayload_len);
-			if (QDF_IS_STATUS_ERROR(ret))
-				return ret;
-
-			if (defragpayload_len != subelemseqpayloadlen) {
-				mlo_err_rl("Length of defragmented payload %zu octets is not equal to length of subelement fragment sequence payload %zu octets",
-					   defragpayload_len,
-					   subelemseqpayloadlen);
-				return QDF_STATUS_E_FAILURE;
-			}
-
-			/* Adjust linkinfo_remlen to reflect removal of all
-			 * subelement headers except the header of the lead
-			 * subelement.
-			 */
-			linkinfo_remlen -= (subelemseqtotallen -
-					    subelemseqpayloadlen -
-					    sizeof(struct subelem_header));
-		} else {
-			if (linkinfo_remlen <
-				(sizeof(struct subelem_header) +
-				 linkinfo_currpos[TAG_LEN_POS])) {
-				mlo_err_rl("Remaining length in link info %zu octets is smaller than total size of current subelement %zu octets",
-					   linkinfo_remlen,
-					   sizeof(struct subelem_header) +
-					   linkinfo_currpos[TAG_LEN_POS]);
-				return QDF_STATUS_E_PROTO;
-			}
-
-			subelemseqpayloadlen = linkinfo_currpos[TAG_LEN_POS];
-		}
-
-		if (subelemid == WLAN_ML_LINFO_SUBELEMID_PERSTAPROFILE) {
-			is_macaddr_valid = false;
-
-			ret = util_parse_bvmlie_perstaprofile_stactrl(linkinfo_currpos +
-								      sizeof(struct subelem_header),
-								      subelemseqpayloadlen,
-								      &linkid,
-								      NULL,
-								      NULL,
-								      NULL,
-								      NULL,
-								      NULL,
-								      &is_macaddr_valid,
-								      &macaddr,
-								      false,
-								      NULL,
-								      NULL,
-								      NULL,
-								      NULL);
-			if (QDF_IS_STATUS_ERROR(ret))
-				return ret;
-
-			if (req_link_id == linkid) {
-				mlo_debug("Found requested per-STA prof for linkid %u, len %zu",
-					  linkid, subelemseqpayloadlen);
-				*persta_prof_frame = linkinfo_currpos;
-				*persta_prof_len = subelemseqpayloadlen;
-				return QDF_STATUS_SUCCESS;
-			}
-		}
-
-		linkinfo_remlen -= (sizeof(struct subelem_header) +
-				    subelemseqpayloadlen);
-		linkinfo_currpos += (sizeof(struct subelem_header) +
-				     subelemseqpayloadlen);
-	}
-
-	return QDF_STATUS_E_PROTO;
-}
+#define MLO_LINKSPECIFIC_ASSOC_REQ_FC0  0x00
+#define MLO_LINKSPECIFIC_ASSOC_REQ_FC1  0x00
+#define MLO_LINKSPECIFIC_ASSOC_RESP_FC0 0x10
+#define MLO_LINKSPECIFIC_ASSOC_RESP_FC1 0x00
 
 static
-QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
-				    uint8_t subtype,
-				    uint8_t req_link_id,
-				    struct qdf_mac_addr link_addr,
-				    uint8_t *link_frame,
-				    qdf_size_t link_frame_maxsize,
-				    qdf_size_t *link_frame_len)
+QDF_STATUS util_gen_link_assoc_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
+					  uint8_t subtype,
+					  struct qdf_mac_addr link_addr,
+					  uint8_t *link_frame,
+					  qdf_size_t link_frame_maxsize,
+					  qdf_size_t *link_frame_len)
 {
 	/* Please see documentation for util_gen_link_assoc_req() and
 	 * util_gen_link_assoc_resp() for information on the inputs to and
@@ -1895,29 +843,17 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 	 * over this helper.
 	 */
 
-	/* Pointer to Multi-Link element/Multi-Link element fragment sequence */
-	uint8_t *mlieseq;
-	/* Total length of Multi-Link element sequence (including fragments if
+	/* Pointer to Multi-Link element */
+	uint8_t *mlie;
+	/* Total length of Multi-Link element sequence (including fragements if
 	 * any)
 	 */
 	qdf_size_t mlieseqlen;
 	/* Variant (i.e. type) of the Multi-Link element */
 	enum wlan_ml_variant variant;
+	/* Pointer to original copy of Multi-Link element */
+	uint8_t *orig_mlie_copy;
 
-	/* Length of the payload of the Multi-Link element (inclusive of
-	 * fragment payloads if any) without IE headers and element ID extension
-	 */
-	qdf_size_t mlieseqpayloadlen;
-	/* Pointer to copy of the payload of the Multi-Link element (inclusive
-	 * of fragment payloads if any) without IE headers and element ID
-	 * extension
-	 */
-	uint8_t *mlieseqpayload_copy;
-
-	/* Pointer to start of Link Info within the copy of the payload of the
-	 * Multi-Link element
-	 */
-	uint8_t *link_info;
 	/* Length of the Link Info */
 	qdf_size_t link_info_len;
 
@@ -1991,38 +927,9 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 	/* MAC address of reported STA */
 	struct qdf_mac_addr reportedmacaddr;
 
-	/* Pointer to per-STA profile */
-	uint8_t *persta_prof;
-	/* Length of the containing buffer which starts with the per-STA profile
-	 */
-	qdf_size_t persta_prof_bufflen;
-
 	/* Other variables for temporary purposes */
-
-	/* Variable into which API for determining fragment information will
-	 * indicate whether the element is the start of a fragment sequence or
-	 * not.
-	 */
-	bool is_elemfragseq;
-	/*  De-fragmented payload length returned by API for element
-	 *  defragmentation.
-	 */
-	qdf_size_t defragpayload_len;
-	/* Pointer to Beacon interval in STA info field */
-	uint16_t beaconinterval;
-	/* Whether Beacon interval value valid */
-	bool is_beaconinterval_valid;
-	/* TSF timer of the reporting AP */
-	uint64_t tsf;
-	/* TSF offset of the reproted AP */
-	uint64_t tsfoffset;
-	/* TSF offset value valid */
-	bool is_tsfoffset_valid;
-	/* If Complete Profile or not*/
-	bool is_completeprofile;
-	qdf_size_t tmplen;
+	uint8_t *sub_copy;
 	QDF_STATUS ret;
-	uint8_t linkid = 0xFF;
 
 	if (!frame) {
 		mlo_err("Pointer to original frame is NULL");
@@ -2037,8 +944,7 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 	if ((subtype != WLAN_FC0_STYPE_ASSOC_REQ) &&
 	    (subtype != WLAN_FC0_STYPE_REASSOC_REQ) &&
 	    (subtype != WLAN_FC0_STYPE_ASSOC_RESP) &&
-	    (subtype != WLAN_FC0_STYPE_REASSOC_RESP) &&
-	    (subtype != WLAN_FC0_STYPE_PROBE_RESP)) {
+	    (subtype != WLAN_FC0_STYPE_REASSOC_RESP)) {
 		mlo_err("802.11 frame subtype %u is invalid", subtype);
 		return QDF_STATUS_E_INVAL;
 	}
@@ -2064,15 +970,6 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 		frame_iesection_offset = WLAN_ASSOC_REQ_IES_OFFSET;
 	} else if (subtype == WLAN_FC0_STYPE_REASSOC_REQ) {
 		frame_iesection_offset = WLAN_REASSOC_REQ_IES_OFFSET;
-	} else if (subtype == WLAN_FC0_STYPE_PROBE_RESP) {
-		frame_iesection_offset = WLAN_PROBE_RESP_IES_OFFSET;
-		if (frame_len < WLAN_TIMESTAMP_LEN) {
-			mlo_err("Frame length %zu is smaller than required timestamp length",
-				frame_len);
-			return QDF_STATUS_E_INVAL;
-		}
-		qdf_mem_copy(&tsf, frame, WLAN_TIMESTAMP_LEN);
-		tsf = qdf_le64_to_cpu(tsf);
 	} else {
 		/* This is a (re)association response */
 		frame_iesection_offset = WLAN_ASSOC_RSP_IES_OFFSET;
@@ -2101,15 +998,15 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 
 	frame_iesection = frame + frame_iesection_offset;
 
-	mlieseq = NULL;
+	mlie = NULL;
 	mlieseqlen = 0;
 
-	ret = util_find_mlie(frame_iesection, frame_iesection_len, &mlieseq,
+	ret = util_find_mlie(frame_iesection, frame_iesection_len, &mlie,
 			     &mlieseqlen);
 	if (QDF_IS_STATUS_ERROR(ret))
 		return ret;
 
-	if (!mlieseq) {
+	if (!mlie) {
 		/* The caller is supposed to have confirmed that a Multi-Link
 		 * element is present in the frame. Hence we treat this as a
 		 * case of invalid argument being passed to us.
@@ -2124,13 +1021,7 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	if (mlieseqlen < sizeof(struct wlan_ie_multilink)) {
-		mlo_err_rl("Multi-Link element sequence length %zu octets is smaller than required for the fixed portion of Multi-Link element (%zu octets)",
-			   mlieseqlen, sizeof(struct wlan_ie_multilink));
-		return QDF_STATUS_E_PROTO;
-	}
-
-	ret = util_get_mlie_variant(mlieseq, mlieseqlen, (int *)&variant);
+	ret = util_get_mlie_variant(mlie, mlieseqlen, (int *)&variant);
 	if (QDF_IS_STATUS_ERROR(ret))
 		return ret;
 
@@ -2140,155 +1031,69 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 		return QDF_STATUS_E_PROTO;
 	}
 
-	mlieseqpayloadlen = 0;
-	tmplen = 0;
-	is_elemfragseq = false;
-
-	ret = wlan_get_elem_fragseq_info(mlieseq,
-					 mlieseqlen,
-					 &is_elemfragseq,
-					 &tmplen,
-					 &mlieseqpayloadlen);
-	if (QDF_IS_STATUS_ERROR(ret))
-		return ret;
-
-	if (is_elemfragseq) {
-		if (tmplen != mlieseqlen) {
-			mlo_err_rl("Mismatch in values of element fragment sequence total length. Val per frag info determination: %zu octets, val per Multi-Link element search: %zu octets",
-				   tmplen, mlieseqlen);
-			return QDF_STATUS_E_FAILURE;
-		}
-
-		if (!mlieseqpayloadlen) {
-			mlo_err_rl("Multi-Link element fragment sequence payload is reported as 0, investigate");
-			return QDF_STATUS_E_FAILURE;
-		}
-
-		mlo_debug("ML IE fragment sequence found with payload len %zu",
-			  mlieseqpayloadlen);
-	} else {
-		if (mlieseqlen > (sizeof(struct ie_header) + WLAN_MAX_IE_LEN)) {
-			mlo_err_rl("Expected presence of valid fragment sequence since Multi-Link element sequence length %zu octets is larger than frag threshold of %zu octets, however no valid fragment sequence found",
-				   mlieseqlen,
-				   sizeof(struct ie_header) + WLAN_MAX_IE_LEN);
-			return QDF_STATUS_E_FAILURE;
-		}
-
-		mlieseqpayloadlen = mlieseqlen - (sizeof(struct ie_header) + 1);
+	/* Note: Multi-Link element fragmentation support will be added in a
+	 * later change. As of now, we temporarily return error if the
+	 * Multi-Link element sequence length is greater than the max length for
+	 * an IE.
+	 */
+	if (mlieseqlen > (sizeof(struct ie_header) + WLAN_MAX_IE_LEN)) {
+		mlo_err_rl("Element fragmentation is not yet supported for this API");
+		return QDF_STATUS_E_NOSUPPORT;
 	}
 
-	mlieseqpayload_copy = qdf_mem_malloc(mlieseqpayloadlen);
-
-	if (!mlieseqpayload_copy) {
-		mlo_err_rl("Could not allocate memory for Multi-Link element payload copy");
-		ret = QDF_STATUS_E_NOMEM;
-		goto mem_free;
+	sub_copy = qdf_mem_malloc(mlieseqlen);
+	if (!sub_copy) {
+		mlo_err_rl("Could not allocate memory for Multi-Link element copy");
+		return QDF_STATUS_E_NOMEM;
 	}
 
-	if (is_elemfragseq) {
-		ret = wlan_defrag_elem_fragseq(false,
-					       mlieseq,
-					       mlieseqlen,
-					       mlieseqpayload_copy,
-					       mlieseqpayloadlen,
-					       &defragpayload_len);
-		if (QDF_IS_STATUS_ERROR(ret))
-			goto mem_free;
+	orig_mlie_copy = sub_copy;
+	qdf_mem_copy(sub_copy, mlie, mlieseqlen);
 
-		if (defragpayload_len != mlieseqpayloadlen) {
-			mlo_err_rl("Length of de-fragmented payload %zu octets is not equal to length of Multi-Link element fragment sequence payload %zu octets",
-				   defragpayload_len, mlieseqpayloadlen);
-			ret = QDF_STATUS_E_FAILURE;
-			goto mem_free;
-		}
-	} else {
-		qdf_mem_copy(mlieseqpayload_copy,
-			     mlieseq + sizeof(struct ie_header) + 1,
-			     mlieseqpayloadlen);
-	}
-
-	link_info = NULL;
-	link_info_len = 0;
-
-	ret = util_parse_multi_link_ctrl(mlieseqpayload_copy,
-					 mlieseqpayloadlen,
-					 &link_info,
-					 &link_info_len);
-	if (QDF_IS_STATUS_ERROR(ret))
-		goto mem_free;
+	sub_copy = util_parse_multi_link_ctrl(sub_copy,
+					      mlieseqlen,
+					      &link_info_len);
 
 	/* As per the standard, the sender must include Link Info for
 	 * association request/response. Throw an error if we are unable to
 	 * obtain this.
 	 */
-	if (!link_info) {
-		mlo_err_rl("Unable to successfully obtain Link Info");
-		ret = QDF_STATUS_E_PROTO;
-		goto mem_free;
+	if (!sub_copy) {
+		mlo_err_rl("Unable to successfully parse Multi-Link element control and obtain Link Info");
+		qdf_mem_free(orig_mlie_copy);
+		return QDF_STATUS_E_PROTO;
 	}
+
+	mlo_debug("Dumping hex after parsing Multi-Link element control");
+	QDF_TRACE_HEX_DUMP(QDF_MODULE_ID_MLO, QDF_TRACE_LEVEL_DEBUG,
+			   sub_copy, link_info_len);
+
+	sta_prof_remlen = 0;
+	is_reportedmacaddr_valid = false;
 
 	/* Note: We may have a future change to skip subelements which are not
 	 * Per-STA Profile, handle more than two links in MLO, handle cases
 	 * where we unexpectedly find more Per-STA Profiles than expected, etc.
 	 */
 
-	persta_prof = NULL;
-	persta_prof_bufflen = 0;
-
-	ret = util_find_bvmlie_persta_prof_for_linkid(req_link_id,
-						      link_info,
-						      link_info_len,
-						      &persta_prof,
-						      &persta_prof_bufflen);
-
-	if (QDF_IS_STATUS_ERROR(ret)) {
-		mlo_err_rl("Per STA profile not found for link id %d",
-			   req_link_id);
-		goto mem_free;
-	}
-
-	sta_prof_remlen = 0;
-	sta_prof_currpos = NULL;
-	is_reportedmacaddr_valid = false;
-	is_beaconinterval_valid = false;
-	is_completeprofile = false;
-	is_tsfoffset_valid = false;
-
 	/* Parse per-STA profile */
-	ret = util_parse_bvmlie_perstaprofile_stactrl(persta_prof +
-						      sizeof(struct subelem_header),
-						      persta_prof_bufflen,
-						      &linkid,
-						      &beaconinterval,
-						      &is_beaconinterval_valid,
-						      &tsfoffset,
-						      &is_tsfoffset_valid,
-						      &is_completeprofile,
-						      &is_reportedmacaddr_valid,
-						      &reportedmacaddr,
-						      true,
-						      &sta_prof_currpos,
-						      &sta_prof_remlen,
-						      NULL,
-						      NULL);
-	if (QDF_IS_STATUS_ERROR(ret))
-		goto mem_free;
+	sta_prof_currpos =
+		util_parse_bvmlie_perstaprofile(sub_copy,
+						link_info_len,
+						true,
+						&sta_prof_remlen,
+						NULL,
+						&is_reportedmacaddr_valid,
+						&reportedmacaddr);
 
-	if (subtype == WLAN_FC0_STYPE_PROBE_RESP && !is_completeprofile) {
-		mlo_err("Complete profile information is not present in per-STA profile of probe response frame");
-		ret = QDF_STATUS_E_NOSUPPORT;
-		goto mem_free;
-	}
-
-	/* We double check for a NULL STA Profile, though the helper function
-	 * above would have taken care of this. We need to get a non-NULL STA
-	 * profile, because we need to get at least the expected fixed fields,
+	/* If we do not successfully find a STA Profile, we return an error.
+	 * This is because we need to get at least the expected fixed fields,
 	 * even if there is an (improbable) total inheritance.
 	 */
 	if (!sta_prof_currpos) {
-		mlo_err_rl("STA profile is NULL");
-		ret = QDF_STATUS_E_PROTO;
-		goto mem_free;
+		mlo_err_rl("Unable to find STA profile");
+		qdf_mem_free(orig_mlie_copy);
+		return QDF_STATUS_E_PROTO;
 	}
 
 	/* As per the standard, the sender sets the MAC address in the per-STA
@@ -2297,8 +1102,8 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 	 */
 	if (!is_reportedmacaddr_valid) {
 		mlo_err_rl("Unable to get MAC address from per-STA profile");
-		ret = QDF_STATUS_E_PROTO;
-		goto mem_free;
+		qdf_mem_free(orig_mlie_copy);
+		return QDF_STATUS_E_PROTO;
 	}
 
 	link_frame_currpos = link_frame;
@@ -2306,11 +1111,11 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 	link_frame_currlen = 0;
 
 	if (link_frame_maxsize < WLAN_MAC_HDR_LEN_3A) {
-		mlo_err("Insufficient space in link specific frame for 802.11 header. Required: %u octets, available: %zu octets",
+		mlo_err("Insufficent space in link specific frame for 802.11 header. Required: %u octets, available: %zu octets",
 			WLAN_MAC_HDR_LEN_3A, link_frame_maxsize);
 
-		ret = QDF_STATUS_E_NOMEM;
-		goto mem_free;
+		qdf_mem_free(orig_mlie_copy);
+		return QDF_STATUS_E_NOMEM;
 	}
 
 	link_frame_currpos += WLAN_MAC_HDR_LEN_3A;
@@ -2325,8 +1130,8 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 				   sta_prof_remlen,
 				   WLAN_CAPABILITYINFO_LEN);
 
-			ret = QDF_STATUS_E_PROTO;
-			goto mem_free;
+			qdf_mem_free(orig_mlie_copy);
+			return QDF_STATUS_E_PROTO;
 		}
 
 		/* Capability information is specific to the link. Copy this
@@ -2335,18 +1140,20 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 
 		if ((link_frame_maxsize - link_frame_currlen) <
 				WLAN_CAPABILITYINFO_LEN) {
-			mlo_err("Insufficient space in link specific frame for Capability Info field. Required: %u octets, available: %zu octets",
+			mlo_err("Insufficent space in link specific frame for Capability Info field. Required: %u octets, available: %zu octets",
 				WLAN_CAPABILITYINFO_LEN,
 				(link_frame_maxsize - link_frame_currlen));
 
-			ret = QDF_STATUS_E_NOMEM;
-			goto mem_free;
+			qdf_mem_free(orig_mlie_copy);
+			return QDF_STATUS_E_NOMEM;
 		}
 
 		qdf_mem_copy(link_frame_currpos, sta_prof_currpos,
 			     WLAN_CAPABILITYINFO_LEN);
 		link_frame_currpos += WLAN_CAPABILITYINFO_LEN;
 		link_frame_currlen += WLAN_CAPABILITYINFO_LEN;
+		mlo_debug("Added Capablity Info field (%u octets) to link specific frame",
+			  WLAN_CAPABILITYINFO_LEN);
 
 		sta_prof_currpos += WLAN_CAPABILITYINFO_LEN;
 		sta_prof_remlen -= WLAN_CAPABILITYINFO_LEN;
@@ -2357,12 +1164,12 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 
 		if ((link_frame_maxsize - link_frame_currlen) <
 				WLAN_LISTENINTERVAL_LEN) {
-			mlo_err("Insufficient space in link specific frame for Listen Interval field. Required: %u octets, available: %zu octets",
+			mlo_err("Insufficent space in link specific frame for Listen Interval field. Required: %u octets, available: %zu octets",
 				WLAN_LISTENINTERVAL_LEN,
 				(link_frame_maxsize - link_frame_currlen));
 
-			ret = QDF_STATUS_E_NOMEM;
-			goto mem_free;
+			qdf_mem_free(orig_mlie_copy);
+			return QDF_STATUS_E_NOMEM;
 		}
 
 		qdf_mem_copy(link_frame_currpos,
@@ -2370,6 +1177,8 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 			     WLAN_LISTENINTERVAL_LEN);
 		link_frame_currpos += WLAN_LISTENINTERVAL_LEN;
 		link_frame_currlen += WLAN_LISTENINTERVAL_LEN;
+		mlo_debug("Added Listen Interval field (%u octets) to link specific frame",
+			  WLAN_LISTENINTERVAL_LEN);
 
 		if (subtype == WLAN_FC0_STYPE_REASSOC_REQ) {
 			/* Current AP address is common between all links. Copy
@@ -2377,13 +1186,13 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 			 */
 			if ((link_frame_maxsize - link_frame_currlen) <
 				QDF_MAC_ADDR_SIZE) {
-				mlo_err("Insufficient space in link specific frame for current AP address. Required: %u octets, available: %zu octets",
+				mlo_err("Insufficent space in link specific frame for current AP address. Required: %u octets, available: %zu octets",
 					QDF_MAC_ADDR_SIZE,
 					(link_frame_maxsize -
 						link_frame_currlen));
 
-				ret = QDF_STATUS_E_NOMEM;
-				goto mem_free;
+				qdf_mem_free(orig_mlie_copy);
+				return QDF_STATUS_E_NOMEM;
 			}
 
 			qdf_mem_copy(link_frame_currpos,
@@ -2395,8 +1204,7 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 			mlo_debug("Reassoc req: Added Current AP address field (%u octets) to link specific frame",
 				  QDF_MAC_ADDR_SIZE);
 		}
-	} else if (subtype == WLAN_FC0_STYPE_ASSOC_RESP ||
-		   subtype == WLAN_FC0_STYPE_REASSOC_RESP) {
+	} else {
 		/* This is a (re)association response */
 		mlo_debug("Populating fixed fields for (re)assoc resp in link specific frame");
 
@@ -2407,8 +1215,8 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 				   WLAN_CAPABILITYINFO_LEN +
 					WLAN_STATUSCODE_LEN);
 
-			ret = QDF_STATUS_E_PROTO;
-			goto mem_free;
+			qdf_mem_free(orig_mlie_copy);
+			return QDF_STATUS_E_PROTO;
 		}
 
 		/* Capability information and Status Code are specific to the
@@ -2417,13 +1225,12 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 
 		if ((link_frame_maxsize - link_frame_currlen) <
 			(WLAN_CAPABILITYINFO_LEN + WLAN_STATUSCODE_LEN)) {
-			mlo_err("Insufficient space in link specific frame for Capability Info and Status Code fields. Required: %u octets, available: %zu octets",
+			mlo_err("Insufficent space in link specific frame for Capability Info and Status Code fields. Required: %u octets, available: %zu octets",
 				WLAN_CAPABILITYINFO_LEN + WLAN_STATUSCODE_LEN,
 				(link_frame_maxsize - link_frame_currlen));
 
-			ret = QDF_STATUS_E_NOMEM;
-			goto mem_free;
-
+			qdf_mem_free(orig_mlie_copy);
+			return QDF_STATUS_E_NOMEM;
 		}
 
 		qdf_mem_copy(link_frame_currpos, sta_prof_currpos,
@@ -2445,12 +1252,12 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 		 */
 
 		if ((link_frame_maxsize - link_frame_currlen) < WLAN_AID_LEN) {
-			mlo_err("Insufficient space in link specific frame for AID field. Required: %u octets, available: %zu octets",
+			mlo_err("Insufficent space in link specific frame for AID field. Required: %u octets, available: %zu octets",
 				WLAN_AID_LEN,
 				(link_frame_maxsize - link_frame_currlen));
 
-			ret = QDF_STATUS_E_NOMEM;
-			goto mem_free;
+			qdf_mem_free(orig_mlie_copy);
+			return QDF_STATUS_E_NOMEM;
 		}
 
 		qdf_mem_copy(link_frame_currpos,
@@ -2461,88 +1268,6 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 		link_frame_currlen += WLAN_AID_LEN;
 		mlo_debug("Added AID field (%u octets) to link specific frame",
 			  WLAN_AID_LEN);
-	} else if (subtype == WLAN_FC0_STYPE_PROBE_RESP) {
-		/* This is a probe response */
-		mlo_debug("Populating fixed fields for probe response in link specific frame");
-
-		if ((link_frame_maxsize - link_frame_currlen) <
-				WLAN_TIMESTAMP_LEN) {
-			mlo_err("Insufficient space in link specific frame for Timestamp Info field. Required: %u octets, available: %zu octets",
-				WLAN_TIMESTAMP_LEN,
-				(link_frame_maxsize - link_frame_currlen));
-
-			ret = QDF_STATUS_E_NOMEM;
-			goto mem_free;
-		}
-
-		/* Per spec 11be_D2.1.1, the TSF Offset subfield of the STA Info
-		 * field indicates the offset (Toffset)between the TSF timer of
-		 * the reported AP (TA) and the TSF timer of the reporting
-		 * AP (TB) and is encoded as a 2s complement signed integer
-		 * with units of 2 µs. Toffset is calculated as
-		 * Toffset= Floor((TA – TB)/2).
-		 */
-		if (is_tsfoffset_valid)
-			tsf += tsfoffset * 2;
-
-		qdf_mem_copy(link_frame_currpos, &tsf, WLAN_TIMESTAMP_LEN);
-		link_frame_currpos += WLAN_TIMESTAMP_LEN;
-		link_frame_currlen += WLAN_TIMESTAMP_LEN;
-
-		if (!is_beaconinterval_valid) {
-			mlo_err_rl("Beacon interval information not present in STA info field of per-STA profile");
-			ret = QDF_STATUS_E_PROTO;
-			goto mem_free;
-		}
-
-		/* Beacon Interval information copy this from
-		 * the STA info field.
-		 */
-		if ((link_frame_maxsize - link_frame_currlen) <
-				WLAN_BEACONINTERVAL_LEN) {
-			mlo_err("Insufficient space in link specific frame for Beacon Interval Info field. Required: %u octets, available: %zu octets",
-				WLAN_BEACONINTERVAL_LEN,
-				(link_frame_maxsize - link_frame_currlen));
-
-			ret = QDF_STATUS_E_NOMEM;
-			goto mem_free;
-		}
-
-		qdf_mem_copy(link_frame_currpos, &beaconinterval,
-			     WLAN_BEACONINTERVAL_LEN);
-		link_frame_currpos += WLAN_BEACONINTERVAL_LEN;
-		link_frame_currlen += WLAN_BEACONINTERVAL_LEN;
-
-		if (sta_prof_remlen < WLAN_CAPABILITYINFO_LEN) {
-			mlo_err_rl("Remaining length of STA profile %zu octets is less than length of Capability Info %u",
-				   sta_prof_remlen,
-				   WLAN_CAPABILITYINFO_LEN);
-
-			ret = QDF_STATUS_E_PROTO;
-			goto mem_free;
-		}
-
-		/* Capability information is specific to the link. Copy this
-		 * from the STA profile.
-		 */
-
-		if ((link_frame_maxsize - link_frame_currlen) <
-				WLAN_CAPABILITYINFO_LEN) {
-			mlo_err("Insufficient space in link specific frame for Capability Info field. Required: %u octets, available: %zu octets",
-				WLAN_CAPABILITYINFO_LEN,
-				(link_frame_maxsize - link_frame_currlen));
-
-			ret = QDF_STATUS_E_NOMEM;
-			goto mem_free;
-		}
-
-		qdf_mem_copy(link_frame_currpos, sta_prof_currpos,
-			     WLAN_CAPABILITYINFO_LEN);
-		link_frame_currpos += WLAN_CAPABILITYINFO_LEN;
-		link_frame_currlen += WLAN_CAPABILITYINFO_LEN;
-
-		sta_prof_currpos += WLAN_CAPABILITYINFO_LEN;
-		sta_prof_remlen -= WLAN_CAPABILITYINFO_LEN;
 	}
 
 	sta_prof_iesection = sta_prof_currpos;
@@ -2560,8 +1285,10 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 				       &ninherit_elemlist_len,
 				       &ninherit_elemextlist,
 				       &ninherit_elemextlist_len);
-	if (QDF_IS_STATUS_ERROR(ret))
-		goto mem_free;
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		qdf_mem_free(orig_mlie_copy);
+		return ret;
+	}
 
 	/* Go through IEs of the reporting STA, and those in STA profile, merge
 	 * them into link_frame (except for elements in the Non-Inheritance
@@ -2574,17 +1301,16 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 					frame_iesection_len);
 
 	if ((subtype == WLAN_FC0_STYPE_ASSOC_REQ) ||
-	    (subtype == WLAN_FC0_STYPE_REASSOC_REQ) ||
-	    (subtype == WLAN_FC0_STYPE_PROBE_RESP)) {
+	    (subtype == WLAN_FC0_STYPE_REASSOC_REQ)) {
 		/* Sanity check that the SSID element is present for the
 		 * reporting STA. There is no stipulation in the standard for
 		 * the STA profile in this regard, so we do not check the STA
 		 * profile for the SSID element.
 		 */
 		if (!reportingsta_ie) {
-			mlo_err_rl("SSID element not found in reporting STA of the frame.");
-			ret = QDF_STATUS_E_PROTO;
-			goto mem_free;
+			mlo_err_rl("SSID element not found for reporting STA for (re)association request.");
+			qdf_mem_free(orig_mlie_copy);
+			return QDF_STATUS_E_PROTO;
 		}
 	} else {
 		/* This is a (re)association response. Sanity check that the
@@ -2593,8 +1319,8 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 		 */
 		if (reportingsta_ie) {
 			mlo_err_rl("SSID element found for reporting STA for (re)association response. It should not be present.");
-			ret = QDF_STATUS_E_PROTO;
-			goto mem_free;
+			qdf_mem_free(orig_mlie_copy);
+			return QDF_STATUS_E_PROTO;
 		}
 
 		sta_prof_ie = util_find_eid(WLAN_ELEMID_SSID,
@@ -2603,8 +1329,8 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 
 		if (sta_prof_ie) {
 			mlo_err_rl("SSID element found in STA profile for (re)association response. It should not be present.");
-			ret = QDF_STATUS_E_PROTO;
-			goto mem_free;
+			qdf_mem_free(orig_mlie_copy);
+			return QDF_STATUS_E_PROTO;
 		}
 	}
 
@@ -2612,8 +1338,10 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 
 	ret = util_validate_reportingsta_ie(reportingsta_ie, frame_iesection,
 					    frame_iesection_len);
-	if (QDF_IS_STATUS_ERROR(ret))
-		goto mem_free;
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		qdf_mem_free(orig_mlie_copy);
+		return ret;
+	}
 
 	reportingsta_ie_size = reportingsta_ie[TAG_LEN_POS] + MIN_IE_LEN;
 
@@ -2627,25 +1355,15 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 					frame_iesection) == frame_iesection_len)
 				break;
 
-			/* Add BV ML IE for link specific probe response */
-			if (subtype == WLAN_FC0_STYPE_PROBE_RESP) {
-				ret = util_add_mlie_for_prb_rsp_gen(
-					reportingsta_ie,
-					reportingsta_ie[TAG_LEN_POS],
-					&link_frame_currpos,
-					&link_frame_currlen,
-					link_frame_maxsize,
-					linkid);
-				if (QDF_IS_STATUS_ERROR(ret))
-					goto mem_free;
-			}
 			reportingsta_ie += reportingsta_ie_size;
 
 			ret = util_validate_reportingsta_ie(reportingsta_ie,
 							    frame_iesection,
 							    frame_iesection_len);
-			if (QDF_IS_STATUS_ERROR(ret))
-				goto mem_free;
+			if (QDF_IS_STATUS_ERROR(ret)) {
+				qdf_mem_free(orig_mlie_copy);
+				return ret;
+			}
 
 			reportingsta_ie_size = reportingsta_ie[TAG_LEN_POS] +
 				MIN_IE_LEN;
@@ -2684,8 +1402,10 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 							     ninherit_elemextlist_len,
 							     &is_in_noninheritlist);
 
-			if (QDF_IS_STATUS_ERROR(ret))
-				goto mem_free;
+			if (QDF_IS_STATUS_ERROR(ret)) {
+				qdf_mem_free(orig_mlie_copy);
+				return ret;
+			}
 
 			if (!is_in_noninheritlist) {
 				if ((link_frame_currpos +
@@ -2701,44 +1421,44 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 						reportingsta_ie_size;
 
 					if (reportingsta_ie[ID_POS] == WLAN_ELEMID_EXTN_ELEM) {
-						mlo_etrace_debug("IE with element ID : %u extension element ID : %u (%zu octets) present for reporting STA but not in STA profile. Copied IE from reporting frame to link specific frame",
-							      reportingsta_ie[ID_POS],
-							      reportingsta_ie[IDEXT_POS],
-							      reportingsta_ie_size);
+						mlo_debug("IE with element ID : %u extension element ID : %u (%zu octets) present for reporting STA but not in STA profile. Copied IE from reporting frame to link specific frame",
+							  reportingsta_ie[ID_POS],
+							  reportingsta_ie[IDEXT_POS],
+							  reportingsta_ie_size);
 					} else {
-						mlo_etrace_debug("IE with element ID : %u (%zu octets) present for reporting STA but not in STA profile. Copied IE from reporting frame to link specific frame",
-							      reportingsta_ie[ID_POS],
-							      reportingsta_ie_size);
+						mlo_debug("IE with element ID : %u (%zu octets) present for reporting STA but not in STA profile. Copied IE from reporting frame to link specific frame",
+							  reportingsta_ie[ID_POS],
+							  reportingsta_ie_size);
 					}
 				} else {
 					if (reportingsta_ie[ID_POS] == WLAN_ELEMID_EXTN_ELEM) {
-						mlo_etrace_err_rl("Insufficient space in link specific frame for IE with element ID : %u extension element ID : %u. Required: %zu octets, available: %zu octets",
-							       reportingsta_ie[ID_POS],
-							       reportingsta_ie[IDEXT_POS],
-							       reportingsta_ie_size,
-							       link_frame_maxsize -
-							       link_frame_currlen);
+						mlo_err_rl("Insufficent space in link specific frame for IE with element ID : %u extension element ID : %u. Required: %zu octets, available: %zu octets",
+							   reportingsta_ie[ID_POS],
+							   reportingsta_ie[IDEXT_POS],
+							   reportingsta_ie_size,
+							   link_frame_maxsize -
+							   link_frame_currlen);
 					} else {
-						mlo_etrace_err_rl("Insufficient space in link specific frame for IE with element ID : %u. Required: %zu octets, available: %zu octets",
-							       reportingsta_ie[ID_POS],
-							       reportingsta_ie_size,
-							       link_frame_maxsize -
-							       link_frame_currlen);
+						mlo_err_rl("Insufficent space in link specific frame for IE with element ID : %u. Required: %zu octets, available: %zu octets",
+							   reportingsta_ie[ID_POS],
+							   reportingsta_ie_size,
+							   link_frame_maxsize -
+							   link_frame_currlen);
 					}
 
-					ret = QDF_STATUS_E_NOMEM;
-					goto mem_free;
+					qdf_mem_free(orig_mlie_copy);
+					return QDF_STATUS_E_NOMEM;
 				}
 			} else {
 				if (reportingsta_ie[ID_POS] == WLAN_ELEMID_EXTN_ELEM) {
-					mlo_etrace_debug("IE with element ID : %u extension element ID : %u (%zu octets) present for reporting STA but not in STA profile. However it is in Non-Inheritance list, hence ignoring.",
-						      reportingsta_ie[ID_POS],
-						      reportingsta_ie[IDEXT_POS],
-						      reportingsta_ie_size);
+					mlo_debug("IE with element ID : %u extension element ID : %u (%zu octets) present for reporting STA but not in STA profile. However it is in Non-Inheritance list, hence ignoring.",
+						  reportingsta_ie[ID_POS],
+						  reportingsta_ie[IDEXT_POS],
+						  reportingsta_ie_size);
 				} else {
-					mlo_etrace_debug("IE with element ID : %u (%zu octets) present for reporting STA but not in STA profile. However it is in Non-Inheritance list, hence ignoring.",
-						      reportingsta_ie[ID_POS],
-						      reportingsta_ie_size);
+					mlo_debug("IE with element ID : %u (%zu octets) present for reporting STA but not in STA profile. However it is in Non-Inheritance list, hence ignoring.",
+						  reportingsta_ie[ID_POS],
+						  reportingsta_ie_size);
 				}
 			}
 		} else {
@@ -2758,8 +1478,10 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 			ret = util_validate_sta_prof_ie(sta_prof_ie,
 							sta_prof_iesection,
 							sta_prof_iesection_len);
-			if (QDF_IS_STATUS_ERROR(ret))
-				goto mem_free;
+			if (QDF_IS_STATUS_ERROR(ret)) {
+				qdf_mem_free(orig_mlie_copy);
+				return ret;
+			}
 
 			sta_prof_ie_size = sta_prof_ie[TAG_LEN_POS] +
 				MIN_IE_LEN;
@@ -2770,14 +1492,67 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 
 			if ((reportingsta_ie[ID_POS] == WLAN_ELEMID_VENDOR) &&
 			    (sta_prof_iesection_remlen >= MIN_VENDOR_TAG_LEN)) {
-				/* If Vendor IE also presents in STA profile,
-				 * then ignore the Vendor IE which is for
-				 * reporting STA. It only needs to copy Vendor
-				 * IE from STA profile to link specific frame.
-				 * The copy happens when going through the
-				 * remaining IEs.
-				 */
-				;
+				if (!qdf_mem_cmp(reportingsta_ie +
+							PAYLOAD_START_POS,
+						 sta_prof_ie +
+							PAYLOAD_START_POS,
+						 OUI_LEN)) {
+					/* Same vendor IE, copy from STA profile
+					 */
+					if ((link_frame_currpos +
+							sta_prof_ie_size) <=
+						(link_frame +
+							link_frame_maxsize)) {
+						qdf_mem_copy(link_frame_currpos,
+							     sta_prof_ie,
+							     sta_prof_ie_size);
+
+						link_frame_currpos +=
+							sta_prof_ie_size;
+						link_frame_currlen +=
+							sta_prof_ie_size;
+
+						mlo_debug("Vendor IE (%zu octets) for reporting STA also present in STA profile. Copied IE from STA profile to link specific frame",
+							  sta_prof_ie_size);
+
+						sta_prof_ie[0] = 0;
+					} else {
+						mlo_err_rl("Insufficent space in link specific frame for IE with element ID : %u. Required: %zu octets, available: %zu octets",
+							   sta_prof_ie[ID_POS],
+							   sta_prof_ie_size,
+							   link_frame_maxsize -
+							   link_frame_currlen);
+
+						qdf_mem_free(orig_mlie_copy);
+						return QDF_STATUS_E_NOMEM;
+					}
+				} else {
+					if ((link_frame_currpos +
+							reportingsta_ie_size) <=
+						(link_frame +
+							link_frame_maxsize)) {
+						qdf_mem_copy(link_frame_currpos,
+							     reportingsta_ie,
+							     reportingsta_ie_size);
+
+						link_frame_currpos +=
+							reportingsta_ie_size;
+						link_frame_currlen +=
+							reportingsta_ie_size;
+
+						mlo_debug("Vendor IE (%zu octets) present for reporting STA but not present in STA profile. Copied IE from reporting frame to link specific frame",
+							  reportingsta_ie_size);
+					} else {
+						mlo_err_rl("Insufficent space in link specific frame for IE with element ID : %u. Required: %zu octets, available: %zu octets",
+							   reportingsta_ie[ID_POS],
+							   reportingsta_ie_size,
+							   link_frame_maxsize -
+							   link_frame_currlen);
+
+						qdf_mem_free(orig_mlie_copy);
+						return QDF_STATUS_E_NOMEM;
+					}
+				}
 			} else {
 				/* Copy IE from STA profile into link specific
 				 * frame.
@@ -2794,36 +1569,36 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 
 					if (reportingsta_ie[ID_POS] ==
 							WLAN_ELEMID_EXTN_ELEM) {
-						mlo_etrace_debug("IE with element ID : %u extension element ID : %u (%zu octets) for reporting STA also present in STA profile. Copied IE from STA profile to link specific frame",
-							      sta_prof_ie[ID_POS],
-							      sta_prof_ie[IDEXT_POS],
-							      sta_prof_ie_size);
+						mlo_debug("IE with element ID : %u extension element ID : %u (%zu octets) for reporting STA also present in STA profile. Copied IE from STA profile to link specific frame",
+							  sta_prof_ie[ID_POS],
+							  sta_prof_ie[IDEXT_POS],
+							  sta_prof_ie_size);
 					} else {
-						mlo_etrace_debug("IE with element ID : %u (%zu octets) for reporting STA also present in STA profile. Copied IE from STA profile to link specific frame",
-								 sta_prof_ie[ID_POS],
-								 sta_prof_ie_size);
+						mlo_debug("IE with element ID : %u (%zu octets) for reporting STA also present in STA profile. Copied IE from STA profile to link specific frame",
+							  sta_prof_ie[ID_POS],
+							  sta_prof_ie_size);
 					}
 
 					sta_prof_ie[0] = 0;
 				} else {
 					if (sta_prof_ie[ID_POS] ==
 							WLAN_ELEMID_EXTN_ELEM) {
-						mlo_etrace_err_rl("Insufficient space in link specific frame for IE with element ID : %u extension element ID : %u. Required: %zu octets, available: %zu octets",
-								  sta_prof_ie[ID_POS],
-								  sta_prof_ie[IDEXT_POS],
-								  sta_prof_ie_size,
-								  link_frame_maxsize -
-								  link_frame_currlen);
+						mlo_err_rl("Insufficent space in link specific frame for IE with element ID : %u extension element ID : %u. Required: %zu octets, available: %zu octets",
+							   sta_prof_ie[ID_POS],
+							   sta_prof_ie[IDEXT_POS],
+							   sta_prof_ie_size,
+							   link_frame_maxsize -
+							   link_frame_currlen);
 					} else {
-						mlo_etrace_err_rl("Insufficient space in link specific frame for IE with element ID : %u. Required: %zu octets, available: %zu octets",
-								  sta_prof_ie[ID_POS],
-								  sta_prof_ie_size,
-								  link_frame_maxsize -
-								  link_frame_currlen);
+						mlo_err_rl("Insufficent space in link specific frame for IE with element ID : %u. Required: %zu octets, available: %zu octets",
+							   sta_prof_ie[ID_POS],
+							   sta_prof_ie_size,
+							   link_frame_maxsize -
+							   link_frame_currlen);
 					}
 
-					ret = QDF_STATUS_E_NOMEM;
-					goto mem_free;
+					qdf_mem_free(orig_mlie_copy);
+					return QDF_STATUS_E_NOMEM;
 				}
 			}
 		}
@@ -2837,8 +1612,10 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 		ret = util_validate_reportingsta_ie(reportingsta_ie,
 						    frame_iesection,
 						    frame_iesection_len);
-		if (QDF_IS_STATUS_ERROR(ret))
-			goto mem_free;
+		if (QDF_IS_STATUS_ERROR(ret)) {
+			qdf_mem_free(orig_mlie_copy);
+			return ret;
+		}
 
 		reportingsta_ie_size = reportingsta_ie[TAG_LEN_POS] +
 			MIN_IE_LEN;
@@ -2861,8 +1638,10 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 		ret = util_validate_sta_prof_ie(sta_prof_ie,
 						sta_prof_iesection_currpos,
 						sta_prof_iesection_remlen);
-		if (QDF_IS_STATUS_ERROR(ret))
-			goto mem_free;
+		if (QDF_IS_STATUS_ERROR(ret)) {
+			qdf_mem_free(orig_mlie_copy);
+			return ret;
+		}
 
 		sta_prof_ie_size = sta_prof_ie[TAG_LEN_POS] + MIN_IE_LEN;
 
@@ -2886,35 +1665,35 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 
 			if (reportingsta_ie[ID_POS] ==
 					WLAN_ELEMID_EXTN_ELEM) {
-				mlo_etrace_debug("IE with element ID : %u extension element ID : %u (%zu octets) is present only in STA profile. Copied IE from STA profile to link specific frame",
-						 sta_prof_ie[ID_POS],
-						 sta_prof_ie[IDEXT_POS],
-						 sta_prof_ie_size);
+				mlo_debug("IE with element ID : %u extension element ID : %u (%zu octets) is present only in STA profile. Copied IE from STA profile to link specific frame",
+					  sta_prof_ie[ID_POS],
+					  sta_prof_ie[IDEXT_POS],
+					  sta_prof_ie_size);
 			} else {
-				mlo_etrace_debug("IE with element ID : %u (%zu octets) is present only in STA profile. Copied IE from STA profile to link specific frame",
-						 sta_prof_ie[ID_POS],
-						 sta_prof_ie_size);
+				mlo_debug("IE with element ID : %u (%zu octets) is present only in STA profile. Copied IE from STA profile to link specific frame",
+					  sta_prof_ie[ID_POS],
+					  sta_prof_ie_size);
 			}
 
 			sta_prof_ie[0] = 0;
 		} else {
 			if (sta_prof_ie[ID_POS] == WLAN_ELEMID_EXTN_ELEM) {
-				mlo_etrace_err_rl("Insufficient space in link specific frame for IE with element ID : %u extension element ID : %u. Required: %zu octets, available: %zu octets",
-						  sta_prof_ie[ID_POS],
-						  sta_prof_ie[IDEXT_POS],
-						  sta_prof_ie_size,
-						  link_frame_maxsize -
-						  link_frame_currlen);
+				mlo_err_rl("Insufficent space in link specific frame for IE with element ID : %u extension element ID : %u. Required: %zu octets, available: %zu octets",
+					   sta_prof_ie[ID_POS],
+					   sta_prof_ie[IDEXT_POS],
+					   sta_prof_ie_size,
+					   link_frame_maxsize -
+					   link_frame_currlen);
 			} else {
-				mlo_etrace_err_rl("Insufficient space in link specific frame for IE with element ID : %u. Required: %zu octets, available: %zu octets",
-						  sta_prof_ie[ID_POS],
-						  sta_prof_ie_size,
-						  link_frame_maxsize -
-						  link_frame_currlen);
+				mlo_err_rl("Insufficent space in link specific frame for IE with element ID : %u. Required: %zu octets, available: %zu octets",
+					   sta_prof_ie[ID_POS],
+					   sta_prof_ie_size,
+					   link_frame_maxsize -
+					   link_frame_currlen);
 			}
 
-			ret = QDF_STATUS_E_NOMEM;
-			goto mem_free;
+			qdf_mem_free(orig_mlie_copy);
+			return QDF_STATUS_E_NOMEM;
 		}
 
 		sta_prof_iesection_currpos += sta_prof_ie_size;
@@ -2935,16 +1714,6 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 
 		link_frame_hdr->i_fc[0] = MLO_LINKSPECIFIC_ASSOC_REQ_FC0;
 		link_frame_hdr->i_fc[1] = MLO_LINKSPECIFIC_ASSOC_REQ_FC1;
-	} else if (subtype == WLAN_FC0_STYPE_PROBE_RESP) {
-		qdf_mem_copy(link_frame_hdr->i_addr3, reportedmacaddr.bytes,
-			     QDF_MAC_ADDR_SIZE);
-		qdf_mem_copy(link_frame_hdr->i_addr2, reportedmacaddr.bytes,
-			     QDF_MAC_ADDR_SIZE);
-		qdf_mem_copy(link_frame_hdr->i_addr1, &link_addr,
-			     QDF_MAC_ADDR_SIZE);
-
-		link_frame_hdr->i_fc[0] = MLO_LINKSPECIFIC_PROBE_RESP_FC0;
-		link_frame_hdr->i_fc[1] = MLO_LINKSPECIFIC_PROBE_RESP_FC1;
 	} else {
 		/* This is a (re)association response */
 
@@ -2959,63 +1728,39 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 		link_frame_hdr->i_fc[1] = MLO_LINKSPECIFIC_ASSOC_RESP_FC1;
 	}
 
-	mlo_debug("subtype:%u addr3:" QDF_MAC_ADDR_FMT " addr2:"
-		  QDF_MAC_ADDR_FMT " addr1:" QDF_MAC_ADDR_FMT,
-		  subtype,
-		  QDF_MAC_ADDR_REF(link_frame_hdr->i_addr3),
-		  QDF_MAC_ADDR_REF(link_frame_hdr->i_addr2),
-		  QDF_MAC_ADDR_REF(link_frame_hdr->i_addr1));
-
 	/* Seq num not used so not populated */
 
-	*link_frame_len = link_frame_currlen;
-	ret = QDF_STATUS_SUCCESS;
+	qdf_mem_free(orig_mlie_copy);
 
-mem_free:
-	qdf_mem_free(mlieseqpayload_copy);
-	return ret;
+	*link_frame_len = link_frame_currlen;
+
+	return QDF_STATUS_SUCCESS;
 }
 
 QDF_STATUS
 util_gen_link_assoc_req(uint8_t *frame, qdf_size_t frame_len, bool isreassoc,
-			uint8_t link_id,
 			struct qdf_mac_addr link_addr,
 			uint8_t *link_frame,
 			qdf_size_t link_frame_maxsize,
 			qdf_size_t *link_frame_len)
 {
-	return util_gen_link_reqrsp_cmn(frame, frame_len,
+	return util_gen_link_assoc_reqrsp_cmn(frame, frame_len,
 			(isreassoc ? WLAN_FC0_STYPE_REASSOC_REQ :
 				WLAN_FC0_STYPE_ASSOC_REQ),
-			link_id, link_addr, link_frame,
-			link_frame_maxsize, link_frame_len);
+			link_addr, link_frame, link_frame_maxsize,
+			link_frame_len);
 }
 
 QDF_STATUS
 util_gen_link_assoc_rsp(uint8_t *frame, qdf_size_t frame_len, bool isreassoc,
-			uint8_t link_id,
 			struct qdf_mac_addr link_addr,
 			uint8_t *link_frame,
 			qdf_size_t link_frame_maxsize,
 			qdf_size_t *link_frame_len)
 {
-	return util_gen_link_reqrsp_cmn(frame, frame_len,
+	return util_gen_link_assoc_reqrsp_cmn(frame, frame_len,
 			(isreassoc ?  WLAN_FC0_STYPE_REASSOC_RESP :
 				WLAN_FC0_STYPE_ASSOC_RESP),
-			link_id, link_addr, link_frame,
-			link_frame_maxsize, link_frame_len);
-}
-
-QDF_STATUS
-util_gen_link_probe_rsp(uint8_t *frame, qdf_size_t frame_len,
-			uint8_t link_id,
-			struct qdf_mac_addr link_addr,
-			uint8_t *link_frame,
-			qdf_size_t link_frame_maxsize,
-			qdf_size_t *link_frame_len)
-{
-	return util_gen_link_reqrsp_cmn(frame, frame_len,
-			 WLAN_FC0_STYPE_PROBE_RESP, link_id,
 			link_addr, link_frame, link_frame_maxsize,
 			link_frame_len);
 }
@@ -3102,199 +1847,6 @@ util_find_mlie(uint8_t *buf, qdf_size_t buflen, uint8_t **mlieseq,
 	return QDF_STATUS_SUCCESS;
 }
 
-static inline QDF_STATUS
-util_validate_bv_mlie_min_seq_len(qdf_size_t mlieseqlen)
-{
-	qdf_size_t parsed_len = sizeof(struct wlan_ie_multilink);
-
-	if (mlieseqlen < parsed_len + WLAN_ML_BV_CINFO_LENGTH_SIZE) {
-		mlo_err_rl("ML seq payload of len %zu doesn't accommodate the mandatory BV ML IE Common info len field",
-			   mlieseqlen);
-		return QDF_STATUS_E_PROTO;
-	}
-	parsed_len += WLAN_ML_BV_CINFO_LENGTH_SIZE;
-
-	if (mlieseqlen < parsed_len + QDF_MAC_ADDR_SIZE) {
-		mlo_err_rl("ML seq payload of len %zu doesn't accommodate the mandatory MLD addr",
-			   mlieseqlen);
-		return QDF_STATUS_E_PROTO;
-	}
-
-	return QDF_STATUS_SUCCESS;
-}
-
-QDF_STATUS
-util_find_mlie_by_variant(uint8_t *buf, qdf_size_t buflen, uint8_t **mlieseq,
-			  qdf_size_t *mlieseqlen, int variant)
-{
-	uint8_t *ieseq;
-	qdf_size_t ieseqlen;
-	QDF_STATUS status;
-	int ml_variant;
-	qdf_size_t buf_parsed_len;
-
-	if (!buf || !buflen || !mlieseq || !mlieseqlen)
-		return QDF_STATUS_E_NULL_VALUE;
-
-	if (variant >= WLAN_ML_VARIANT_INVALIDSTART)
-		return QDF_STATUS_E_PROTO;
-
-	ieseq = NULL;
-	ieseqlen = 0;
-	*mlieseq = NULL;
-	*mlieseqlen = 0;
-	buf_parsed_len = 0;
-
-	while (buflen > buf_parsed_len) {
-		status = util_find_mlie(buf + buf_parsed_len,
-					buflen - buf_parsed_len,
-					&ieseq, &ieseqlen);
-
-		if (QDF_IS_STATUS_ERROR(status))
-			return status;
-
-		/* Even if the element is not found, we have successfully
-		 * examined the buffer. The caller will be provided a NULL value
-		 * for the starting of the Multi-Link element. Hence, we return
-		 * success.
-		 */
-		if (!ieseq)
-			return QDF_STATUS_SUCCESS;
-
-		status = util_get_mlie_variant(ieseq, ieseqlen,
-					       &ml_variant);
-		if (QDF_IS_STATUS_ERROR(status)) {
-			mlo_err("Unable to get Multi-link element variant");
-			return status;
-		}
-
-		if (ml_variant == variant) {
-			*mlieseq = ieseq;
-			*mlieseqlen = ieseqlen;
-			return QDF_STATUS_SUCCESS;
-		}
-
-		buf_parsed_len = ieseq + ieseqlen - buf;
-	}
-
-	return QDF_STATUS_E_INVAL;
-}
-
-QDF_STATUS
-util_get_mlie_common_info_len(uint8_t *mlieseq, qdf_size_t mlieseqlen,
-			      uint8_t *commoninfo_len)
-{
-	struct wlan_ie_multilink *mlie_fixed;
-	enum wlan_ml_variant variant;
-	uint16_t mlcontrol;
-
-	if (!mlieseq || !mlieseqlen || !commoninfo_len)
-		return QDF_STATUS_E_NULL_VALUE;
-
-	if (mlieseqlen < sizeof(struct wlan_ie_multilink))
-		return QDF_STATUS_E_INVAL;
-
-	mlie_fixed = (struct wlan_ie_multilink *)mlieseq;
-
-	if (mlie_fixed->elem_id != WLAN_ELEMID_EXTN_ELEM ||
-	    mlie_fixed->elem_id_ext != WLAN_EXTN_ELEMID_MULTI_LINK)
-		return QDF_STATUS_E_INVAL;
-
-	mlcontrol = qdf_le16_to_cpu(mlie_fixed->mlcontrol);
-
-	variant = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_TYPE_IDX,
-			       WLAN_ML_CTRL_TYPE_BITS);
-
-	if (variant != WLAN_ML_VARIANT_BASIC)
-		return QDF_STATUS_E_INVAL;
-
-	/* Common Info starts at mlieseq + sizeof(struct wlan_ie_multilink).
-	 * Check if there is sufficient space in the buffer for the Common Info
-	 * Length and MLD MAC address.
-	 */
-	if ((sizeof(struct wlan_ie_multilink) + WLAN_ML_BV_CINFO_LENGTH_SIZE +
-	    QDF_MAC_ADDR_SIZE) > mlieseqlen)
-		return QDF_STATUS_E_PROTO;
-
-	*commoninfo_len = *(mlieseq + sizeof(struct wlan_ie_multilink));
-
-	return QDF_STATUS_SUCCESS;
-}
-
-QDF_STATUS
-util_get_bvmlie_bssparamchangecnt(uint8_t *mlieseq, qdf_size_t mlieseqlen,
-				  bool *bssparamchangecntfound,
-				  uint8_t *bssparamchangecnt)
-{
-	struct wlan_ie_multilink *mlie_fixed;
-	enum wlan_ml_variant variant;
-	uint16_t mlcontrol;
-	uint16_t presencebitmap;
-	uint8_t *commoninfo;
-	uint8_t commoninfolen;
-	qdf_size_t mldcap_offset;
-
-	if (!mlieseq || !mlieseqlen || !bssparamchangecntfound ||
-	    !bssparamchangecnt)
-		return QDF_STATUS_E_NULL_VALUE;
-
-	*bssparamchangecntfound = false;
-	*bssparamchangecnt = 0;
-
-	if (mlieseqlen < sizeof(struct wlan_ie_multilink))
-		return QDF_STATUS_E_INVAL;
-
-	mlie_fixed = (struct wlan_ie_multilink *)mlieseq;
-
-	if (mlie_fixed->elem_id != WLAN_ELEMID_EXTN_ELEM ||
-	    mlie_fixed->elem_id_ext != WLAN_EXTN_ELEMID_MULTI_LINK)
-		return QDF_STATUS_E_INVAL;
-
-	mlcontrol = qdf_le16_to_cpu(mlie_fixed->mlcontrol);
-
-	variant = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_TYPE_IDX,
-			       WLAN_ML_CTRL_TYPE_BITS);
-
-	if (variant != WLAN_ML_VARIANT_BASIC)
-		return QDF_STATUS_E_NOSUPPORT;
-
-	presencebitmap = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_PBM_IDX,
-				      WLAN_ML_CTRL_PBM_BITS);
-
-	if (QDF_IS_STATUS_ERROR(util_validate_bv_mlie_min_seq_len(mlieseqlen)))
-		return QDF_STATUS_E_INVAL;
-
-	commoninfo = mlieseq + sizeof(struct wlan_ie_multilink);
-	commoninfolen = *(mlieseq + sizeof(struct wlan_ie_multilink));
-
-	mldcap_offset = WLAN_ML_BV_CINFO_LENGTH_SIZE;
-
-	mldcap_offset += QDF_MAC_ADDR_SIZE;
-
-	if (presencebitmap & WLAN_ML_BV_CTRL_PBM_LINKIDINFO_P) {
-		mldcap_offset += WLAN_ML_BV_CINFO_LINKIDINFO_SIZE;
-
-		if ((sizeof(struct wlan_ie_multilink) + mldcap_offset) >
-				mlieseqlen)
-			return QDF_STATUS_E_PROTO;
-	}
-
-	if (presencebitmap & WLAN_ML_BV_CTRL_PBM_BSSPARAMCHANGECNT_P) {
-		if (commoninfolen < (mldcap_offset +
-				     WLAN_ML_BSSPARAMCHNGCNT_SIZE))
-			return QDF_STATUS_E_PROTO;
-
-		if ((sizeof(struct wlan_ie_multilink) + mldcap_offset +
-				WLAN_ML_BSSPARAMCHNGCNT_SIZE) >
-				mlieseqlen)
-			return QDF_STATUS_E_PROTO;
-		*bssparamchangecntfound = true;
-		*bssparamchangecnt = *(commoninfo + mldcap_offset);
-	}
-
-	return QDF_STATUS_SUCCESS;
-}
-
 QDF_STATUS
 util_get_mlie_variant(uint8_t *mlieseq, qdf_size_t mlieseqlen,
 		      int *variant)
@@ -3327,185 +1879,19 @@ util_get_mlie_variant(uint8_t *mlieseq, qdf_size_t mlieseqlen,
 }
 
 QDF_STATUS
-util_get_bvmlie_eml_cap(uint8_t *mlieseq, qdf_size_t mlieseqlen,
-			bool *eml_cap_found,
-			uint16_t *eml_cap)
-{
-	struct wlan_ie_multilink *mlie_fixed;
-	enum wlan_ml_variant variant;
-	uint16_t mlcontrol;
-	uint8_t eml_cap_offset;
-	uint8_t commoninfo_len;
-	uint16_t presencebitmap;
-
-	if (!mlieseq || !mlieseqlen || !eml_cap_found || !eml_cap)
-		return QDF_STATUS_E_NULL_VALUE;
-
-	*eml_cap = 0;
-	*eml_cap_found = false;
-
-	if (mlieseqlen < sizeof(struct wlan_ie_multilink))
-		return QDF_STATUS_E_INVAL;
-
-	mlie_fixed = (struct wlan_ie_multilink *)mlieseq;
-
-	if ((mlie_fixed->elem_id != WLAN_ELEMID_EXTN_ELEM) ||
-	    (mlie_fixed->elem_id_ext != WLAN_EXTN_ELEMID_MULTI_LINK))
-		return QDF_STATUS_E_INVAL;
-
-	mlcontrol = qdf_le16_to_cpu(mlie_fixed->mlcontrol);
-
-	variant = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_TYPE_IDX,
-			       WLAN_ML_CTRL_TYPE_BITS);
-
-	if (variant != WLAN_ML_VARIANT_BASIC)
-		return QDF_STATUS_E_INVAL;
-
-	presencebitmap = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_PBM_IDX,
-				      WLAN_ML_CTRL_PBM_BITS);
-
-	/* eml_cap_offset stores the offset of EML Capabilities within
-	 * Common Info
-	 */
-	eml_cap_offset = WLAN_ML_BV_CINFO_LENGTH_SIZE + QDF_MAC_ADDR_SIZE;
-	if (presencebitmap & WLAN_ML_BV_CTRL_PBM_LINKIDINFO_P)
-		eml_cap_offset += WLAN_ML_BV_CINFO_LINKIDINFO_SIZE;
-	if (presencebitmap & WLAN_ML_BV_CTRL_PBM_BSSPARAMCHANGECNT_P)
-		eml_cap_offset += WLAN_ML_BSSPARAMCHNGCNT_SIZE;
-	if (presencebitmap & WLAN_ML_BV_CTRL_PBM_MEDIUMSYNCDELAYINFO_P)
-		eml_cap_offset += WLAN_ML_BV_CINFO_MEDMSYNCDELAYINFO_SIZE;
-
-	if (presencebitmap & WLAN_ML_BV_CTRL_PBM_EMLCAP_P) {
-		/* Common Info starts at
-		 * mlieseq + sizeof(struct wlan_ie_multilink).
-		 * Check if there is sufficient space in the buffer for
-		 * the Common Info Length.
-		 */
-		if (mlieseqlen < (sizeof(struct wlan_ie_multilink) +
-				  WLAN_ML_BV_CINFO_LENGTH_SIZE))
-			return QDF_STATUS_E_PROTO;
-
-		/* Check if the value indicated in the Common Info Length
-		 * subfield is sufficient to access the EML capabilities.
-		 */
-		commoninfo_len = *(mlieseq + sizeof(struct wlan_ie_multilink));
-		if (commoninfo_len < (eml_cap_offset +
-				      WLAN_ML_BV_CINFO_EMLCAP_SIZE))
-			return QDF_STATUS_E_PROTO;
-
-		/* Common Info starts at mlieseq + sizeof(struct
-		 * wlan_ie_multilink). Check if there is sufficient space in
-		 * Common Info for the EML capability.
-		 */
-		if (mlieseqlen < (sizeof(struct wlan_ie_multilink) +
-				  eml_cap_offset +
-				  WLAN_ML_BV_CINFO_EMLCAP_SIZE))
-			return QDF_STATUS_E_PROTO;
-
-		*eml_cap_found = true;
-		*eml_cap = qdf_le16_to_cpu(*(uint16_t *)(mlieseq +
-							 sizeof(struct wlan_ie_multilink) +
-							 eml_cap_offset));
-	}
-	return QDF_STATUS_SUCCESS;
-}
-
-QDF_STATUS
-util_get_bvmlie_msd_cap(uint8_t *mlieseq, qdf_size_t mlieseqlen,
-			bool *msd_cap_found,
-			uint16_t *msd_cap)
-{
-	struct wlan_ie_multilink *mlie_fixed;
-	enum wlan_ml_variant variant;
-	uint16_t mlcontrol;
-	uint8_t msd_cap_offset;
-	uint8_t commoninfo_len;
-	uint16_t presencebitmap;
-
-	if (!mlieseq || !mlieseqlen || !msd_cap_found || !msd_cap)
-		return QDF_STATUS_E_NULL_VALUE;
-
-	*msd_cap = 0;
-	*msd_cap_found = false;
-
-	if (mlieseqlen < sizeof(struct wlan_ie_multilink))
-		return QDF_STATUS_E_INVAL;
-
-	mlie_fixed = (struct wlan_ie_multilink *)mlieseq;
-
-	if ((mlie_fixed->elem_id != WLAN_ELEMID_EXTN_ELEM) ||
-	    (mlie_fixed->elem_id_ext != WLAN_EXTN_ELEMID_MULTI_LINK))
-		return QDF_STATUS_E_INVAL;
-
-	mlcontrol = qdf_le16_to_cpu(mlie_fixed->mlcontrol);
-
-	variant = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_TYPE_IDX,
-			       WLAN_ML_CTRL_TYPE_BITS);
-
-	if (variant != WLAN_ML_VARIANT_BASIC)
-		return QDF_STATUS_E_INVAL;
-
-	presencebitmap = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_PBM_IDX,
-				      WLAN_ML_CTRL_PBM_BITS);
-
-	/* msd_cap_offset stores the offset of MSD capabilities within
-	 * Common Info
-	 */
-	msd_cap_offset = WLAN_ML_BV_CINFO_LENGTH_SIZE + QDF_MAC_ADDR_SIZE;
-	if (presencebitmap & WLAN_ML_BV_CTRL_PBM_LINKIDINFO_P)
-		msd_cap_offset += WLAN_ML_BV_CINFO_LINKIDINFO_SIZE;
-	if (presencebitmap & WLAN_ML_BV_CTRL_PBM_BSSPARAMCHANGECNT_P)
-		msd_cap_offset += WLAN_ML_BSSPARAMCHNGCNT_SIZE;
-	if (presencebitmap & WLAN_ML_BV_CTRL_PBM_MEDIUMSYNCDELAYINFO_P) {
-		/* Common Info starts at
-		 * mlieseq + sizeof(struct wlan_ie_multilink).
-		 * Check if there is sufficient space in the buffer for
-		 * the Common Info Length.
-		 */
-		if (mlieseqlen < (sizeof(struct wlan_ie_multilink) +
-				  WLAN_ML_BV_CINFO_LENGTH_SIZE))
-			return QDF_STATUS_E_PROTO;
-
-		/* Check if the value indicated in the Common Info Length
-		 * subfield is sufficient to access the MSD capabilities.
-		 */
-		commoninfo_len = *(mlieseq + sizeof(struct wlan_ie_multilink));
-		if (commoninfo_len < (msd_cap_offset +
-				      WLAN_ML_BV_CINFO_MEDMSYNCDELAYINFO_SIZE))
-			return QDF_STATUS_E_PROTO;
-
-		/* Common Info starts at mlieseq + sizeof(struct
-		 * wlan_ie_multilink). Check if there is sufficient space in
-		 * Common Info for the MSD capability.
-		 */
-		if (mlieseqlen < (sizeof(struct wlan_ie_multilink) +
-				  msd_cap_offset +
-				  WLAN_ML_BV_CINFO_MEDMSYNCDELAYINFO_SIZE))
-			return QDF_STATUS_E_PROTO;
-
-		*msd_cap_found = true;
-		*msd_cap = qdf_le16_to_cpu(*(uint16_t *)(mlieseq +
-							 sizeof(struct wlan_ie_multilink) +
-							 msd_cap_offset));
-	} else {
-		mlo_debug("MSD caps not found in assoc rsp");
-	}
-
-	return QDF_STATUS_SUCCESS;
-}
-
-QDF_STATUS
 util_get_bvmlie_mldmacaddr(uint8_t *mlieseq, qdf_size_t mlieseqlen,
+			   bool *mldmacaddrfound,
 			   struct qdf_mac_addr *mldmacaddr)
 {
 	struct wlan_ie_multilink *mlie_fixed;
 	enum wlan_ml_variant variant;
 	uint16_t mlcontrol;
-	uint8_t commoninfo_len;
+	uint16_t presencebitmap;
 
-	if (!mlieseq || !mlieseqlen || !mldmacaddr)
+	if (!mlieseq || !mlieseqlen || !mldmacaddrfound || !mldmacaddr)
 		return QDF_STATUS_E_NULL_VALUE;
 
+	*mldmacaddrfound = false;
 	qdf_mem_zero(mldmacaddr, sizeof(*mldmacaddr));
 
 	if (mlieseqlen < sizeof(struct wlan_ie_multilink))
@@ -3517,7 +1903,7 @@ util_get_bvmlie_mldmacaddr(uint8_t *mlieseq, qdf_size_t mlieseqlen,
 	    (mlie_fixed->elem_id_ext != WLAN_EXTN_ELEMID_MULTI_LINK))
 		return QDF_STATUS_E_INVAL;
 
-	mlcontrol = qdf_le16_to_cpu(mlie_fixed->mlcontrol);
+	mlcontrol = le16toh(mlie_fixed->mlcontrol);
 
 	variant = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_TYPE_IDX,
 			       WLAN_ML_CTRL_TYPE_BITS);
@@ -3525,25 +1911,23 @@ util_get_bvmlie_mldmacaddr(uint8_t *mlieseq, qdf_size_t mlieseqlen,
 	if (variant != WLAN_ML_VARIANT_BASIC)
 		return QDF_STATUS_E_INVAL;
 
-	/* Common Info starts at mlieseq + sizeof(struct wlan_ie_multilink).
-	 * Check if there is sufficient space in the buffer for the Common Info
-	 * Length and MLD MAC address.
-	 */
-	if ((sizeof(struct wlan_ie_multilink) + WLAN_ML_BV_CINFO_LENGTH_SIZE +
-	    QDF_MAC_ADDR_SIZE) > mlieseqlen)
-		return QDF_STATUS_E_PROTO;
+	presencebitmap = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_PBM_IDX,
+				      WLAN_ML_CTRL_PBM_BITS);
 
-	/* Check if the value indicated in the Common Info Length subfield is
-	 * sufficient to access the MLD MAC address.
-	 */
-	commoninfo_len = *(mlieseq + sizeof(struct wlan_ie_multilink));
-	if (commoninfo_len < (WLAN_ML_BV_CINFO_LENGTH_SIZE + QDF_MAC_ADDR_SIZE))
-		return QDF_STATUS_E_PROTO;
+	if (presencebitmap & WLAN_ML_BV_CTRL_PBM_MLDMACADDR_P) {
+		/* Common Info starts at mlieseq + sizeof(struct
+		 * wlan_ie_multilink). Check if there is sufficient space in
+		 * Common Info for the MLD MAC address.
+		 */
+		if ((sizeof(struct wlan_ie_multilink) + QDF_MAC_ADDR_SIZE) >
+				mlieseqlen)
+			return QDF_STATUS_E_PROTO;
 
-	qdf_mem_copy(mldmacaddr->bytes,
-		     mlieseq + sizeof(struct wlan_ie_multilink) +
-		     WLAN_ML_BV_CINFO_LENGTH_SIZE,
-		     QDF_MAC_ADDR_SIZE);
+		*mldmacaddrfound = true;
+		qdf_mem_copy(mldmacaddr->bytes,
+			     mlieseq + sizeof(struct wlan_ie_multilink),
+			     QDF_MAC_ADDR_SIZE);
+	}
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -3588,15 +1972,14 @@ util_get_bvmlie_primary_linkid(uint8_t *mlieseq, qdf_size_t mlieseqlen,
 
 	commoninfo = mlieseq + sizeof(struct wlan_ie_multilink);
 	commoninfolen = 0;
-	commoninfolen += WLAN_ML_BV_CINFO_LENGTH_SIZE;
-	if ((sizeof(struct wlan_ie_multilink) + commoninfolen) >
-			mlieseqlen)
-		return QDF_STATUS_E_PROTO;
 
-	commoninfolen += QDF_MAC_ADDR_SIZE;
-	if ((sizeof(struct wlan_ie_multilink) + commoninfolen) >
-			mlieseqlen)
-		return QDF_STATUS_E_PROTO;
+	if (presencebitmap & WLAN_ML_BV_CTRL_PBM_MLDMACADDR_P) {
+		commoninfolen += QDF_MAC_ADDR_SIZE;
+
+		if ((sizeof(struct wlan_ie_multilink) + commoninfolen) >
+				mlieseqlen)
+			return QDF_STATUS_E_PROTO;
+	}
 
 	if (presencebitmap & WLAN_ML_BV_CTRL_PBM_LINKIDINFO_P) {
 		linkidinfo = commoninfo + commoninfolen;
@@ -3616,230 +1999,8 @@ util_get_bvmlie_primary_linkid(uint8_t *mlieseq, qdf_size_t mlieseqlen,
 }
 
 QDF_STATUS
-util_get_bvmlie_mldcap(uint8_t *mlieseq, qdf_size_t mlieseqlen,
-		       bool *mldcapfound, uint16_t *mldcap)
-{
-	struct wlan_ie_multilink *mlie_fixed;
-	enum wlan_ml_variant variant;
-	uint16_t mlcontrol;
-	uint16_t presencebitmap;
-	uint8_t *commoninfo;
-	uint8_t commoninfo_len;
-	qdf_size_t mldcap_offset;
-
-	if (!mlieseq || !mlieseqlen || !mldcapfound || !mldcap)
-		return QDF_STATUS_E_NULL_VALUE;
-
-	*mldcapfound = false;
-	*mldcap = 0;
-
-	if (mlieseqlen < sizeof(struct wlan_ie_multilink))
-		return QDF_STATUS_E_INVAL;
-
-	mlie_fixed = (struct wlan_ie_multilink *)mlieseq;
-
-	if (mlie_fixed->elem_id != WLAN_ELEMID_EXTN_ELEM ||
-	    mlie_fixed->elem_id_ext != WLAN_EXTN_ELEMID_MULTI_LINK)
-		return QDF_STATUS_E_INVAL;
-
-	mlcontrol = qdf_le16_to_cpu(mlie_fixed->mlcontrol);
-
-	variant = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_TYPE_IDX,
-			       WLAN_ML_CTRL_TYPE_BITS);
-
-	if (variant != WLAN_ML_VARIANT_BASIC)
-		return QDF_STATUS_E_NOSUPPORT;
-
-	presencebitmap = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_PBM_IDX,
-				      WLAN_ML_CTRL_PBM_BITS);
-
-	if (QDF_IS_STATUS_ERROR(util_validate_bv_mlie_min_seq_len(mlieseqlen)))
-		return QDF_STATUS_E_INVAL;
-
-	commoninfo = mlieseq + sizeof(struct wlan_ie_multilink);
-	commoninfo_len = *(mlieseq + sizeof(struct wlan_ie_multilink));
-	/* mldcap_offset stores the offset of MLD Capabilities within
-	 * Common Info
-	 */
-	mldcap_offset = WLAN_ML_BV_CINFO_LENGTH_SIZE;
-	mldcap_offset += QDF_MAC_ADDR_SIZE;
-
-	if (presencebitmap & WLAN_ML_BV_CTRL_PBM_LINKIDINFO_P) {
-		mldcap_offset += WLAN_ML_BV_CINFO_LINKIDINFO_SIZE;
-
-		if ((sizeof(struct wlan_ie_multilink) + mldcap_offset) >
-				mlieseqlen)
-			return QDF_STATUS_E_PROTO;
-	}
-
-	if (presencebitmap & WLAN_ML_BV_CTRL_PBM_BSSPARAMCHANGECNT_P) {
-		mldcap_offset += WLAN_ML_BSSPARAMCHNGCNT_SIZE;
-
-		if ((sizeof(struct wlan_ie_multilink) + mldcap_offset) >
-				mlieseqlen)
-			return QDF_STATUS_E_PROTO;
-	}
-
-	if (presencebitmap & WLAN_ML_BV_CTRL_PBM_MEDIUMSYNCDELAYINFO_P) {
-		mldcap_offset += WLAN_ML_BV_CINFO_MEDMSYNCDELAYINFO_SIZE;
-
-		if ((sizeof(struct wlan_ie_multilink) + mldcap_offset) >
-				mlieseqlen)
-			return QDF_STATUS_E_PROTO;
-	}
-
-	if (presencebitmap & WLAN_ML_BV_CTRL_PBM_EMLCAP_P) {
-		mldcap_offset += WLAN_ML_BV_CINFO_EMLCAP_SIZE;
-
-		if ((sizeof(struct wlan_ie_multilink) + mldcap_offset) >
-				mlieseqlen)
-			return QDF_STATUS_E_PROTO;
-	}
-
-	if (presencebitmap & WLAN_ML_BV_CTRL_PBM_MLDCAPANDOP_P) {
-		/* Check if the value indicated in the Common Info Length
-		 * subfield is sufficient to access the MLD capabilities.
-		 */
-		if (commoninfo_len < (mldcap_offset +
-				      WLAN_ML_BV_CINFO_MLDCAPANDOP_SIZE))
-			return QDF_STATUS_E_PROTO;
-
-		if ((sizeof(struct wlan_ie_multilink) + mldcap_offset +
-					WLAN_ML_BV_CINFO_MLDCAPANDOP_SIZE) >
-				mlieseqlen)
-			return QDF_STATUS_E_PROTO;
-
-		*mldcap = qdf_le16_to_cpu(*((uint16_t *)(commoninfo + mldcap_offset)));
-		*mldcapfound = true;
-	}
-
-	return QDF_STATUS_SUCCESS;
-}
-
-QDF_STATUS
-util_get_bvmlie_ext_mld_cap_op_info(uint8_t *mlie_seq,
-				    qdf_size_t mlie_seqlen,
-				    bool *ext_mld_cap_found,
-				    uint16_t *ext_mld_cap)
-{
-	struct wlan_ie_multilink *mlie_fixed;
-	uint16_t mlcontrol;
-	enum wlan_ml_variant variant;
-	uint16_t presence_bitmap;
-	uint8_t *commoninfo;
-	uint8_t commoninfo_len;
-	qdf_size_t extmldcap_offset;
-
-	if (!mlie_seq || !mlie_seqlen || !ext_mld_cap_found || !ext_mld_cap)
-		return QDF_STATUS_E_NULL_VALUE;
-
-	*ext_mld_cap_found = false;
-	*ext_mld_cap = 0;
-
-	if (mlie_seqlen < sizeof(struct wlan_ie_multilink))
-		return QDF_STATUS_E_INVAL;
-
-	mlie_fixed = (struct wlan_ie_multilink *)mlie_seq;
-
-	if (mlie_fixed->elem_id != WLAN_ELEMID_EXTN_ELEM ||
-	    mlie_fixed->elem_id_ext != WLAN_EXTN_ELEMID_MULTI_LINK)
-		return QDF_STATUS_E_INVAL;
-
-	mlcontrol = qdf_le16_to_cpu(mlie_fixed->mlcontrol);
-
-	variant = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_TYPE_IDX,
-			       WLAN_ML_CTRL_TYPE_BITS);
-
-	if (variant != WLAN_ML_VARIANT_BASIC)
-		return QDF_STATUS_E_NOSUPPORT;
-
-	presence_bitmap = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_PBM_IDX,
-				       WLAN_ML_CTRL_PBM_BITS);
-
-	commoninfo = mlie_seq + sizeof(struct wlan_ie_multilink);
-	commoninfo_len = *(mlie_seq + sizeof(struct wlan_ie_multilink));
-	/* extmldcap_offset stores the offset of Ext MLD Capabilities and
-	 * operations within the Common Info
-	 */
-
-	extmldcap_offset = WLAN_ML_BV_CINFO_LENGTH_SIZE;
-	extmldcap_offset += QDF_MAC_ADDR_SIZE;
-
-	if (presence_bitmap & WLAN_ML_BV_CTRL_PBM_LINKIDINFO_P) {
-		extmldcap_offset += WLAN_ML_BV_CINFO_LINKIDINFO_SIZE;
-
-		if ((sizeof(struct wlan_ie_multilink) + extmldcap_offset) >
-				mlie_seqlen)
-			return QDF_STATUS_E_PROTO;
-	}
-
-	if (presence_bitmap & WLAN_ML_BV_CTRL_PBM_BSSPARAMCHANGECNT_P) {
-		extmldcap_offset += WLAN_ML_BSSPARAMCHNGCNT_SIZE;
-
-		if ((sizeof(struct wlan_ie_multilink) + extmldcap_offset) >
-				mlie_seqlen)
-			return QDF_STATUS_E_PROTO;
-	}
-
-	if (presence_bitmap & WLAN_ML_BV_CTRL_PBM_MEDIUMSYNCDELAYINFO_P) {
-		extmldcap_offset += WLAN_ML_BV_CINFO_MEDMSYNCDELAYINFO_SIZE;
-
-		if ((sizeof(struct wlan_ie_multilink) + extmldcap_offset) >
-				mlie_seqlen)
-			return QDF_STATUS_E_PROTO;
-	}
-
-	if (presence_bitmap & WLAN_ML_BV_CTRL_PBM_EMLCAP_P) {
-		extmldcap_offset += WLAN_ML_BV_CINFO_EMLCAP_SIZE;
-
-		if ((sizeof(struct wlan_ie_multilink) + extmldcap_offset) >
-				mlie_seqlen)
-			return QDF_STATUS_E_PROTO;
-	}
-
-	if (presence_bitmap & WLAN_ML_BV_CTRL_PBM_MLDCAPANDOP_P) {
-		extmldcap_offset += WLAN_ML_BV_CINFO_MLDCAPANDOP_SIZE;
-
-		if ((sizeof(struct wlan_ie_multilink) + extmldcap_offset) >
-				mlie_seqlen)
-			return QDF_STATUS_E_PROTO;
-	}
-
-	if (presence_bitmap & WLAN_ML_BV_CTRL_PBM_MLDID_P) {
-		extmldcap_offset += WLAN_ML_BV_CINFO_MLDID_SIZE;
-
-		if ((sizeof(struct wlan_ie_multilink) + extmldcap_offset) >
-				mlie_seqlen)
-			return QDF_STATUS_E_PROTO;
-	}
-
-	if (presence_bitmap & WLAN_ML_BV_CTRL_PBM_EXT_MLDCAPANDOP_P) {
-		/* Check if the value indicated in the Common Info Length
-		 * subfield is sufficient to access the Ext MLD capabilities.
-		 */
-		if (commoninfo_len < (extmldcap_offset +
-					WLAN_ML_BV_CINFO_EXT_MLDCAPANDOP_SIZE))
-			return QDF_STATUS_E_PROTO;
-
-		if ((sizeof(struct wlan_ie_multilink) + extmldcap_offset +
-					WLAN_ML_BV_CINFO_EXT_MLDCAPANDOP_SIZE) >
-				mlie_seqlen)
-			return QDF_STATUS_E_PROTO;
-
-		*ext_mld_cap = qdf_le16_to_cpu(*((uint16_t *)(commoninfo +
-						extmldcap_offset)));
-
-		*ext_mld_cap_found = true;
-	}
-
-	return QDF_STATUS_SUCCESS;
-}
-
-QDF_STATUS
-util_get_bvmlie_persta_partner_info(uint8_t *mlieseq,
-				    qdf_size_t mlieseqlen,
-				    struct mlo_partner_info *partner_info,
-				    uint8_t subtype)
+util_get_bvmlie_persta_partner_info(uint8_t *mlie, qdf_size_t mlielen,
+				    struct mlo_partner_info *partner_info)
 {
 	struct wlan_ie_multilink *mlie_fixed;
 	uint16_t mlcontrol;
@@ -3847,22 +2008,16 @@ util_get_bvmlie_persta_partner_info(uint8_t *mlieseq,
 	uint8_t *linkinfo;
 	qdf_size_t linkinfo_len;
 	struct mlo_partner_info pinfo = {0};
-	qdf_size_t mlieseqpayloadlen;
-	uint8_t *mlieseqpayload_copy;
-	bool is_elemfragseq;
-	qdf_size_t defragpayload_len;
-
-	qdf_size_t tmplen;
 	QDF_STATUS ret;
 
-	if (!mlieseq) {
-		mlo_err("Pointer to Multi-Link element sequence is NULL");
+	if (!mlie) {
+		mlo_err("mlie is NULL");
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
-	if (!mlieseqlen) {
-		mlo_err("Length of Multi-Link element sequence is zero");
-		return QDF_STATUS_E_INVAL;
+	if (!mlielen) {
+		mlo_err("mlielen is zero");
+		return QDF_STATUS_E_NULL_VALUE;
 	}
 
 	if (!partner_info) {
@@ -3872,13 +2027,23 @@ util_get_bvmlie_persta_partner_info(uint8_t *mlieseq,
 
 	partner_info->num_partner_links = 0;
 
-	if (mlieseqlen < sizeof(struct wlan_ie_multilink)) {
-		mlo_err_rl("Multi-Link element sequence length %zu octets is smaller than required for the fixed portion of Multi-Link element (%zu octets)",
-			   mlieseqlen, sizeof(struct wlan_ie_multilink));
+	if (mlielen < sizeof(struct wlan_ie_multilink)) {
+		mlo_err_rl("mlielen %zu octets is smaller than required for the fixed portion of Multi-Link element (%zu octets)",
+			   mlielen, sizeof(struct wlan_ie_multilink));
 		return QDF_STATUS_E_INVAL;
 	}
 
-	mlie_fixed = (struct wlan_ie_multilink *)mlieseq;
+	/* Note: Multi-Link element fragmentation support will be added in a
+	 * later change once shared helper utilities for the same are available.
+	 * As of now, we temporarily return error if the mlielen is greater than
+	 * the max length for an IE.
+	 */
+	if (mlielen > (sizeof(struct ie_header) + WLAN_MAX_IE_LEN)) {
+		mlo_err_rl("Element fragmentation is not yet supported for this API");
+		return QDF_STATUS_E_NOSUPPORT;
+	}
+
+	mlie_fixed = (struct wlan_ie_multilink *)mlie;
 
 	if ((mlie_fixed->elem_id != WLAN_ELEMID_EXTN_ELEM) ||
 	    (mlie_fixed->elem_id_ext != WLAN_EXTN_ELEMID_MULTI_LINK)) {
@@ -3897,1689 +2062,31 @@ util_get_bvmlie_persta_partner_info(uint8_t *mlieseq,
 		return QDF_STATUS_E_INVAL;
 	}
 
-	mlieseqpayloadlen = 0;
-	tmplen = 0;
-	is_elemfragseq = false;
-
-	ret = wlan_get_elem_fragseq_info(mlieseq,
-					 mlieseqlen,
-					 &is_elemfragseq,
-					 &tmplen,
-					 &mlieseqpayloadlen);
-	if (QDF_IS_STATUS_ERROR(ret))
-		return ret;
-
-	if (is_elemfragseq) {
-		if (tmplen != mlieseqlen) {
-			mlo_err_rl("Mismatch in values of element fragment sequence total length. Val per frag info determination: %zu octets, val passed as arg: %zu octets",
-				   tmplen, mlieseqlen);
-			return QDF_STATUS_E_INVAL;
-		}
-
-		if (!mlieseqpayloadlen) {
-			mlo_err_rl("Multi-Link element fragment sequence payload is reported as 0, investigate");
-			return QDF_STATUS_E_FAILURE;
-		}
-
-		mlo_debug("Multi-Link element fragment sequence found with payload len %zu",
-			  mlieseqpayloadlen);
-	} else {
-		if (mlieseqlen > (sizeof(struct ie_header) + WLAN_MAX_IE_LEN)) {
-			mlo_err_rl("Expected presence of valid fragment sequence since Multi-Link element sequence length %zu octets is larger than frag threshold of %zu octets, however no valid fragment sequence found",
-				   mlieseqlen,
-				   sizeof(struct ie_header) + WLAN_MAX_IE_LEN);
-			return QDF_STATUS_E_FAILURE;
-		}
-
-		mlieseqpayloadlen = mlieseqlen - (sizeof(struct ie_header) + 1);
-	}
-
-	mlieseqpayload_copy = qdf_mem_malloc(mlieseqpayloadlen);
-
-	if (!mlieseqpayload_copy) {
-		mlo_err_rl("Could not allocate memory for Multi-Link element payload copy");
-		return QDF_STATUS_E_NOMEM;
-	}
-
-	if (is_elemfragseq) {
-		ret = wlan_defrag_elem_fragseq(false,
-					       mlieseq,
-					       mlieseqlen,
-					       mlieseqpayload_copy,
-					       mlieseqpayloadlen,
-					       &defragpayload_len);
-		if (QDF_IS_STATUS_ERROR(ret)) {
-			qdf_mem_free(mlieseqpayload_copy);
-			return ret;
-		}
-
-		if (defragpayload_len != mlieseqpayloadlen) {
-			mlo_err_rl("Length of de-fragmented payload %zu octets is not equal to length of Multi-Link element fragment sequence payload %zu octets",
-				   defragpayload_len, mlieseqpayloadlen);
-			qdf_mem_free(mlieseqpayload_copy);
-			return QDF_STATUS_E_FAILURE;
-		}
-	} else {
-		qdf_mem_copy(mlieseqpayload_copy,
-			     mlieseq + sizeof(struct ie_header) + 1,
-			     mlieseqpayloadlen);
-	}
-
-	linkinfo = NULL;
 	linkinfo_len = 0;
+	linkinfo = util_parse_multi_link_ctrl(mlie, mlielen,
+					      &linkinfo_len);
 
-	ret = util_parse_multi_link_ctrl(mlieseqpayload_copy,
-					 mlieseqpayloadlen,
-					 &linkinfo,
-					 &linkinfo_len);
-	if (QDF_IS_STATUS_ERROR(ret)) {
-		qdf_mem_free(mlieseqpayload_copy);
-		return ret;
+	if (!linkinfo) {
+		mlo_err_rl("Error in parsing Multi-Link element control");
+		return QDF_STATUS_E_INVAL;
 	}
 
-	/*
-	 * If Probe Request variant Multi-Link element in the Multi-Link probe
-	 * request does not include any per-STA profile, then all APs affiliated
-	 * with the same AP MLD as the AP identified in the Addr 1 or Addr 3
-	 * field or AP MLD ID of the Multi-Link probe request are requested
-	 * APs return success here
+	/* In case Link Info is absent as indicated by the Link Info length
+	 * being 0, return success. The number of partner links will remain 0.
 	 */
-	if (!linkinfo) {
-		qdf_mem_free(mlieseqpayload_copy);
+	if (!linkinfo_len) {
+		mlo_warn_rl("Link Info is absent");
 		return QDF_STATUS_SUCCESS;
 	}
 
 	ret = util_parse_partner_info_from_linkinfo(linkinfo,
 						    linkinfo_len,
-						    &pinfo,
-						    subtype);
+						    &pinfo);
 
-	if (QDF_IS_STATUS_ERROR(ret)) {
-		qdf_mem_free(mlieseqpayload_copy);
+	if (QDF_IS_STATUS_ERROR(ret))
 		return ret;
-	}
 
 	qdf_mem_copy(partner_info, &pinfo, sizeof(*partner_info));
-
-	qdf_mem_free(mlieseqpayload_copy);
-
-	return QDF_STATUS_SUCCESS;
-}
-
-QDF_STATUS
-util_get_prvmlie_persta_link_id(uint8_t *mlieseq,
-				qdf_size_t mlieseqlen,
-				struct mlo_probereq_info *probereq_info)
-{
-	struct wlan_ie_multilink *mlie_fixed;
-	uint16_t mlcontrol;
-	enum wlan_ml_variant variant;
-	uint8_t *linkinfo;
-	qdf_size_t linkinfo_len;
-	qdf_size_t mlieseqpayloadlen;
-	uint8_t *mlieseqpayload_copy;
-	bool is_elemfragseq;
-	qdf_size_t defragpayload_len;
-
-	qdf_size_t tmplen;
-	QDF_STATUS ret;
-
-	if (!mlieseq) {
-		mlo_err("Pointer to Multi-Link element sequence is NULL");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	if (!mlieseqlen) {
-		mlo_err("Length of Multi-Link element sequence is zero");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	if (!probereq_info) {
-		mlo_err("probe request_info is NULL");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	probereq_info->num_links = 0;
-
-	if (mlieseqlen < sizeof(struct wlan_ie_multilink)) {
-		mlo_err_rl("Multi-Link element sequence length %zu octets is smaller than required for the fixed portion of Multi-Link element (%zu octets)",
-			   mlieseqlen, sizeof(struct wlan_ie_multilink));
-		return QDF_STATUS_E_INVAL;
-	}
-
-	mlie_fixed = (struct wlan_ie_multilink *)mlieseq;
-
-	if ((mlie_fixed->elem_id != WLAN_ELEMID_EXTN_ELEM) ||
-	    (mlie_fixed->elem_id_ext != WLAN_EXTN_ELEMID_MULTI_LINK)) {
-		mlo_err("The element is not a Multi-Link element");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	mlcontrol = qdf_le16_to_cpu(mlie_fixed->mlcontrol);
-
-	variant = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_TYPE_IDX,
-			       WLAN_ML_CTRL_TYPE_BITS);
-
-	if (variant != WLAN_ML_VARIANT_PROBEREQ) {
-		mlo_err("The variant value %u does not correspond to Probe Request Variant value %u",
-			variant, WLAN_ML_VARIANT_PROBEREQ);
-		return QDF_STATUS_E_INVAL;
-	}
-
-	mlieseqpayloadlen = 0;
-	tmplen = 0;
-	is_elemfragseq = false;
-
-	ret = wlan_get_elem_fragseq_info(mlieseq,
-					 mlieseqlen,
-					 &is_elemfragseq,
-					 &tmplen,
-					 &mlieseqpayloadlen);
-	if (QDF_IS_STATUS_ERROR(ret))
-		return ret;
-
-	if (is_elemfragseq) {
-		if (tmplen != mlieseqlen) {
-			mlo_err_rl("Mismatch in values of element fragment sequence total length. Val per frag info determination: %zu octets, val passed as arg: %zu octets",
-				   tmplen, mlieseqlen);
-			return QDF_STATUS_E_INVAL;
-		}
-
-		if (!mlieseqpayloadlen) {
-			mlo_err_rl("Multi-Link element fragment sequence payload is reported as 0, investigate");
-			return QDF_STATUS_E_FAILURE;
-		}
-
-		mlo_debug("Multi-Link element fragment sequence found with payload len %zu",
-			  mlieseqpayloadlen);
-	} else {
-		if (mlieseqlen > (sizeof(struct ie_header) + WLAN_MAX_IE_LEN)) {
-			mlo_err_rl("Expected presence of valid fragment sequence since Multi-Link element sequence length %zu octets is larger than frag threshold of %zu octets, however no valid fragment sequence found",
-				   mlieseqlen,
-				   sizeof(struct ie_header) + WLAN_MAX_IE_LEN);
-			return QDF_STATUS_E_FAILURE;
-		}
-
-		mlieseqpayloadlen = mlieseqlen - (sizeof(struct ie_header) + 1);
-	}
-
-	mlieseqpayload_copy = qdf_mem_malloc(mlieseqpayloadlen);
-
-	if (!mlieseqpayload_copy) {
-		mlo_err_rl("Could not allocate memory for Multi-Link element payload copy");
-		return QDF_STATUS_E_NOMEM;
-	}
-
-	if (is_elemfragseq) {
-		ret = wlan_defrag_elem_fragseq(false,
-					       mlieseq,
-					       mlieseqlen,
-					       mlieseqpayload_copy,
-					       mlieseqpayloadlen,
-					       &defragpayload_len);
-		if (QDF_IS_STATUS_ERROR(ret)) {
-			qdf_mem_free(mlieseqpayload_copy);
-			return ret;
-		}
-
-		if (defragpayload_len != mlieseqpayloadlen) {
-			mlo_err_rl("Length of de-fragmented payload %zu octets is not equal to length of Multi-Link element fragment sequence payload %zu octets",
-				   defragpayload_len, mlieseqpayloadlen);
-			qdf_mem_free(mlieseqpayload_copy);
-			return QDF_STATUS_E_FAILURE;
-		}
-	} else {
-		qdf_mem_copy(mlieseqpayload_copy,
-			     mlieseq + sizeof(struct ie_header) + 1,
-			     mlieseqpayloadlen);
-	}
-
-	linkinfo = NULL;
-	linkinfo_len = 0;
-	ret = util_parse_prv_multi_link_ctrl(mlieseqpayload_copy,
-					     mlieseqpayloadlen,
-					     &linkinfo,
-					     &linkinfo_len);
-	if (QDF_IS_STATUS_ERROR(ret)) {
-		qdf_mem_free(mlieseqpayload_copy);
-		return ret;
-	}
-
-	/* In case Link Info is absent, the number of links will remain
-	 * zero.
-	 */
-	if (!linkinfo) {
-		mlo_debug("No link info present");
-		qdf_mem_free(mlieseqpayload_copy);
-		return QDF_STATUS_SUCCESS;
-	}
-
-	ret = util_parse_probereq_info_from_linkinfo(linkinfo,
-						     linkinfo_len,
-						     probereq_info);
-
-	if (QDF_IS_STATUS_ERROR(ret)) {
-		qdf_mem_free(mlieseqpayload_copy);
-		return ret;
-	}
-
-	qdf_mem_free(mlieseqpayload_copy);
-
-	return QDF_STATUS_SUCCESS;
-}
-
-QDF_STATUS
-util_get_prvmlie_mldid(uint8_t *mlieseq, qdf_size_t mlieseqlen,
-		       bool *mldidfound, uint8_t *mldid)
-{
-	struct wlan_ie_multilink *mlie_fixed;
-	enum wlan_ml_variant variant;
-	uint16_t mlcontrol;
-	uint16_t presencebitmap;
-	uint8_t *commoninfo;
-	qdf_size_t commoninfolen;
-
-	if (!mlieseq || !mlieseqlen || !mldidfound || !mldid)
-		return QDF_STATUS_E_NULL_VALUE;
-
-	*mldidfound = false;
-	*mldid = 0;
-
-	if (mlieseqlen < sizeof(struct wlan_ie_multilink))
-		return QDF_STATUS_E_INVAL;
-
-	mlie_fixed = (struct wlan_ie_multilink *)mlieseq;
-
-	if (mlie_fixed->elem_id != WLAN_ELEMID_EXTN_ELEM ||
-	    mlie_fixed->elem_id_ext != WLAN_EXTN_ELEMID_MULTI_LINK)
-		return QDF_STATUS_E_INVAL;
-
-	mlcontrol = qdf_le16_to_cpu(mlie_fixed->mlcontrol);
-
-	variant = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_TYPE_IDX,
-			       WLAN_ML_CTRL_TYPE_BITS);
-
-	if (variant != WLAN_ML_VARIANT_PROBEREQ)
-		return QDF_STATUS_E_NOSUPPORT;
-
-	presencebitmap = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_PBM_IDX,
-				      WLAN_ML_CTRL_PBM_BITS);
-
-	commoninfo = mlieseq + sizeof(struct wlan_ie_multilink);
-	commoninfolen = WLAN_ML_PRV_CINFO_LENGTH_SIZE;
-
-	if (presencebitmap & WLAN_ML_PRV_CTRL_PBM_MLDID_P) {
-		if ((sizeof(struct wlan_ie_multilink) + commoninfolen +
-		     WLAN_ML_PRV_CINFO_MLDID_SIZE) >
-		    mlieseqlen)
-			return QDF_STATUS_E_PROTO;
-
-		*mldid = *((uint8_t *)(commoninfo + commoninfolen));
-		commoninfolen += WLAN_ML_PRV_CINFO_MLDID_SIZE;
-
-		*mldidfound = true;
-	}
-
-	return QDF_STATUS_SUCCESS;
-}
-
-QDF_STATUS util_get_rvmlie_mldmacaddr(uint8_t *mlieseq, qdf_size_t mlieseqlen,
-				      struct qdf_mac_addr *mldmacaddr,
-				      bool *is_mldmacaddr_found)
-{
-	struct wlan_ie_multilink *mlie_fixed;
-	enum wlan_ml_variant variant;
-	uint16_t mlcontrol;
-	uint16_t presencebitmap;
-	qdf_size_t rv_cinfo_len;
-
-	if (!mlieseq || !mlieseqlen || !mldmacaddr || !is_mldmacaddr_found)
-		return QDF_STATUS_E_NULL_VALUE;
-
-	*is_mldmacaddr_found = false;
-	qdf_mem_zero(mldmacaddr, sizeof(*mldmacaddr));
-
-	if (mlieseqlen < sizeof(struct wlan_ie_multilink))
-		return QDF_STATUS_E_INVAL;
-
-	mlie_fixed = (struct wlan_ie_multilink *)mlieseq;
-
-	if (mlie_fixed->elem_id != WLAN_ELEMID_EXTN_ELEM ||
-	    mlie_fixed->elem_id_ext != WLAN_EXTN_ELEMID_MULTI_LINK)
-		return QDF_STATUS_E_INVAL;
-
-	mlcontrol = qdf_le16_to_cpu(mlie_fixed->mlcontrol);
-
-	variant = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_TYPE_IDX,
-			       WLAN_ML_CTRL_TYPE_BITS);
-
-	if (variant != WLAN_ML_VARIANT_RECONFIG)
-		return QDF_STATUS_E_INVAL;
-
-	/* ML Reconfig Common Info Length field present */
-	if ((sizeof(struct wlan_ie_multilink) + WLAN_ML_RV_CINFO_LENGTH_SIZE) >
-	    mlieseqlen)
-		return QDF_STATUS_E_PROTO;
-
-	rv_cinfo_len = *(mlieseq + sizeof(struct wlan_ie_multilink));
-
-	presencebitmap = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_PBM_IDX,
-				      WLAN_ML_CTRL_PBM_BITS);
-
-	/* Check if MLD mac address is present */
-	if (presencebitmap & WLAN_ML_RV_CTRL_PBM_MLDMACADDR_P) {
-		/* Check if the value indicated in the Common Info Length
-		 * subfield is sufficient to access the MLD MAC address.
-		 */
-		if (rv_cinfo_len < (WLAN_ML_RV_CINFO_LENGTH_SIZE +
-				    QDF_MAC_ADDR_SIZE))
-			return QDF_STATUS_E_PROTO;
-
-		if ((sizeof(struct wlan_ie_multilink) +
-		     WLAN_ML_RV_CINFO_LENGTH_SIZE + QDF_MAC_ADDR_SIZE) >
-			mlieseqlen)
-			return QDF_STATUS_E_PROTO;
-
-		qdf_mem_copy(mldmacaddr->bytes,
-			     mlieseq + sizeof(struct wlan_ie_multilink) +
-			     WLAN_ML_RV_CINFO_LENGTH_SIZE,
-			     QDF_MAC_ADDR_SIZE);
-		*is_mldmacaddr_found = true;
-	}
-
-	return QDF_STATUS_SUCCESS;
-}
-
-static QDF_STATUS
-util_parse_rv_multi_link_ctrl(uint8_t *mlieseqpayload,
-			      qdf_size_t mlieseqpayloadlen,
-			      uint8_t **link_info,
-			      qdf_size_t *link_info_len)
-{
-	qdf_size_t parsed_payload_len, rv_cinfo_len;
-	uint16_t mlcontrol;
-	uint16_t presence_bm;
-
-	/* This helper returns the location(s) and length(s) of (sub)field(s)
-	 * inferable after parsing the Multi Link element Control field. These
-	 * location(s) and length(s) is/are in reference to the payload section
-	 * of the Multi Link element (after defragmentation, if applicable).
-	 * Here, the payload is the point after the element ID extension of the
-	 * Multi Link element, and includes the payloads of all subsequent
-	 * fragments (if any) but not the headers of those fragments.
-	 *
-	 * Currently, the helper returns the location and length of the Link
-	 * Info field in the Multi Link element sequence. Other (sub)field(s)
-	 * can be added later as required.
-	 */
-	if (!mlieseqpayload) {
-		mlo_err("ML seq payload pointer is NULL");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	if (!mlieseqpayloadlen) {
-		mlo_err("ML seq payload len is 0");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	if (mlieseqpayloadlen < WLAN_ML_CTRL_SIZE) {
-		mlo_err_rl("ML seq payload len %zu < ML Control size %u",
-			   mlieseqpayloadlen, WLAN_ML_CTRL_SIZE);
-		return QDF_STATUS_E_PROTO;
-	}
-
-	parsed_payload_len = 0;
-
-	qdf_mem_copy(&mlcontrol, mlieseqpayload, WLAN_ML_CTRL_SIZE);
-	mlcontrol = qdf_le16_to_cpu(mlcontrol);
-	parsed_payload_len += WLAN_ML_CTRL_SIZE;
-
-	if (mlieseqpayloadlen <
-			(parsed_payload_len + WLAN_ML_RV_CINFO_LENGTH_SIZE)) {
-		mlo_err_rl("ML rv seq payload len %zu insufficient for common info length size %u after parsed payload len %zu.",
-			   mlieseqpayloadlen,
-			   WLAN_ML_RV_CINFO_LENGTH_SIZE,
-			   parsed_payload_len);
-		return QDF_STATUS_E_PROTO;
-	}
-
-	rv_cinfo_len = *(mlieseqpayload + parsed_payload_len);
-	parsed_payload_len += WLAN_ML_RV_CINFO_LENGTH_SIZE;
-
-	presence_bm = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_PBM_IDX,
-				   WLAN_ML_CTRL_PBM_BITS);
-
-	/* Check if MLD MAC address is present */
-	if (presence_bm & WLAN_ML_RV_CTRL_PBM_MLDMACADDR_P) {
-		/* Check if the value indicated in the Common Info Length
-		 * subfield is sufficient to access the MLD MAC address.
-		 * Note: In D3.0, MLD MAC address will not be present
-		 * in ML Reconfig IE. But for code completeness, we
-		 * should have below code to sanity check.
-		 */
-		if (rv_cinfo_len < (WLAN_ML_RV_CINFO_LENGTH_SIZE +
-				    QDF_MAC_ADDR_SIZE)) {
-			mlo_err_rl("ML rv Common Info Length %zu insufficient to access MLD MAC addr size %u.",
-				   rv_cinfo_len,
-				   QDF_MAC_ADDR_SIZE);
-			return QDF_STATUS_E_PROTO;
-		}
-
-		if (mlieseqpayloadlen <
-				(parsed_payload_len +
-				 QDF_MAC_ADDR_SIZE)) {
-			mlo_err_rl("ML seq payload len %zu insufficient for MLD MAC size %u after parsed payload len %zu.",
-				   mlieseqpayloadlen,
-				   QDF_MAC_ADDR_SIZE,
-				   parsed_payload_len);
-			return QDF_STATUS_E_PROTO;
-		}
-
-		parsed_payload_len += QDF_MAC_ADDR_SIZE;
-	}
-
-	/* At present, we only handle MAC address field in common info field.
-	 * To be compatible with future spec updating, if new items are added
-	 * to common info, below log will highlight the spec change.
-	 */
-	if (rv_cinfo_len != (parsed_payload_len - WLAN_ML_CTRL_SIZE))
-		mlo_debug_rl("ML rv seq common info len %zu doesn't match with expected common info len %zu",
-			     rv_cinfo_len,
-			     parsed_payload_len - WLAN_ML_CTRL_SIZE);
-
-	if (mlieseqpayloadlen < (WLAN_ML_CTRL_SIZE + rv_cinfo_len)) {
-		mlo_err_rl("ML seq payload len %zu insufficient for rv link info after parsed mutli-link control %u and indicated Common Info length %zu",
-			   mlieseqpayloadlen,
-			   WLAN_ML_CTRL_SIZE,
-			   rv_cinfo_len);
-		return QDF_STATUS_E_PROTO;
-	}
-	/* Update parsed_payload_len to reflect the actual bytes in common info
-	 * field to be compatible with future spec updating.
-	 */
-	parsed_payload_len = WLAN_ML_CTRL_SIZE + rv_cinfo_len;
-
-	if (link_info_len) {
-		*link_info_len = mlieseqpayloadlen - parsed_payload_len;
-		mlo_debug("link_info_len:%zu, parsed_payload_len:%zu, rv_cinfo_len %zu ",
-			  *link_info_len, parsed_payload_len, rv_cinfo_len);
-	}
-
-	if (mlieseqpayloadlen == parsed_payload_len) {
-		mlo_debug("No Link Info field present");
-		if (link_info)
-			*link_info = NULL;
-
-		return QDF_STATUS_SUCCESS;
-	}
-
-	if (link_info)
-		*link_info = mlieseqpayload + parsed_payload_len;
-
-	return QDF_STATUS_SUCCESS;
-}
-
-static QDF_STATUS
-util_parse_rvmlie_perstaprofile_stactrl(uint8_t *subelempayload,
-					qdf_size_t subelempayloadlen,
-					uint8_t *linkid,
-					bool *is_macaddr_valid,
-					struct qdf_mac_addr *macaddr,
-					bool *is_ap_removal_timer_valid,
-					uint16_t *ap_removal_timer)
-{
-	qdf_size_t parsed_payload_len = 0, sta_info_len;
-	qdf_size_t parsed_sta_info_len;
-	uint16_t stacontrol;
-	uint8_t completeprofile;
-
-	/* This helper returns the location(s) and where required, the length(s)
-	 * of (sub)field(s) inferable after parsing the STA Control field in the
-	 * per-STA profile subelement. These location(s) and length(s) is/are in
-	 * reference to the payload section of the per-STA profile subelement
-	 * (after defragmentation, if applicable).  Here, the payload is the
-	 * point after the subelement length in the subelement, and includes the
-	 * payloads of all subsequent fragments (if any) but not the headers of
-	 * those fragments.
-	 *
-	 * Currently, the helper returns the link ID, MAC address, AP removal
-	 * timer and STA profile. More (sub)fields can be added when required.
-	 */
-	if (!subelempayload) {
-		mlo_err("Pointer to subelement payload is NULL");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	if (!subelempayloadlen) {
-		mlo_err("Length of subelement payload is zero");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	if (subelempayloadlen < WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_SIZE) {
-		mlo_err_rl("Subelement payload length %zu octets is smaller than STA control field of per-STA profile subelement %u octets",
-			   subelempayloadlen,
-			   WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_SIZE);
-		return QDF_STATUS_E_PROTO;
-	}
-
-	parsed_payload_len = 0;
-	qdf_mem_copy(&stacontrol,
-		     subelempayload,
-		     WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_SIZE);
-
-	stacontrol = qdf_le16_to_cpu(stacontrol);
-	parsed_payload_len += WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_SIZE;
-
-	if (linkid)
-		*linkid = QDF_GET_BITS(stacontrol,
-				WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_LINKID_IDX,
-				WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_LINKID_BITS);
-
-	/* Check if this a complete profile */
-	completeprofile = QDF_GET_BITS(stacontrol,
-				WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_CMPLTPROF_IDX,
-				WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_CMPLTPROF_BITS);
-
-	if (is_macaddr_valid)
-		*is_macaddr_valid = false;
-	if (subelempayloadlen < parsed_payload_len +
-		WLAN_ML_RV_LINFO_PERSTAPROF_STAINFO_LENGTH_SIZE) {
-		mlo_err_rl("Length of subelement payload %zu octets not sufficient for sta info length of size %u octets after parsed payload length of %zu octets.",
-			   subelempayloadlen, WLAN_ML_RV_LINFO_PERSTAPROF_STAINFO_LENGTH_SIZE,
-			   parsed_payload_len);
-		return QDF_STATUS_E_PROTO;
-	}
-
-	sta_info_len = *(subelempayload + parsed_payload_len);
-	parsed_payload_len += WLAN_ML_RV_LINFO_PERSTAPROF_STAINFO_LENGTH_SIZE;
-	parsed_sta_info_len = WLAN_ML_RV_LINFO_PERSTAPROF_STAINFO_LENGTH_SIZE;
-
-	/* Check STA MAC address present bit */
-	if (QDF_GET_BITS(stacontrol,
-			 WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_STAMACADDRP_IDX,
-			 WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_STAMACADDRP_BITS)) {
-		if (sta_info_len < (parsed_sta_info_len + QDF_MAC_ADDR_SIZE)) {
-			mlo_err_rl("Length of sta info len %zu octets not sufficient to contain MAC address of size %u octets after parsed sta info length of %zu octets.",
-				   sta_info_len, QDF_MAC_ADDR_SIZE,
-				   parsed_sta_info_len);
-			return QDF_STATUS_E_PROTO;
-		}
-
-		if (subelempayloadlen <
-				(parsed_payload_len + QDF_MAC_ADDR_SIZE)) {
-			mlo_err_rl("Length of subelement payload %zu octets not sufficient to contain MAC address of size %u octets after parsed payload length of %zu octets.",
-				   subelempayloadlen, QDF_MAC_ADDR_SIZE,
-				   parsed_payload_len);
-			return QDF_STATUS_E_PROTO;
-		}
-
-		if (macaddr) {
-			qdf_mem_copy(macaddr->bytes,
-				     subelempayload + parsed_payload_len,
-				     QDF_MAC_ADDR_SIZE);
-			mlo_nofl_debug("Copied MAC address: " QDF_MAC_ADDR_FMT,
-				       QDF_MAC_ADDR_REF(macaddr->bytes));
-
-			if (is_macaddr_valid)
-				*is_macaddr_valid = true;
-		}
-
-		parsed_payload_len += QDF_MAC_ADDR_SIZE;
-		parsed_sta_info_len += QDF_MAC_ADDR_SIZE;
-	}
-
-	/* Check AP Removal timer present bit */
-	if (QDF_GET_BITS(stacontrol,
-			 WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_APREMOVALTIMERP_IDX,
-			 WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_APREMOVALTIMERP_BITS)) {
-		if (sta_info_len <
-				(parsed_sta_info_len +
-				 WLAN_ML_RV_LINFO_PERSTAPROF_STAINFO_APREMOVALTIMER_SIZE)) {
-			mlo_err_rl("Length of sta info len %zu octets not sufficient to contain AP removal timer of size %u octets after parsed sta info length of %zu octets.",
-				   sta_info_len, WLAN_ML_RV_LINFO_PERSTAPROF_STAINFO_APREMOVALTIMER_SIZE,
-				   parsed_sta_info_len);
-			return QDF_STATUS_E_PROTO;
-		}
-
-		if (subelempayloadlen <
-				(parsed_payload_len +
-				 WLAN_ML_RV_LINFO_PERSTAPROF_STAINFO_APREMOVALTIMER_SIZE)) {
-			mlo_err_rl("Length of subelement payload %zu octets not sufficient to contain AP removal timer of size %u octets after parsed payload length of %zu octets.",
-				   subelempayloadlen,
-				   WLAN_ML_RV_LINFO_PERSTAPROF_STAINFO_APREMOVALTIMER_SIZE,
-				   parsed_payload_len);
-			return QDF_STATUS_E_PROTO;
-		}
-
-		if (ap_removal_timer) {
-			qdf_mem_copy(ap_removal_timer,
-				     subelempayload + parsed_payload_len,
-				     WLAN_ML_RV_LINFO_PERSTAPROF_STAINFO_APREMOVALTIMER_SIZE);
-
-			if (is_ap_removal_timer_valid)
-				*is_ap_removal_timer_valid = true;
-		}
-
-		parsed_payload_len +=
-			WLAN_ML_RV_LINFO_PERSTAPROF_STAINFO_APREMOVALTIMER_SIZE;
-		parsed_sta_info_len += WLAN_ML_RV_LINFO_PERSTAPROF_STAINFO_APREMOVALTIMER_SIZE;
-	}
-	/* At present, we only handle link MAC address field and ap removal
-	 * timer tbtt field parsing. To be compatible with future spec
-	 * updating, if new items are added to sta info, below log will
-	 * highlight the spec change.
-	 */
-	if (sta_info_len != (parsed_payload_len -
-			     WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_SIZE))
-		mlo_debug_rl("Length of sta info len %zu octets not match parsed payload length of %zu octets.",
-			     sta_info_len,
-			     parsed_payload_len -
-			     WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_SIZE);
-
-	return QDF_STATUS_SUCCESS;
-}
-
-static QDF_STATUS
-util_parse_rv_info_from_linkinfo(uint8_t *linkinfo,
-				 qdf_size_t linkinfo_len,
-				 struct ml_rv_info *reconfig_info)
-{
-	uint8_t linkid;
-	uint8_t *linkinfo_currpos;
-	qdf_size_t linkinfo_remlen;
-	bool is_subelemfragseq;
-	uint8_t subelemid;
-	qdf_size_t subelemseqtotallen;
-	qdf_size_t subelemseqpayloadlen;
-	qdf_size_t defragpayload_len;
-	QDF_STATUS ret;
-	struct qdf_mac_addr mac_addr;
-	bool is_macaddr_valid;
-	bool is_ap_removal_timer_valid;
-	uint16_t ap_removal_timer;
-
-	/* This helper function parses probe request info from the per-STA prof
-	 * present (if any) in the Link Info field in the payload of a Multi
-	 * Link element (after defragmentation if required). The caller should
-	 * pass a copy of the payload so that inline defragmentation of
-	 * subelements can be carried out if required. The subelement
-	 * defragmentation (if applicable) in this Control Path helper is
-	 * required for maintainability, accuracy and eliminating current and
-	 * future per-field-access multi-level fragment boundary checks and
-	 * adjustments, given the complex format of Multi Link elements. It is
-	 * also most likely to be required mainly at the client side.
-	 * Fragmentation is currently unlikely to be required for subelements
-	 * in Reconfiguration variant Multi-Link elements, but it should be
-	 * handled in order to be future ready.
-	 */
-	if (!linkinfo) {
-		mlo_err("linkinfo is NULL");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	if (!linkinfo_len) {
-		mlo_err("linkinfo_len is zero");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	if (!reconfig_info) {
-		mlo_err("ML reconfig info is NULL");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	reconfig_info->num_links = 0;
-	linkinfo_currpos = linkinfo;
-	linkinfo_remlen = linkinfo_len;
-
-	while (linkinfo_remlen) {
-		if (linkinfo_remlen <  sizeof(struct subelem_header)) {
-			mlo_err_rl("Remaining length in link info %zu octets is smaller than subelement header length %zu octets",
-				   linkinfo_remlen,
-				   sizeof(struct subelem_header));
-			return QDF_STATUS_E_PROTO;
-		}
-
-		subelemid = linkinfo_currpos[ID_POS];
-		is_subelemfragseq = false;
-		subelemseqtotallen = 0;
-		subelemseqpayloadlen = 0;
-
-		ret = wlan_get_subelem_fragseq_info(WLAN_ML_LINFO_SUBELEMID_FRAGMENT,
-						    linkinfo_currpos,
-						    linkinfo_remlen,
-						    &is_subelemfragseq,
-						    &subelemseqtotallen,
-						    &subelemseqpayloadlen);
-		if (QDF_IS_STATUS_ERROR(ret))
-			return ret;
-
-		if (qdf_unlikely(is_subelemfragseq)) {
-			if (!subelemseqpayloadlen) {
-				mlo_err_rl("Subelement fragment sequence payload is reported as 0, investigate");
-				return QDF_STATUS_E_FAILURE;
-			}
-
-			mlo_debug("Subelement fragment sequence found with payload len %zu",
-				  subelemseqpayloadlen);
-
-			ret = wlan_defrag_subelem_fragseq(true,
-							  WLAN_ML_LINFO_SUBELEMID_FRAGMENT,
-							  linkinfo_currpos,
-							  linkinfo_remlen,
-							  NULL,
-							  0,
-							  &defragpayload_len);
-
-			if (QDF_IS_STATUS_ERROR(ret))
-				return ret;
-
-			if (defragpayload_len != subelemseqpayloadlen) {
-				mlo_err_rl("Length of defragmented payload %zu octets is not equal to length of subelement fragment sequence payload %zu octets",
-					   defragpayload_len,
-					   subelemseqpayloadlen);
-				return QDF_STATUS_E_FAILURE;
-			}
-
-			/* Adjust linkinfo_remlen to reflect removal of all
-			 * subelement headers except the header of the lead
-			 * subelement.
-			 */
-			linkinfo_remlen -= (subelemseqtotallen -
-					    subelemseqpayloadlen -
-					    sizeof(struct subelem_header));
-		} else {
-			if (linkinfo_remlen <
-				(sizeof(struct subelem_header) +
-				linkinfo_currpos[TAG_LEN_POS])) {
-				mlo_err_rl("Remaining length in link info %zu octets is smaller than total size of current subelement %zu octets",
-					   linkinfo_remlen,
-					   sizeof(struct subelem_header) +
-					   linkinfo_currpos[TAG_LEN_POS]);
-				return QDF_STATUS_E_PROTO;
-			}
-
-			subelemseqpayloadlen = linkinfo_currpos[TAG_LEN_POS];
-		}
-
-		if (subelemid == WLAN_ML_LINFO_SUBELEMID_PERSTAPROFILE) {
-			struct ml_rv_partner_link_info *link_info;
-			is_macaddr_valid = false;
-			is_ap_removal_timer_valid = false;
-			ret = util_parse_rvmlie_perstaprofile_stactrl(linkinfo_currpos +
-								      sizeof(struct subelem_header),
-								      subelemseqpayloadlen,
-								      &linkid,
-								      &is_macaddr_valid,
-								      &mac_addr,
-								      &is_ap_removal_timer_valid,
-								      &ap_removal_timer);
-			if (QDF_IS_STATUS_ERROR(ret))
-				return ret;
-			if (reconfig_info->num_links >=
-						WLAN_UMAC_MLO_MAX_VDEVS) {
-				mlo_err("num_link %d invalid",
-					reconfig_info->num_links);
-				return QDF_STATUS_E_INVAL;
-			}
-			link_info =
-			&reconfig_info->link_info[reconfig_info->num_links];
-			link_info->link_id = linkid;
-			link_info->is_ap_removal_timer_p = is_ap_removal_timer_valid;
-			if (is_macaddr_valid)
-				qdf_copy_macaddr(&link_info->link_mac_addr,
-						 &mac_addr);
-
-			if (is_ap_removal_timer_valid)
-				link_info->ap_removal_timer = ap_removal_timer;
-			else
-				mlo_warn_rl("AP removal timer not found in STA Info field of per-STA profile with link ID %u",
-					    linkid);
-
-			mlo_debug("Per-STA Profile Link ID: %u AP removal timer present: %d AP removal timer: %u",
-				  link_info->link_id,
-				  link_info->is_ap_removal_timer_p,
-				  link_info->ap_removal_timer);
-
-			reconfig_info->num_links++;
-		}
-
-		linkinfo_remlen -= (sizeof(struct subelem_header) +
-				    subelemseqpayloadlen);
-		linkinfo_currpos += (sizeof(struct subelem_header) +
-				     subelemseqpayloadlen);
-	}
-
-	mlo_debug("Number of ML probe request links found=%u",
-		  reconfig_info->num_links);
-
-	return QDF_STATUS_SUCCESS;
-}
-
-QDF_STATUS util_get_rvmlie_persta_link_info(uint8_t *mlieseq,
-					    qdf_size_t mlieseqlen,
-					    struct ml_rv_info *reconfig_info)
-{
-	struct wlan_ie_multilink *mlie_fixed;
-	uint16_t mlcontrol;
-	enum wlan_ml_variant variant;
-	uint8_t *linkinfo;
-	qdf_size_t linkinfo_len;
-	struct ml_rv_info rinfo = {0};
-	qdf_size_t mlieseqpayloadlen;
-	uint8_t *mlieseqpayload_copy;
-	bool is_elemfragseq;
-	qdf_size_t defragpayload_len;
-	qdf_size_t tmplen;
-	QDF_STATUS ret;
-
-	if (!mlieseq) {
-		mlo_err("Pointer to Multi-Link element sequence is NULL");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	if (!mlieseqlen) {
-		mlo_err("Length of Multi-Link element sequence is zero");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	if (!reconfig_info) {
-		mlo_err("reconfig_info is NULL");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	reconfig_info->num_links = 0;
-
-	if (mlieseqlen < sizeof(struct wlan_ie_multilink)) {
-		mlo_err_rl("Multi-Link element sequence length %zu octets is smaller than required for the fixed portion of Multi-Link element (%zu octets)",
-			   mlieseqlen, sizeof(struct wlan_ie_multilink));
-		return QDF_STATUS_E_INVAL;
-	}
-
-	mlie_fixed = (struct wlan_ie_multilink *)mlieseq;
-	if (mlie_fixed->elem_id != WLAN_ELEMID_EXTN_ELEM ||
-	    mlie_fixed->elem_id_ext != WLAN_EXTN_ELEMID_MULTI_LINK) {
-		mlo_err("The element is not a Multi-Link element");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	mlcontrol = qdf_le16_to_cpu(mlie_fixed->mlcontrol);
-
-	variant = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_TYPE_IDX,
-			       WLAN_ML_CTRL_TYPE_BITS);
-
-	if (variant != WLAN_ML_VARIANT_RECONFIG) {
-		mlo_err("The variant value %u does not correspond to Reconfig Variant value %u",
-			variant, WLAN_ML_VARIANT_RECONFIG);
-		return QDF_STATUS_E_INVAL;
-	}
-
-	mlieseqpayloadlen = 0;
-	tmplen = 0;
-	is_elemfragseq = false;
-
-	ret = wlan_get_elem_fragseq_info(mlieseq,
-					 mlieseqlen,
-					 &is_elemfragseq,
-					 &tmplen,
-					 &mlieseqpayloadlen);
-
-	if (QDF_IS_STATUS_ERROR(ret))
-		return ret;
-
-	if (qdf_unlikely(is_elemfragseq)) {
-		if (tmplen != mlieseqlen) {
-			mlo_err_rl("Mismatch in values of element fragment sequence total length. Val per frag info determination: %zu octets, val passed as arg: %zu octets",
-				   tmplen, mlieseqlen);
-			return QDF_STATUS_E_INVAL;
-		}
-
-		if (!mlieseqpayloadlen) {
-			mlo_err_rl("Multi-Link element fragment sequence payload is reported as 0, investigate");
-			return QDF_STATUS_E_FAILURE;
-		}
-
-		mlo_debug("Multi-Link element fragment sequence found with payload len %zu",
-			  mlieseqpayloadlen);
-	} else {
-		if (mlieseqlen > (sizeof(struct ie_header) + WLAN_MAX_IE_LEN)) {
-			mlo_err_rl("Expected presence of valid fragment sequence since Multi-Link element sequence length %zu octets is larger than frag threshold of %zu octets, however no valid fragment sequence found",
-				   mlieseqlen,
-				   sizeof(struct ie_header) + WLAN_MAX_IE_LEN);
-			return QDF_STATUS_E_FAILURE;
-		}
-
-		mlieseqpayloadlen = mlieseqlen - (sizeof(struct ie_header) + 1);
-	}
-
-	mlieseqpayload_copy = qdf_mem_malloc(mlieseqpayloadlen);
-
-	if (!mlieseqpayload_copy) {
-		mlo_err_rl("Could not allocate memory for Multi-Link element payload copy");
-		return QDF_STATUS_E_NOMEM;
-	}
-
-	if (qdf_unlikely(is_elemfragseq)) {
-		ret = wlan_defrag_elem_fragseq(false,
-					       mlieseq,
-					       mlieseqlen,
-					       mlieseqpayload_copy,
-					       mlieseqpayloadlen,
-					       &defragpayload_len);
-		if (QDF_IS_STATUS_ERROR(ret)) {
-			qdf_mem_free(mlieseqpayload_copy);
-			return ret;
-		}
-
-		if (defragpayload_len != mlieseqpayloadlen) {
-			mlo_err_rl("Length of de-fragmented payload %zu octets is not equal to length of Multi-Link element fragment sequence payload %zu octets",
-				   defragpayload_len, mlieseqpayloadlen);
-			qdf_mem_free(mlieseqpayload_copy);
-			return QDF_STATUS_E_FAILURE;
-		}
-	} else {
-		qdf_mem_copy(mlieseqpayload_copy,
-			     mlieseq + sizeof(struct ie_header) + 1,
-			     mlieseqpayloadlen);
-	}
-
-	linkinfo = NULL;
-	linkinfo_len = 0;
-
-	ret = util_parse_rv_multi_link_ctrl(mlieseqpayload_copy,
-					    mlieseqpayloadlen,
-					    &linkinfo,
-					    &linkinfo_len);
-	if (QDF_IS_STATUS_ERROR(ret)) {
-		qdf_mem_free(mlieseqpayload_copy);
-		return ret;
-	}
-
-	/* In case Link Info is absent, the number of links will remain
-	 * zero.
-	 */
-	if (!linkinfo) {
-		qdf_mem_free(mlieseqpayload_copy);
-		return QDF_STATUS_SUCCESS;
-	}
-
-	ret = util_parse_rv_info_from_linkinfo(linkinfo, linkinfo_len, &rinfo);
-	if (QDF_IS_STATUS_ERROR(ret)) {
-		qdf_mem_free(mlieseqpayload_copy);
-		return ret;
-	}
-
-	qdf_mem_copy(reconfig_info, &rinfo, sizeof(*reconfig_info));
-	qdf_mem_free(mlieseqpayload_copy);
-
-	return QDF_STATUS_SUCCESS;
-}
-
-static QDF_STATUS
-util_parse_pa_multi_link_ctrl(uint8_t *mlieseqpayload,
-			      qdf_size_t mlieseqpayloadlen,
-			      uint8_t **link_info,
-			      qdf_size_t *link_info_len)
-{
-	qdf_size_t parsed_payload_len;
-
-	/* This helper returns the location(s) and length(s) of (sub)field(s)
-	 * inferable after parsing the Multi Link element Control field. These
-	 * location(s) and length(s) is/are in reference to the payload section
-	 * of the Multi Link element (after defragmentation, if applicable).
-	 * Here, the payload is the point after the element ID extension of the
-	 * Multi Link element, and includes the payloads of all subsequent
-	 * fragments (if any) but not the headers of those fragments.
-	 *
-	 * Currently, the helper returns the location and length of the Link
-	 * Info field in the Multi Link element sequence. Other (sub)field(s)
-	 * can be added later as required.
-	 */
-	if (!mlieseqpayload) {
-		mlo_err("ML seq payload pointer is NULL");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	if (!mlieseqpayloadlen) {
-		mlo_err("ML seq payload len is 0");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	if (mlieseqpayloadlen < WLAN_ML_CTRL_SIZE) {
-		mlo_err_rl("ML seq payload len %zu < ML Control size %u",
-			   mlieseqpayloadlen, WLAN_ML_CTRL_SIZE);
-		return QDF_STATUS_E_PROTO;
-	}
-
-	parsed_payload_len = 0;
-
-	parsed_payload_len += WLAN_ML_CTRL_SIZE;
-
-	if (mlieseqpayloadlen <
-		(parsed_payload_len +
-		WLAN_ML_PAV_CINFO_LENGTH_MAX)) {
-		mlo_err_rl("ML seq payload len %zu insufficient for MLD cmn size %u after parsed payload len %zu.",
-			   mlieseqpayloadlen,
-			   WLAN_ML_PAV_CINFO_LENGTH_MAX,
-			   parsed_payload_len);
-		return QDF_STATUS_E_PROTO;
-	}
-
-	parsed_payload_len += QDF_MAC_ADDR_SIZE + WLAN_ML_PAV_CINFO_LENGTH_SIZE;
-
-	if (link_info_len) {
-		*link_info_len = mlieseqpayloadlen - parsed_payload_len;
-		mlo_debug("link_info_len:%zu, parsed_payload_len:%zu",
-			  *link_info_len, parsed_payload_len);
-	}
-
-	if (mlieseqpayloadlen == parsed_payload_len) {
-		mlo_debug("No Link Info field present");
-		if (link_info)
-			*link_info = NULL;
-
-		return QDF_STATUS_SUCCESS;
-	}
-
-	if (link_info)
-		*link_info = mlieseqpayload + parsed_payload_len;
-
-	return QDF_STATUS_SUCCESS;
-}
-
-static QDF_STATUS
-util_parse_pamlie_perstaprofile_stactrl(uint8_t *subelempayload,
-					qdf_size_t subelempayloadlen,
-					struct ml_pa_partner_link_info *pa_link_info)
-{
-	qdf_size_t parsed_payload_len = 0;
-	uint16_t stacontrol;
-	struct ie_header *ie;
-	struct extn_ie_header *extn_ie;
-
-	/* This helper returns the location(s) and where required, the length(s)
-	 * of (sub)field(s) inferable after parsing the STA Control field in the
-	 * per-STA profile subelement. These location(s) and length(s) is/are in
-	 * reference to the payload section of the per-STA profile subelement
-	 * (after defragmentation, if applicable).  Here, the payload is the
-	 * point after the subelement length in the subelement, and includes the
-	 * payloads of all subsequent fragments (if any) but not the headers of
-	 * those fragments.
-	 *
-	 * Currently, the helper returns the priority access link information
-	 * for all parner links.
-	 */
-	if (!subelempayload) {
-		mlo_err("Pointer to subelement payload is NULL");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	if (!subelempayloadlen) {
-		mlo_err("Length of subelement payload is zero");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	if (subelempayloadlen < WLAN_ML_PAV_LINFO_PERSTAPROF_STACTRL_SIZE) {
-		mlo_err_rl("Subelement payload length %zu octets is smaller than STA control field of per-STA profile subelement %u octets",
-			   subelempayloadlen,
-			   WLAN_ML_PAV_LINFO_PERSTAPROF_STACTRL_SIZE);
-		return QDF_STATUS_E_PROTO;
-	}
-
-	parsed_payload_len = 0;
-	qdf_mem_copy(&stacontrol,
-		     subelempayload,
-		     WLAN_ML_PAV_LINFO_PERSTAPROF_STACTRL_SIZE);
-
-	stacontrol = qdf_le16_to_cpu(stacontrol);
-	parsed_payload_len += WLAN_ML_PAV_LINFO_PERSTAPROF_STACTRL_SIZE;
-
-	subelempayload += WLAN_ML_PAV_LINFO_PERSTAPROF_STACTRL_SIZE;
-
-	pa_link_info->link_id =
-		QDF_GET_BITS(stacontrol,
-			     WLAN_ML_PAV_LINFO_PERSTAPROF_STACTRL_LINKID_IDX,
-			     WLAN_ML_PAV_LINFO_PERSTAPROF_STACTRL_LINKID_BITS);
-
-	pa_link_info->edca_ie_present = false;
-	pa_link_info->ven_wme_ie_present = false;
-	pa_link_info->muedca_ie_present = false;
-
-	do {
-		if (subelempayloadlen <
-			(parsed_payload_len +
-			sizeof(struct ie_header))) {
-			mlo_err_rl("Length of subelement payload %zu octets not sufficient to contain min ie length %zu after parsed payload length of %zu octets",
-				   subelempayloadlen,
-				   sizeof(struct ie_header),
-				   parsed_payload_len);
-			return QDF_STATUS_E_PROTO;
-		}
-
-		ie = (struct ie_header *)subelempayload;
-
-		if (subelempayloadlen <
-			(parsed_payload_len +
-			(sizeof(struct ie_header) + ie->ie_len))) {
-			mlo_err_rl("Length of subelement payload %zu octets not sufficient to contain ie length %zu after parsed payload length of %zu octets",
-				   subelempayloadlen,
-				   sizeof(struct ie_header) + ie->ie_len,
-				   parsed_payload_len);
-			return QDF_STATUS_E_PROTO;
-		}
-
-		switch (ie->ie_id) {
-		case WLAN_ELEMID_EDCAPARMS:
-			if (pa_link_info->ven_wme_ie_present) {
-				/* WME parameters already present
-				 * use that one instead of EDCA */
-				break;
-			}
-			if (ie->ie_len == (sizeof(struct edca_ie) -
-			    sizeof(struct ie_header))) {
-				pa_link_info->edca_ie_present = true;
-				qdf_mem_copy(&pa_link_info->edca,
-					     subelempayload,
-					     sizeof(struct edca_ie));
-			} else {
-				epcs_debug("Invalid edca length %d in PAV IE",
-					   ie->ie_len);
-			}
-			break;
-		case WLAN_ELEMID_VENDOR:
-			if (is_wme_param((uint8_t *)ie) &&
-			    (ie->ie_len == WLAN_VENDOR_WME_IE_LEN)) {
-				pa_link_info->ven_wme_ie_present = true;
-				qdf_mem_copy(&pa_link_info->ven_wme_ie_bytes,
-					     subelempayload,
-					     sizeof(WLAN_VENDOR_WME_IE_LEN +
-						    sizeof(struct ie_header)));
-				pa_link_info->edca_ie_present = false;
-			} else {
-				epcs_debug("Unrelated Venfor IE reecived ie_id %d ie_len %d",
-					   ie->ie_id,
-					   ie->ie_len);
-			}
-			break;
-		case WLAN_ELEMID_EXTN_ELEM:
-			extn_ie = (struct extn_ie_header *)ie;
-			/**
-			 * Zero IE len means there is no IE contents (EXT ID)
-			 * and so, if IE is dereferenced after IE len then it
-			 * can leads to out of bound error.
-			 * | IE ID | IE len | EXT ID |
-			 */
-			if (!extn_ie->ie_len) {
-				mlo_err_rl("extn element has zero len");
-				return QDF_STATUS_E_PROTO;
-			}
-			switch (extn_ie->ie_extn_id) {
-			case WLAN_EXTN_ELEMID_MUEDCA:
-				if (extn_ie->ie_len == WLAN_MAX_MUEDCA_IE_LEN) {
-					pa_link_info->muedca_ie_present = true;
-					qdf_mem_copy(&pa_link_info->muedca,
-						     subelempayload,
-						     sizeof(struct muedca_ie));
-				} else {
-					epcs_debug("Invalid muedca length %d in PAV IE",
-						   ie->ie_len);
-				}
-				break;
-			default:
-				epcs_debug("Unrelated Extn IE reecived ie_id %d ie_len %d extid %d IN PAV IE",
-					   ie->ie_id,
-					   ie->ie_len,
-					   extn_ie->ie_extn_id);
-				break;
-			}
-			break;
-		default:
-			epcs_debug("Unrelated IE reecived ie_id %d ie_len %d in PAV IE",
-				   ie->ie_id,
-				   ie->ie_len);
-			break;
-		}
-		subelempayload += ie->ie_len + sizeof(struct ie_header);
-		parsed_payload_len += ie->ie_len + sizeof(struct ie_header);
-	} while (parsed_payload_len < subelempayloadlen);
-
-	if (parsed_payload_len != subelempayloadlen)
-		epcs_debug("Error in processing per sta profile of PA ML IE %zu %zu",
-			   parsed_payload_len,
-			   subelempayloadlen);
-
-	epcs_debug("Link id %d presence of edca %d muedca %d wme %d",
-		   pa_link_info->link_id,
-		   pa_link_info->edca_ie_present,
-		   pa_link_info->muedca_ie_present,
-		   pa_link_info->ven_wme_ie_present);
-
-	return QDF_STATUS_SUCCESS;
-}
-
-static QDF_STATUS
-util_parse_pa_info_from_linkinfo(uint8_t *linkinfo,
-				 qdf_size_t linkinfo_len,
-				 struct ml_pa_info *pa_info)
-{
-	uint8_t *linkinfo_currpos;
-	qdf_size_t linkinfo_remlen;
-	bool is_subelemfragseq;
-	uint8_t subelemid;
-	qdf_size_t subelemseqtotallen;
-	qdf_size_t subelemseqpayloadlen;
-	qdf_size_t defragpayload_len;
-	QDF_STATUS ret;
-
-	/* This helper function parses priority access info from the per-STA
-	 * prof present (if any) in the Link Info field in the payload of a
-	 * Multi Link element (after defragmentation if required). The caller
-	 * should pass a copy of the payload so that inline defragmentation of
-	 * subelements can be carried out if required. The subelement
-	 * defragmentation (if applicable) in this Control Path helper is
-	 * required for maintainability, accuracy and eliminating current and
-	 * future per-field-access multi-level fragment boundary checks and
-	 * adjustments, given the complex format of Multi Link elements. It is
-	 * also most likely to be required mainly at the client side.
-	 * Fragmentation is currently unlikely to be required for subelements
-	 * in Reconfiguration variant Multi-Link elements, but it should be
-	 * handled in order to be future ready.
-	 */
-	if (!linkinfo) {
-		mlo_err("linkinfo is NULL");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	if (!linkinfo_len) {
-		mlo_err("linkinfo_len is zero");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	if (!pa_info) {
-		mlo_err("ML pa info is NULL");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	pa_info->num_links = 0;
-	linkinfo_currpos = linkinfo;
-	linkinfo_remlen = linkinfo_len;
-
-	while (linkinfo_remlen &&
-	       pa_info->num_links < QDF_ARRAY_SIZE(pa_info->link_info)) {
-		if (linkinfo_remlen <  sizeof(struct subelem_header)) {
-			mlo_err_rl("Remaining length in link info %zu octets is smaller than subelement header length %zu octets",
-				   linkinfo_remlen,
-				   sizeof(struct subelem_header));
-			return QDF_STATUS_E_PROTO;
-		}
-
-		subelemid = linkinfo_currpos[ID_POS];
-		is_subelemfragseq = false;
-		subelemseqtotallen = 0;
-		subelemseqpayloadlen = 0;
-
-		ret = wlan_get_subelem_fragseq_info(WLAN_ML_LINFO_SUBELEMID_FRAGMENT,
-						    linkinfo_currpos,
-						    linkinfo_remlen,
-						    &is_subelemfragseq,
-						    &subelemseqtotallen,
-						    &subelemseqpayloadlen);
-		if (QDF_IS_STATUS_ERROR(ret))
-			return ret;
-
-		if (qdf_unlikely(is_subelemfragseq)) {
-			if (!subelemseqpayloadlen) {
-				mlo_err_rl("Subelement fragment sequence payload is reported as 0, investigate");
-				return QDF_STATUS_E_FAILURE;
-			}
-
-			mlo_debug("Subelement fragment sequence found with payload len %zu",
-				  subelemseqpayloadlen);
-
-			ret = wlan_defrag_subelem_fragseq(true,
-							  WLAN_ML_LINFO_SUBELEMID_FRAGMENT,
-							  linkinfo_currpos,
-							  linkinfo_remlen,
-							  NULL,
-							  0,
-							  &defragpayload_len);
-
-			if (QDF_IS_STATUS_ERROR(ret))
-				return ret;
-
-			if (defragpayload_len != subelemseqpayloadlen) {
-				mlo_err_rl("Length of defragmented payload %zu octets is not equal to length of subelement fragment sequence payload %zu octets",
-					   defragpayload_len,
-					   subelemseqpayloadlen);
-				return QDF_STATUS_E_FAILURE;
-			}
-
-			/* Adjust linkinfo_remlen to reflect removal of all
-			 * subelement headers except the header of the lead
-			 * subelement.
-			 */
-			linkinfo_remlen -= (subelemseqtotallen -
-					    subelemseqpayloadlen -
-					    sizeof(struct subelem_header));
-		} else {
-			if (linkinfo_remlen <
-				(sizeof(struct subelem_header) +
-				linkinfo_currpos[TAG_LEN_POS])) {
-				mlo_err_rl("Remaining length in link info %zu octets is smaller than total size of current subelement %zu octets",
-					   linkinfo_remlen,
-					   sizeof(struct subelem_header) +
-					   linkinfo_currpos[TAG_LEN_POS]);
-				return QDF_STATUS_E_PROTO;
-			}
-
-			subelemseqpayloadlen = linkinfo_currpos[TAG_LEN_POS];
-		}
-
-		if (subelemid == WLAN_ML_LINFO_SUBELEMID_PERSTAPROFILE) {
-			struct ml_pa_partner_link_info *link_info =
-					&pa_info->link_info[pa_info->num_links];
-			ret = util_parse_pamlie_perstaprofile_stactrl(linkinfo_currpos +
-								      sizeof(struct subelem_header),
-								      subelemseqpayloadlen,
-								      link_info);
-			if (QDF_IS_STATUS_ERROR(ret))
-				return ret;
-		}
-
-		pa_info->num_links++;
-
-		linkinfo_remlen -= (sizeof(struct subelem_header) +
-				    subelemseqpayloadlen);
-		linkinfo_currpos += (sizeof(struct subelem_header) +
-				     subelemseqpayloadlen);
-	}
-
-	mlo_debug("Number of ML probe request links found=%u",
-		  pa_info->num_links);
-
-	return QDF_STATUS_SUCCESS;
-}
-
-QDF_STATUS
-util_get_pav_mlie_link_info(uint8_t *mlieseq,
-			    qdf_size_t mlieseqlen,
-			    struct ml_pa_info *pa_info)
-{
-	struct wlan_ie_multilink *mlie_fixed;
-	uint16_t mlcontrol;
-	enum wlan_ml_variant variant;
-	uint8_t *linkinfo;
-	qdf_size_t linkinfo_len;
-	struct ml_pa_info painfo = {0};
-	qdf_size_t mlieseqpayloadlen;
-	uint8_t *mlieseqpayload_copy;
-	bool is_elemfragseq;
-	qdf_size_t defragpayload_len;
-	qdf_size_t tmplen;
-	QDF_STATUS ret;
-
-	if (!mlieseq) {
-		mlo_err("Pointer to Multi-Link element sequence is NULL");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	if (!mlieseqlen) {
-		mlo_err("Length of Multi-Link element sequence is zero");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	if (!pa_info) {
-		mlo_err("pa_info is NULL");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	pa_info->num_links = 0;
-
-	if (mlieseqlen < sizeof(struct wlan_ie_multilink)) {
-		mlo_err_rl("Multi-Link element sequence length %zu octets is smaller than required for the fixed portion of Multi-Link element (%zu octets)",
-			   mlieseqlen, sizeof(struct wlan_ie_multilink));
-		return QDF_STATUS_E_INVAL;
-	}
-
-	mlie_fixed = (struct wlan_ie_multilink *)mlieseq;
-	if (mlie_fixed->elem_id != WLAN_ELEMID_EXTN_ELEM ||
-	    mlie_fixed->elem_id_ext != WLAN_EXTN_ELEMID_MULTI_LINK) {
-		mlo_err("The element is not a Multi-Link element");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	mlcontrol = qdf_le16_to_cpu(mlie_fixed->mlcontrol);
-
-	variant = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_TYPE_IDX,
-			       WLAN_ML_CTRL_TYPE_BITS);
-
-	if (variant != WLAN_ML_VARIANT_PRIORITYACCESS) {
-		mlo_err("The variant value %u does not correspond to priority access Variant value %u",
-			variant, WLAN_ML_VARIANT_PRIORITYACCESS);
-		return QDF_STATUS_E_INVAL;
-	}
-
-	mlieseqpayloadlen = 0;
-	tmplen = 0;
-	is_elemfragseq = false;
-
-	ret = wlan_get_elem_fragseq_info(mlieseq,
-					 mlieseqlen,
-					 &is_elemfragseq,
-					 &tmplen,
-					 &mlieseqpayloadlen);
-
-	if (QDF_IS_STATUS_ERROR(ret))
-		return ret;
-
-	if (qdf_unlikely(is_elemfragseq)) {
-		if (tmplen != mlieseqlen) {
-			mlo_err_rl("Mismatch in values of element fragment sequence total length. Val per frag info determination: %zu octets, val passed as arg: %zu octets",
-				   tmplen, mlieseqlen);
-			return QDF_STATUS_E_INVAL;
-		}
-
-		if (!mlieseqpayloadlen) {
-			mlo_err_rl("Multi-Link element fragment sequence payload is reported as 0, investigate");
-			return QDF_STATUS_E_FAILURE;
-		}
-
-		mlo_debug("Multi-Link element fragment sequence found with payload len %zu",
-			  mlieseqpayloadlen);
-	} else {
-		if (mlieseqlen > (sizeof(struct ie_header) + WLAN_MAX_IE_LEN)) {
-			mlo_err_rl("Expected presence of valid fragment sequence since Multi-Link element sequence length %zu octets is larger than frag threshold of %zu octets, however no valid fragment sequence found",
-				   mlieseqlen,
-				   sizeof(struct ie_header) + WLAN_MAX_IE_LEN);
-			return QDF_STATUS_E_FAILURE;
-		}
-
-		mlieseqpayloadlen = mlieseqlen - (sizeof(struct ie_header) + 1);
-	}
-
-	mlieseqpayload_copy = qdf_mem_malloc(mlieseqpayloadlen);
-
-	if (!mlieseqpayload_copy) {
-		mlo_err_rl("Could not allocate memory for Multi-Link element payload copy");
-		return QDF_STATUS_E_NOMEM;
-	}
-
-	if (qdf_unlikely(is_elemfragseq)) {
-		ret = wlan_defrag_elem_fragseq(false,
-					       mlieseq,
-					       mlieseqlen,
-					       mlieseqpayload_copy,
-					       mlieseqpayloadlen,
-					       &defragpayload_len);
-		if (QDF_IS_STATUS_ERROR(ret)) {
-			qdf_mem_free(mlieseqpayload_copy);
-			return ret;
-		}
-
-		if (defragpayload_len != mlieseqpayloadlen) {
-			mlo_err_rl("Length of de-fragmented payload %zu octets is not equal to length of Multi-Link element fragment sequence payload %zu octets",
-				   defragpayload_len, mlieseqpayloadlen);
-			qdf_mem_free(mlieseqpayload_copy);
-			return QDF_STATUS_E_FAILURE;
-		}
-	} else {
-		qdf_mem_copy(mlieseqpayload_copy,
-			     mlieseq + sizeof(struct ie_header) + 1,
-			     mlieseqpayloadlen);
-	}
-
-	linkinfo = NULL;
-	linkinfo_len = 0;
-
-	ret = util_parse_pa_multi_link_ctrl(mlieseqpayload_copy,
-					    mlieseqpayloadlen,
-					    &linkinfo,
-					    &linkinfo_len);
-	if (QDF_IS_STATUS_ERROR(ret)) {
-		qdf_mem_free(mlieseqpayload_copy);
-		return ret;
-	}
-
-	/* In case Link Info is absent, the number of links will remain
-	 * zero.
-	 */
-	if (!linkinfo) {
-		qdf_mem_free(mlieseqpayload_copy);
-		return QDF_STATUS_SUCCESS;
-	}
-
-	mlo_debug("Dumping hex of link info after parsing Multi-Link element control");
-	QDF_TRACE_HEX_DUMP(QDF_MODULE_ID_MLO, QDF_TRACE_LEVEL_ERROR,
-			   linkinfo, linkinfo_len);
-
-	ret = util_parse_pa_info_from_linkinfo(linkinfo, linkinfo_len, &painfo);
-	if (QDF_IS_STATUS_ERROR(ret)) {
-		qdf_mem_free(mlieseqpayload_copy);
-		return ret;
-	}
-
-	qdf_mem_copy(pa_info, &painfo, sizeof(painfo));
-	qdf_mem_free(mlieseqpayload_copy);
-
-	return QDF_STATUS_SUCCESS;
-}
-
-#endif
-
-#ifdef WLAN_FEATURE_11BE
-
-QDF_STATUS util_add_bw_ind(struct wlan_ie_bw_ind *bw_ind, uint8_t ccfs0,
-			   uint8_t ccfs1, enum phy_ch_width ch_width,
-			   uint16_t puncture_bitmap, int *bw_ind_len)
-{
-	uint8_t bw_ind_width;
-
-	if (!bw_ind) {
-		mlo_err("Pointer to bandwidth indiaction element is NULL");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	if (!bw_ind_len) {
-		mlo_err("Length of bandwidth indaication element is Zero");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	switch (ch_width) {
-	case CH_WIDTH_20MHZ:
-		bw_ind_width = IEEE80211_11BEOP_CHWIDTH_20;
-		break;
-	case CH_WIDTH_40MHZ:
-		bw_ind_width = IEEE80211_11BEOP_CHWIDTH_40;
-		break;
-	case CH_WIDTH_80MHZ:
-		bw_ind_width = IEEE80211_11BEOP_CHWIDTH_80;
-		break;
-	case CH_WIDTH_160MHZ:
-		bw_ind_width = IEEE80211_11BEOP_CHWIDTH_160;
-		break;
-	case CH_WIDTH_320MHZ:
-		bw_ind_width = IEEE80211_11BEOP_CHWIDTH_320;
-		break;
-	default:
-		bw_ind_width = IEEE80211_11BEOP_CHWIDTH_20;
-	}
-
-	bw_ind->elem_id = WLAN_ELEMID_EXTN_ELEM;
-	*bw_ind_len = WLAN_BW_IND_IE_MAX_LEN;
-	bw_ind->elem_len = WLAN_BW_IND_IE_MAX_LEN - WLAN_IE_HDR_LEN;
-	bw_ind->elem_id_extn = WLAN_EXTN_ELEMID_BW_IND;
-	bw_ind->ccfs0 = ccfs0;
-	bw_ind->ccfs1 = ccfs1;
-	QDF_SET_BITS(bw_ind->control, BW_IND_CHAN_WIDTH_IDX,
-		     BW_IND_CHAN_WIDTH_BITS, bw_ind_width);
-
-	if (puncture_bitmap) {
-		bw_ind->disabled_sub_chan_bitmap[0] =
-			QDF_GET_BITS(puncture_bitmap, 0, 8);
-		bw_ind->disabled_sub_chan_bitmap[1] =
-			QDF_GET_BITS(puncture_bitmap, 8, 8);
-		QDF_SET_BITS(bw_ind->bw_ind_param,
-			     BW_IND_PARAM_DISABLED_SC_BITMAP_PRESENT_IDX,
-			     BW_IND_PARAM_DISABLED_SC_BITMAP_PRESENT_BITS, 1);
-	} else {
-		QDF_SET_BITS(bw_ind->bw_ind_param,
-			     BW_IND_PARAM_DISABLED_SC_BITMAP_PRESENT_IDX,
-			     BW_IND_PARAM_DISABLED_SC_BITMAP_PRESENT_BITS, 0);
-		bw_ind->elem_len -=
-			QDF_ARRAY_SIZE(bw_ind->disabled_sub_chan_bitmap);
-		*bw_ind_len -=
-			QDF_ARRAY_SIZE(bw_ind->disabled_sub_chan_bitmap);
-	}
-
-	return QDF_STATUS_SUCCESS;
-}
-
-QDF_STATUS util_parse_bw_ind(struct wlan_ie_bw_ind *bw_ind, uint8_t *ccfs0,
-			     uint8_t *ccfs1, enum phy_ch_width *ch_width,
-			     uint16_t *puncture_bitmap)
-{
-	uint8_t bw_ind_width;
-
-	if (!bw_ind) {
-		mlo_err("Pointer to bandwidth indiaction element is NULL");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	*ccfs0 = bw_ind->ccfs0;
-	*ccfs1 = bw_ind->ccfs1;
-	bw_ind_width = QDF_GET_BITS(bw_ind->control, BW_IND_CHAN_WIDTH_IDX,
-				    BW_IND_CHAN_WIDTH_BITS);
-
-	switch (bw_ind_width) {
-	case IEEE80211_11BEOP_CHWIDTH_20:
-		*ch_width = CH_WIDTH_20MHZ;
-		break;
-	case IEEE80211_11BEOP_CHWIDTH_40:
-		*ch_width = CH_WIDTH_40MHZ;
-		break;
-	case IEEE80211_11BEOP_CHWIDTH_80:
-		*ch_width = CH_WIDTH_80MHZ;
-		break;
-	case IEEE80211_11BEOP_CHWIDTH_160:
-		*ch_width = CH_WIDTH_160MHZ;
-		break;
-	case IEEE80211_11BEOP_CHWIDTH_320:
-		*ch_width = CH_WIDTH_320MHZ;
-		break;
-	default:
-		*ch_width = CH_WIDTH_20MHZ;
-	}
-
-	if (QDF_GET_BITS(bw_ind->bw_ind_param,
-			 BW_IND_PARAM_DISABLED_SC_BITMAP_PRESENT_IDX,
-			 BW_IND_PARAM_DISABLED_SC_BITMAP_PRESENT_BITS)) {
-		QDF_SET_BITS(*puncture_bitmap, 0, 8,
-			     bw_ind->disabled_sub_chan_bitmap[0]);
-		QDF_SET_BITS(*puncture_bitmap, 8, 8,
-			     bw_ind->disabled_sub_chan_bitmap[1]);
-	} else {
-		*puncture_bitmap = 0;
-	}
-
 	return QDF_STATUS_SUCCESS;
 }
 #endif

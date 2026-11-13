@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2018, 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -49,6 +49,11 @@ struct hif_bus_ops {
 				      const struct hif_bus_id *bid,
 				      enum hif_enable_type type);
 	void (*hif_disable_bus)(struct hif_softc *hif_sc);
+#ifdef FEATURE_RUNTIME_PM
+	struct hif_runtime_pm_ctx *(*hif_bus_get_rpm_ctx)(
+						struct hif_softc *hif_sc);
+	struct device *(*hif_bus_get_dev)(struct hif_softc *hif_sc);
+#endif
 	int (*hif_bus_configure)(struct hif_softc *hif_sc);
 	QDF_STATUS (*hif_get_config_item)(struct hif_softc *hif_sc,
 			     int opcode, void *config, uint32_t config_len);
@@ -99,7 +104,6 @@ struct hif_bus_ops {
 	void (*hif_set_grp_intr_affinity)(struct hif_softc *scn,
 					  uint32_t grp_intr_bitmask, bool perf);
 #endif
-	void (*hif_affinity_mgr_set_affinity)(struct hif_softc *scn);
 };
 
 #ifdef HIF_SNOC
@@ -189,7 +193,6 @@ int hif_ahb_get_context_size(void);
 #else
 /**
  * hif_initialize_ahb_ops() - dummy for when ahb not supported
- * @bus_ops: hif_bus_ops table pointer to initialize
  *
  * Return: QDF_STATUS_E_NOSUPPORT
  */
@@ -216,7 +219,6 @@ int hif_sdio_get_context_size(void);
 #else
 /**
  * hif_initialize_sdio_ops() - dummy for when sdio not supported
- * @hif_sc: hif context
  *
  * Return: QDF_STATUS_E_NOSUPPORT
  */
@@ -263,7 +265,7 @@ static inline int hif_usb_get_context_size(void)
 
 /**
  * hif_config_irq_affinity() - Set IRQ affinity for WLAN IRQs
- * @hif_sc: hif context
+ * @hif_sc - hif context
  *
  * Set IRQ affinity hint for WLAN IRQs in order to affine to
  * gold cores.
@@ -274,8 +276,8 @@ void hif_config_irq_affinity(struct hif_softc *hif_sc);
 
 /**
  * hif_config_irq_by_ceid() - register irq by CE id
- * @hif_sc: hif context
- * @ce_id: Copy Engine id for which the irq need to be configured
+ * @hif_sc - hif context
+ * @ce_id - Copy Engine id for which the irq need to be configured
  *
  * Return: 0 on success, negative value on error.
  */

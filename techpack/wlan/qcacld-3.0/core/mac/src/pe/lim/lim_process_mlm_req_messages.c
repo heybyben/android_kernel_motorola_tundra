@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -43,15 +43,11 @@
 #include "wlan_mlme_public_struct.h"
 #include "../../core/src/vdev_mgr_ops.h"
 #include "wlan_pmo_ucfg_api.h"
-#include "wlan_cp_stats_utils_api.h"
 #include "wlan_objmgr_vdev_obj.h"
 #include <wlan_cm_api.h>
 #include <lim_mlo.h>
 #include "wlan_mlo_mgr_peer.h"
 #include <son_api.h>
-#include "wifi_pos_pasn_api.h"
-#include "rrm_api.h"
-#include "../../core/src/wlan_cp_stats_obj_mgr_handler.h"
 
 static void lim_process_mlm_auth_req(struct mac_context *, uint32_t *);
 static void lim_process_mlm_assoc_req(struct mac_context *, uint32_t *);
@@ -97,75 +93,6 @@ static void lim_fill_status_code(uint8_t frame_type,
 			*proto_status_code = STATUS_UNSPECIFIED_FAILURE;
 		}
 	}
-}
-
-void lim_process_rrm_sta_stats_rsp_timeout(struct mac_context *mac)
-{
-	struct pe_session *session;
-	tSirMacRadioMeasureReport rrm_report;
-	QDF_STATUS status;
-	uint8_t index;
-	tpRRMReq pcurrent_req = NULL;
-	tRrmRetStatus rrm_status;
-
-	session = pe_find_session_by_session_id(mac,
-		mac->lim.lim_timers.rrm_sta_stats_resp_timer.sessionId);
-	if (!session) {
-		pe_err("Session does not exist for given session id %d",
-		       mac->lim.lim_timers.rrm_sta_stats_resp_timer.sessionId);
-		rrm_cleanup(mac, mac->rrm.rrmPEContext.rrm_sta_stats.index);
-		return;
-	}
-
-	pe_warn("STA STATS RSP timeout vdev_id %d", session->vdev_id);
-	index = mac->rrm.rrmPEContext.rrm_sta_stats.index;
-	pcurrent_req = mac->rrm.rrmPEContext.pCurrentReq[index];
-	if (!pcurrent_req) {
-		pe_err("Current request is NULL for index %d", index);
-		qdf_mem_zero(&mac->rrm.rrmPEContext.rrm_sta_stats,
-			     sizeof(mac->rrm.rrmPEContext.rrm_sta_stats));
-		return;
-	}
-
-	if (!mac->rrm.rrmPEContext.rrm_sta_stats.rrm_sta_stats_res_count) {
-		pe_err("response not received for previous req");
-		rrm_status = eRRM_INCAPABLE;
-		goto err;
-	}
-
-	rrm_report = mac->rrm.rrmPEContext.rrm_sta_stats.rrm_report;
-	switch (rrm_report.report.statistics_report.group_id) {
-	/*
-	 * For Counter stats and Mac stats some stats will be received
-	 * via FW and some via DP. So, same handling is required for both
-	 * cases.
-	 */
-	case STA_STAT_GROUP_ID_COUNTER_STATS:
-	case STA_STAT_GROUP_ID_MAC_STATS:
-		status = wlan_cp_stats_infra_cp_deregister_resp_cb(mac->psoc);
-		if (QDF_IS_STATUS_ERROR(status))
-			pe_err("failed to deregister callback %d", status);
-
-		status =
-			rrm_send_sta_stats_req(
-				mac, session,
-				mac->rrm.rrmPEContext.rrm_sta_stats.peer);
-		if (QDF_IS_STATUS_ERROR(status)) {
-			pe_err("fail to send stats req");
-			rrm_status = eRRM_FAILURE;
-			goto err;
-		}
-		break;
-	case STA_STAT_GROUP_ID_DELAY_STATS:
-		/* TOdo: fetch from scan ie */
-		break;
-	}
-	return;
-err:
-	rrm_process_rrm_sta_stats_request_failure(
-		mac, session, mac->rrm.rrmPEContext.rrm_sta_stats.peer,
-		rrm_status, mac->rrm.rrmPEContext.rrm_sta_stats.index);
-	rrm_cleanup(mac, mac->rrm.rrmPEContext.rrm_sta_stats.index);
 }
 
 void lim_process_sae_auth_timeout(struct mac_context *mac_ctx)
@@ -260,14 +187,14 @@ void lim_process_mlm_req_messages(struct mac_context *mac_ctx,
 	case SIR_LIM_DISASSOC_ACK_TIMEOUT:
 		lim_process_disassoc_ack_timeout(mac_ctx);
 		break;
+	case SIR_LIM_DEAUTH_ACK_TIMEOUT:
+		lim_process_deauth_ack_timeout(mac_ctx);
+		break;
 	case SIR_LIM_AUTH_RETRY_TIMEOUT:
 		lim_process_auth_retry_timer(mac_ctx);
 		break;
 	case SIR_LIM_AUTH_SAE_TIMEOUT:
 		lim_process_sae_auth_timeout(mac_ctx);
-		break;
-	case SIR_LIM_RRM_STA_STATS_RSP_TIMEOUT:
-		lim_process_rrm_sta_stats_rsp_timeout(mac_ctx);
 		break;
 	case LIM_MLM_TSPEC_REQ:
 	default:
@@ -424,37 +351,15 @@ end:
 		lim_send_start_bss_confirm(mac_ctx, &mlm_start_cnf);
 }
 
-#if defined(WIFI_POS_CONVERGED) && defined(WLAN_FEATURE_RTT_11AZ_SUPPORT)
-void
-lim_pasn_peer_del_all_resp_vdev_delete_resume(struct mac_context *mac,
-					      struct wlan_objmgr_vdev *vdev)
-{
-	if (!mac) {
-		pe_err("Mac ctx is NULL");
-		return;
-	}
-
-	/*
-	 * If PASN peer delete all command to firmware timedout, then
-	 * the PASN peers will not be cleaned up. So cleanup the
-	 * objmgr peers from here and reset the peer delete all in
-	 * progress flag.
-	 */
-	if (wifi_pos_get_pasn_peer_count(vdev))
-		wifi_pos_cleanup_pasn_peers(mac->psoc, vdev);
-
-	wifi_pos_set_delete_all_peer_in_progress(vdev, false);
-
-	pe_debug("Resume vdev delete");
-	if (mac->sme.sme_vdev_del_cb)
-		mac->sme.sme_vdev_del_cb(MAC_HANDLE(mac), vdev);
-}
-#endif
-
 void lim_send_peer_create_resp(struct mac_context *mac, uint8_t vdev_id,
 			       QDF_STATUS qdf_status, uint8_t *peer_mac)
 {
 	struct wlan_objmgr_vdev *vdev;
+#ifdef WLAN_FEATURE_11BE_MLO
+	struct wlan_objmgr_peer *link_peer = NULL;
+	uint8_t link_id;
+	struct mlo_partner_info partner_info;
+#endif
 	QDF_STATUS status;
 
 	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(mac->psoc,
@@ -465,6 +370,39 @@ void lim_send_peer_create_resp(struct mac_context *mac, uint8_t vdev_id,
 	status = wlan_cm_bss_peer_create_rsp(vdev, qdf_status,
 					     (struct qdf_mac_addr *)peer_mac);
 
+#ifdef WLAN_FEATURE_11BE_MLO
+	if (!wlan_vdev_mlme_is_mlo_vdev(vdev))
+		goto end;
+
+	link_id = vdev->vdev_mlme.mlo_link_id;
+	/* currently only 2 link MLO supported */
+	partner_info.num_partner_links = 1;
+	qdf_mem_copy(partner_info.partner_link_info[0].link_addr.bytes,
+		     vdev->vdev_mlme.macaddr, QDF_MAC_ADDR_SIZE);
+	partner_info.partner_link_info[0].link_id = link_id;
+	pe_debug("link_addr " QDF_MAC_ADDR_FMT,
+		 QDF_MAC_ADDR_REF(
+			partner_info.partner_link_info[0].link_addr.bytes));
+
+	if (QDF_IS_STATUS_SUCCESS(status)) {
+		/* Get the bss peer obj */
+		link_peer = wlan_objmgr_get_peer_by_mac(mac->psoc, peer_mac,
+							WLAN_LEGACY_MAC_ID);
+		if (!link_peer) {
+			pe_err("Link peer is NULL");
+			goto end;
+		}
+
+		status = wlan_mlo_peer_create(vdev, link_peer,
+					      &partner_info, NULL, 0);
+
+		if (QDF_IS_STATUS_ERROR(status))
+			pe_err("Peer creation failed");
+
+		wlan_objmgr_peer_release_ref(link_peer, WLAN_LEGACY_MAC_ID);
+	}
+end:
+#endif
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_LEGACY_MAC_ID);
 }
 
@@ -568,7 +506,8 @@ static bool lim_is_auth_req_expected(struct mac_context *mac_ctx,
 }
 
 /**
- * lim_is_preauth_ctx_exists() - check if preauth context exists
+ * lim_is_preauth_ctx_exisits() - check if preauth context exists
+ *
  * @mac_ctx:          global MAC context
  * @session:          PE session entry
  * @preauth_node_ptr: pointer to preauth node pointer
@@ -609,70 +548,6 @@ static bool lim_is_preauth_ctx_exists(struct mac_context *mac_ctx,
 }
 
 #ifdef WLAN_FEATURE_SAE
-static inline
-uint32_t lim_get_sae_keymgmt_suite(uint32_t keymgmt)
-{
-	/* Select the best SAE AKM suite supported */
-	if (QDF_HAS_PARAM(keymgmt, WLAN_CRYPTO_KEY_MGMT_FT_SAE_EXT_KEY))
-		return WLAN_AKM_FT_SAE_EXT_KEY;
-	else if (QDF_HAS_PARAM(keymgmt, WLAN_CRYPTO_KEY_MGMT_SAE_EXT_KEY))
-		return WLAN_AKM_SAE_EXT_KEY;
-	else if (QDF_HAS_PARAM(keymgmt, WLAN_CRYPTO_KEY_MGMT_FT_SAE))
-		return WLAN_AKM_FT_SAE;
-	else if (QDF_HAS_PARAM(keymgmt, WLAN_CRYPTO_KEY_MGMT_SAE))
-		return WLAN_AKM_SAE;
-
-	pe_err("Invalid SAE Keymgmt suite %d", keymgmt);
-	return WLAN_AKM_SAE;
-}
-
-QDF_STATUS lim_trigger_auth_req_sae(struct mac_context *mac_ctx,
-				    struct pe_session *session,
-				    struct qdf_mac_addr *peer_bssid)
-{
-	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS;
-	struct sir_sae_info *sae_info;
-	struct scheduler_msg msg = {0};
-	uint32_t keymgmt;
-
-	sae_info = qdf_mem_malloc(sizeof(*sae_info));
-	if (!sae_info)
-		return QDF_STATUS_E_FAILURE;
-
-	sae_info->msg_type = eWNI_SME_TRIGGER_SAE;
-	sae_info->msg_len = sizeof(*sae_info);
-	sae_info->vdev_id = session->smeSessionId;
-
-	qdf_copy_macaddr(&sae_info->peer_mac_addr, peer_bssid);
-	keymgmt = wlan_crypto_get_param(session->vdev,
-					WLAN_CRYPTO_PARAM_KEY_MGMT);
-	sae_info->akm = lim_get_sae_keymgmt_suite(keymgmt);
-
-	sae_info->ssid.length = session->ssId.length;
-	qdf_mem_copy(sae_info->ssid.ssId,
-		session->ssId.ssId,
-		session->ssId.length);
-
-	pe_debug("vdev_id %d ssid " QDF_SSID_FMT " " QDF_MAC_ADDR_FMT "akm %d",
-		 sae_info->vdev_id,
-		 QDF_SSID_REF(sae_info->ssid.length, sae_info->ssid.ssId),
-		 QDF_MAC_ADDR_REF(sae_info->peer_mac_addr.bytes),
-		 sae_info->akm);
-
-	msg.type = eWNI_SME_TRIGGER_SAE;
-	msg.bodyptr = sae_info;
-	msg.bodyval = 0;
-
-	qdf_status = mac_ctx->lim.sme_msg_callback(mac_ctx, &msg);
-	if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
-		pe_err("SAE failed for AUTH frame");
-		qdf_mem_free(sae_info);
-		return qdf_status;
-	}
-
-	return qdf_status;
-}
-
 /**
  * lim_process_mlm_auth_req_sae() - Handle SAE authentication
  * @mac_ctx: global MAC context
@@ -684,16 +559,45 @@ QDF_STATUS lim_trigger_auth_req_sae(struct mac_context *mac_ctx,
  * Return: QDF_STATUS
  */
 static QDF_STATUS lim_process_mlm_auth_req_sae(struct mac_context *mac_ctx,
-					       struct pe_session *session)
+		struct pe_session *session)
 {
-	QDF_STATUS qdf_status;
+	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS;
+	struct sir_sae_info *sae_info;
+	struct scheduler_msg msg = {0};
 
-	qdf_status = lim_trigger_auth_req_sae(
-					mac_ctx, session,
-					(struct qdf_mac_addr *)session->bssId);
-	if (QDF_IS_STATUS_ERROR(qdf_status))
+	sae_info = qdf_mem_malloc(sizeof(*sae_info));
+	if (!sae_info)
+		return QDF_STATUS_E_FAILURE;
+
+	sae_info->msg_type = eWNI_SME_TRIGGER_SAE;
+	sae_info->msg_len = sizeof(*sae_info);
+	sae_info->vdev_id = session->smeSessionId;
+
+	qdf_mem_copy(sae_info->peer_mac_addr.bytes,
+		session->bssId,
+		QDF_MAC_ADDR_SIZE);
+
+	sae_info->ssid.length = session->ssId.length;
+	qdf_mem_copy(sae_info->ssid.ssId,
+		session->ssId.ssId,
+		session->ssId.length);
+
+	pe_debug("vdev_id %d ssid %.*s "QDF_MAC_ADDR_FMT,
+		sae_info->vdev_id,
+		sae_info->ssid.length,
+		sae_info->ssid.ssId,
+		QDF_MAC_ADDR_REF(sae_info->peer_mac_addr.bytes));
+
+	msg.type = eWNI_SME_TRIGGER_SAE;
+	msg.bodyptr = sae_info;
+	msg.bodyval = 0;
+
+	qdf_status = mac_ctx->lim.sme_msg_callback(mac_ctx, &msg);
+	if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
+		pe_err("SAE failed for AUTH frame");
+		qdf_mem_free(sae_info);
 		return qdf_status;
-
+	}
 	session->limMlmState = eLIM_MLM_WT_SAE_AUTH_STATE;
 
 	MTRACE(mac_trace(mac_ctx, TRACE_CODE_MLM_STATE, session->peSessionId,
@@ -1060,9 +964,9 @@ lim_process_mlm_disassoc_req_ntf(struct mac_context *mac_ctx,
 	case eLIM_STA_ROLE:
 		if (!qdf_is_macaddr_equal(&mlm_disassocreq->peer_macaddr,
 				     &curr_bssid)) {
-			pe_warn("received MLM_DISASSOC_REQ with invalid BSS: "QDF_MAC_ADDR_FMT,
-				QDF_MAC_ADDR_REF(
-				mlm_disassocreq->peer_macaddr.bytes));
+			pe_warn("received MLM_DISASSOC_REQ with invalid BSS id");
+			lim_print_mac_addr(mac_ctx,
+				mlm_disassocreq->peer_macaddr.bytes, LOGW);
 
 			/*
 			 * Disassociation response due to host triggered
@@ -1276,8 +1180,7 @@ void lim_clean_up_disassoc_deauth_req(struct mac_context *mac_ctx,
 			     (uint8_t *) &mlm_deauth_req->peer_macaddr.bytes,
 			     QDF_MAC_ADDR_SIZE))) {
 		if (clean_rx_path) {
-			lim_process_deauth_ack_timeout(mac_ctx,
-						       mlm_deauth_req->sessionId);
+			lim_process_deauth_ack_timeout(mac_ctx);
 		} else {
 			if (tx_timer_running(
 				&mac_ctx->lim.lim_timers.gLimDeauthAckTimer)) {
@@ -1411,7 +1314,7 @@ lim_process_mlm_deauth_req_ntf(struct mac_context *mac_ctx,
 				sme_deauth_rsp->status_code =
 						eSIR_SME_DEAUTH_STATUS;
 				sme_deauth_rsp->sessionId =
-						session->vdev_id;
+						mlm_deauth_req->sessionId;
 
 				qdf_mem_copy(sme_deauth_rsp->peer_macaddr.bytes,
 					     mlm_deauth_req->peer_macaddr.bytes,
@@ -1589,19 +1492,15 @@ end:
  * lim_process_deauth_ack_timeout() - wrapper function around
  * lim_send_deauth_cnf
  *
- * @pMacGlobal:     mac_ctx
- * @vdev_id:        vdev id
+ * @mac_ctx:        mac_ctx
  *
  * wrapper function around lim_send_deauth_cnf
  *
  * Return: void
  */
-void lim_process_deauth_ack_timeout(void *pMacGlobal, uint32_t vdev_id)
+void lim_process_deauth_ack_timeout(struct mac_context *mac_ctx)
 {
-	struct mac_context *mac_ctx = (struct mac_context *)pMacGlobal;
-
-	pe_debug("Deauth Ack timeout for vdev id %d", vdev_id);
-	lim_send_deauth_cnf(mac_ctx, vdev_id);
+	lim_send_deauth_cnf(mac_ctx);
 }
 
 /*
@@ -1660,7 +1559,6 @@ void lim_process_join_failure_timeout(struct mac_context *mac_ctx)
 		rssi_log->rssi = session->rssi;
 	WLAN_HOST_DIAG_LOG_REPORT(rssi_log);
 #endif
-	session->join_probe_cnt = 0;
 
 	if (session->limMlmState == eLIM_MLM_WT_JOIN_BEACON_STATE) {
 		len = sizeof(tSirMacAddr);
@@ -1712,7 +1610,6 @@ static void lim_process_periodic_join_probe_req_timer(struct mac_context *mac_ct
 {
 	struct pe_session *session;
 	tSirMacSSid ssid;
-	tSirMacAddr bssid;
 
 	session = pe_find_session_by_session_id(mac_ctx,
 	      mac_ctx->lim.lim_timers.gLimPeriodicJoinProbeReqTimer.sessionId);
@@ -1729,11 +1626,9 @@ static void lim_process_periodic_join_probe_req_timer(struct mac_context *mac_ct
 		qdf_mem_copy(ssid.ssId, session->ssId.ssId,
 			     session->ssId.length);
 		ssid.length = session->ssId.length;
-		sir_copy_mac_addr(bssid,
-				  session->pLimMlmJoinReq->bssDescription.bssId);
-
-		lim_send_probe_req_mgmt_frame(mac_ctx, &ssid, bssid,
-					      session->curr_op_freq,
+		lim_send_probe_req_mgmt_frame(mac_ctx, &ssid,
+			session->pLimMlmJoinReq->bssDescription.bssId,
+			session->curr_op_freq,
 			session->self_mac_addr, session->dot11mode,
 			&session->lim_join_req->addIEScan.length,
 			session->lim_join_req->addIEScan.addIEdata);
@@ -1746,7 +1641,6 @@ static void lim_process_periodic_join_probe_req_timer(struct mac_context *mac_ct
 			pe_warn("could not activate Periodic Join req failure timer");
 			return;
 		}
-		session->join_probe_cnt++;
 	}
 }
 
@@ -1873,6 +1767,7 @@ static void lim_process_auth_retry_timer(struct mac_context *mac_ctx)
 						SIR_MAC_AUTH_FRAME_1;
 			auth_frame->authStatusCode = 0;
 			pe_debug("Retry Auth");
+			mac_ctx->auth_ack_status = LIM_ACK_NOT_RCD;
 			lim_increase_fils_sequence_number(session_entry);
 			lim_send_auth_mgmt_frame(mac_ctx, auth_frame,
 				mac_ctx->lim.gpLimMlmAuthReq->peerMacAddr,
@@ -1953,7 +1848,6 @@ void lim_process_auth_failure_timeout(struct mac_context *mac_ctx)
 		lim_restore_from_auth_state(mac_ctx,
 				eSIR_SME_AUTH_TIMEOUT_RESULT_CODE,
 				proto_status_code, session);
-		mac_ctx->auth_ack_status = LIM_ACK_NOT_RCD;
 		break;
 	default:
 		/*

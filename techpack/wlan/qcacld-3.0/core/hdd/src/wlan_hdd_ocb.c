@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -44,7 +44,6 @@
 #include <cdp_txrx_ocb.h>
 #include "ol_txrx.h"
 #include "wlan_hdd_object_manager.h"
-#include "wlan_dp_ucfg_api.h"
 
 /* Structure definitions for WLAN_SET_DOT11P_CHANNEL_SCHED */
 #define AIFSN_MIN		(2)
@@ -100,8 +99,7 @@ static int dot11p_validate_qos_params(struct ocb_wmm_param qos_params[])
 
 /**
  * dot11p_validate_channel() - validates a DSRC channel
- * @wiphy: pointer to the wiphy
- * @channel_freq: the channel's center frequency
+ * @center_freq: the channel's center frequency
  * @bandwidth: the channel's bandwidth
  * @tx_power: transmit power
  * @reg_power: (output) the max tx power from the regulatory domain
@@ -180,7 +178,6 @@ static int dot11p_validate_channel(struct wiphy *wiphy,
 
 /**
  * hdd_ocb_validate_config() - Validates the config data
- * @adapter: Pointer to HDD Adapter
  * @config: configuration to be validated
  *
  * Return: 0 on success.
@@ -222,9 +219,9 @@ static int hdd_ocb_register_sta(struct hdd_adapter *adapter)
 {
 	QDF_STATUS qdf_status = QDF_STATUS_E_FAILURE;
 	struct ol_txrx_desc_type sta_desc = {0};
-	struct hdd_station_ctx *sta_ctx;
+	struct hdd_station_ctx *sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter);
+	struct ol_txrx_ops txrx_ops;
 	void *soc = cds_get_context(QDF_MODULE_ID_SOC);
-	struct wlan_objmgr_vdev *vdev;
 
 	qdf_status = cdp_peer_register_ocb_peer(soc,
 				adapter->mac_addr.bytes);
@@ -236,16 +233,14 @@ static int hdd_ocb_register_sta(struct hdd_adapter *adapter)
 	WLAN_ADDR_COPY(sta_desc.peer_addr.bytes, adapter->mac_addr.bytes);
 	sta_desc.is_qos_enabled = 1;
 
-	vdev = hdd_objmgr_get_vdev_by_user(adapter->deflink, WLAN_DP_ID);
-	if (!vdev)
-		return -EINVAL;
+	/* Register the vdev transmit and receive functions */
+	qdf_mem_zero(&txrx_ops, sizeof(txrx_ops));
+	txrx_ops.rx.rx = hdd_rx_packet_cbk;
 
-	qdf_status = ucfg_dp_ocb_register_txrx_ops(vdev);
-	hdd_objmgr_put_vdev_by_user(vdev, WLAN_DP_ID);
-	if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
-		hdd_err("Failed to register tx/rx ops. Status= %d", qdf_status);
-		return -EINVAL;
-	}
+	cdp_vdev_register(soc, adapter->vdev_id, (ol_osif_vdev_handle)adapter,
+			  &txrx_ops);
+	txrx_ops.rx.stats_rx = hdd_tx_rx_collect_connectivity_stats_info;
+	adapter->tx_fn = txrx_ops.tx.tx;
 
 	qdf_status = cdp_peer_register(soc, OL_TXRX_PDEV_ID, &sta_desc);
 	if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
@@ -254,7 +249,6 @@ static int hdd_ocb_register_sta(struct hdd_adapter *adapter)
 		return -EINVAL;
 	}
 
-	sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter->deflink);
 	qdf_copy_macaddr(&sta_ctx->conn_info.peer_macaddr[0],
 			 &adapter->mac_addr);
 
@@ -389,7 +383,7 @@ static int hdd_ocb_set_config_req(struct hdd_adapter *adapter,
 	}
 	cookie = osif_request_cookie(request);
 
-	vdev = hdd_objmgr_get_vdev_by_user(adapter->deflink, WLAN_OSIF_OCB_ID);
+	vdev = hdd_objmgr_get_vdev_by_user(adapter, WLAN_OSIF_OCB_ID);
 	if (!vdev) {
 		rc = -EINVAL;
 		goto end;
@@ -444,7 +438,7 @@ end:
  * __iw_set_dot11p_channel_sched() - Handler for WLAN_SET_DOT11P_CHANNEL_SCHED
  *				     ioctl
  * @dev: Pointer to net_device structure
- * @info: IW Request Info
+ * @iw_request_info: IW Request Info
  * @wrqu: IW Request Userspace Data Pointer
  * @extra: IW Request Kernel Data Pointer
  *
@@ -490,7 +484,7 @@ static int __iw_set_dot11p_channel_sched(struct net_device *dev,
 	}
 
 	/* Identify the vdev interface */
-	config->vdev_id = adapter->deflink->vdev_id;
+	config->vdev_id = adapter->vdev_id;
 
 	/* Release all the mac addresses used for OCB */
 	for (i = 0; i < adapter->ocb_mac_addr_count; i++) {
@@ -583,7 +577,7 @@ fail:
 /**
  * iw_set_dot11p_channel_sched() - IOCTL interface for setting channel schedule
  * @dev: Pointer to net_device structure
- * @info: IW Request Info
+ * @iw_request_info: IW Request Info
  * @wrqu: IW Request Userspace Data Pointer
  * @extra: IW Request Kernel Data Pointer
  *
@@ -710,8 +704,7 @@ const struct nla_policy qca_wlan_vendor_dcc_update_ndl[
  * struct wlan_hdd_ocb_config_channel
  * @chan_freq: frequency of the channel
  * @bandwidth: bandwidth of the channel, either 10 or 20 MHz
- * @flags: channel flags
- * @reserved: reserved padding, set to 0
+ * @mac_address: MAC address assigned to this channel
  * @qos_params: QoS parameters
  * @max_pwr: maximum transmit power of the channel (1/2 dBm)
  * @min_pwr: minimum transmit power of the channel (1/2 dBm)
@@ -865,7 +858,7 @@ static int __wlan_hdd_cfg80211_ocb_set_config(struct wiphy *wiphy,
 	    config->channels, nla_data(channel_array), channel_count);
 
 	/* Identify the vdev interface */
-	config->vdev_id = adapter->deflink->vdev_id;
+	config->vdev_id = adapter->vdev_id;
 
 	/* Release all the mac addresses used for OCB */
 	for (i = 0; i < adapter->ocb_mac_addr_count; i++) {
@@ -1004,7 +997,7 @@ static int __wlan_hdd_cfg80211_ocb_set_utc_time(struct wiphy *wiphy,
 		return -EINVAL;
 	}
 
-	if (!wma_is_vdev_up(adapter->deflink->vdev_id)) {
+	if (!wma_is_vdev_up(adapter->vdev_id)) {
 		hdd_err("The device has not been started");
 		return -EINVAL;
 	}
@@ -1044,12 +1037,12 @@ static int __wlan_hdd_cfg80211_ocb_set_utc_time(struct wiphy *wiphy,
 	if (!utc)
 		return -ENOMEM;
 
-	utc->vdev_id = adapter->deflink->vdev_id;
+	utc->vdev_id = adapter->vdev_id;
 	qdf_mem_copy(utc->utc_time, nla_data(utc_attr), SIZE_UTC_TIME);
 	qdf_mem_copy(utc->time_error, nla_data(time_error_attr),
 		SIZE_UTC_TIME_ERROR);
 
-	vdev = hdd_objmgr_get_vdev_by_user(adapter->deflink, WLAN_OSIF_OCB_ID);
+	vdev = hdd_objmgr_get_vdev_by_user(adapter, WLAN_OSIF_OCB_ID);
 	if (!vdev) {
 		rc = -EINVAL;
 		goto out;
@@ -1135,7 +1128,7 @@ __wlan_hdd_cfg80211_ocb_start_timing_advert(struct wiphy *wiphy,
 		return -EINVAL;
 	}
 
-	if (!wma_is_vdev_up(adapter->deflink->vdev_id)) {
+	if (!wma_is_vdev_up(adapter->vdev_id)) {
 		hdd_err("The device has not been started");
 		return -EINVAL;
 	}
@@ -1144,7 +1137,7 @@ __wlan_hdd_cfg80211_ocb_start_timing_advert(struct wiphy *wiphy,
 	if (!timing_advert)
 		return -ENOMEM;
 
-	timing_advert->vdev_id = adapter->deflink->vdev_id;
+	timing_advert->vdev_id = adapter->vdev_id;
 
 	/* Parse the netlink message */
 	if (wlan_cfg80211_nla_parse(tb,
@@ -1180,7 +1173,7 @@ __wlan_hdd_cfg80211_ocb_start_timing_advert(struct wiphy *wiphy,
 		goto fail;
 	}
 
-	vdev = hdd_objmgr_get_vdev_by_user(adapter->deflink, WLAN_OSIF_OCB_ID);
+	vdev = hdd_objmgr_get_vdev_by_user(adapter, WLAN_OSIF_OCB_ID);
 	if (!vdev) {
 		rc = -EINVAL;
 		goto fail;
@@ -1269,7 +1262,7 @@ __wlan_hdd_cfg80211_ocb_stop_timing_advert(struct wiphy *wiphy,
 		return -EINVAL;
 	}
 
-	if (!wma_is_vdev_up(adapter->deflink->vdev_id)) {
+	if (!wma_is_vdev_up(adapter->vdev_id)) {
 		hdd_err("The device has not been started");
 		return -EINVAL;
 	}
@@ -1278,7 +1271,7 @@ __wlan_hdd_cfg80211_ocb_stop_timing_advert(struct wiphy *wiphy,
 	if (!timing_advert)
 		return -ENOMEM;
 
-	timing_advert->vdev_id = adapter->deflink->vdev_id;
+	timing_advert->vdev_id = adapter->vdev_id;
 
 	/* Parse the netlink message */
 	if (wlan_cfg80211_nla_parse(tb,
@@ -1296,7 +1289,7 @@ __wlan_hdd_cfg80211_ocb_stop_timing_advert(struct wiphy *wiphy,
 	timing_advert->chan_freq = nla_get_u32(
 		tb[QCA_WLAN_VENDOR_ATTR_OCB_STOP_TIMING_ADVERT_CHANNEL_FREQ]);
 
-	vdev = hdd_objmgr_get_vdev_by_user(adapter->deflink, WLAN_OSIF_OCB_ID);
+	vdev = hdd_objmgr_get_vdev_by_user(adapter, WLAN_OSIF_OCB_ID);
 	if (!vdev) {
 		rc = -EINVAL;
 		goto fail;
@@ -1390,9 +1383,9 @@ hdd_ocb_get_tsf_timer_reply(struct wiphy *wiphy,
 	/* Allocate the buffer for the response. */
 	nl_buf_len = NLMSG_HDRLEN;
 	nl_buf_len += 2 * (NLA_HDRLEN + sizeof(uint32_t));
-	nl_resp = wlan_cfg80211_vendor_cmd_alloc_reply_skb(wiphy, nl_buf_len);
+	nl_resp = cfg80211_vendor_cmd_alloc_reply_skb(wiphy, nl_buf_len);
 	if (!nl_resp) {
-		hdd_err("wlan_cfg80211_vendor_cmd_alloc_reply_skb failed");
+		hdd_err("cfg80211_vendor_cmd_alloc_reply_skb failed");
 		return -ENOMEM;
 	}
 
@@ -1409,14 +1402,16 @@ hdd_ocb_get_tsf_timer_reply(struct wiphy *wiphy,
 		goto end;
 
 	/* Send the response. */
-	rc = wlan_cfg80211_vendor_cmd_reply(nl_resp);
+	rc = cfg80211_vendor_cmd_reply(nl_resp);
 	nl_resp = NULL;
 	if (rc) {
-		hdd_err("wlan_cfg80211_vendor_cmd_reply failed: %d", rc);
+		hdd_err("cfg80211_vendor_cmd_reply failed: %d", rc);
 		goto end;
 	}
 end:
-	wlan_cfg80211_vendor_free_skb(nl_resp);
+	if (nl_resp)
+		kfree_skb(nl_resp);
+
 	return rc;
 }
 
@@ -1466,7 +1461,7 @@ __wlan_hdd_cfg80211_ocb_get_tsf_timer(struct wiphy *wiphy,
 		return -EINVAL;
 	}
 
-	if (!wma_is_vdev_up(adapter->deflink->vdev_id)) {
+	if (!wma_is_vdev_up(adapter->vdev_id)) {
 		hdd_err("The device has not been started");
 		return -EINVAL;
 	}
@@ -1478,13 +1473,13 @@ __wlan_hdd_cfg80211_ocb_get_tsf_timer(struct wiphy *wiphy,
 	}
 	cookie = osif_request_cookie(request);
 
-	vdev = hdd_objmgr_get_vdev_by_user(adapter->deflink, WLAN_OSIF_OCB_ID);
+	vdev = hdd_objmgr_get_vdev_by_user(adapter, WLAN_OSIF_OCB_ID);
 	if (!vdev) {
 		rc = -EINVAL;
 		goto end;
 	}
 
-	tsf_request.vdev_id = adapter->deflink->vdev_id;
+	tsf_request.vdev_id = adapter->vdev_id;
 	status = ucfg_ocb_get_tsf_timer(vdev, &tsf_request,
 					hdd_ocb_get_tsf_timer_callback,
 					cookie);
@@ -1623,9 +1618,9 @@ hdd_dcc_get_stats_send_reply(struct wiphy *wiphy,
 	nl_buf_len = NLMSG_HDRLEN;
 	nl_buf_len += NLA_HDRLEN + sizeof(uint32_t);
 	nl_buf_len += NLA_HDRLEN + response->channel_stats_array_len;
-	nl_resp = wlan_cfg80211_vendor_cmd_alloc_reply_skb(wiphy, nl_buf_len);
+	nl_resp = cfg80211_vendor_cmd_alloc_reply_skb(wiphy, nl_buf_len);
 	if (!nl_resp) {
-		hdd_err("wlan_cfg80211_vendor_cmd_alloc_reply_skb failed");
+		hdd_err("cfg80211_vendor_cmd_alloc_reply_skb failed");
 		return -ENOMEM;
 	}
 
@@ -1643,14 +1638,16 @@ hdd_dcc_get_stats_send_reply(struct wiphy *wiphy,
 		goto end;
 
 	/* Send the response. */
-	rc = wlan_cfg80211_vendor_cmd_reply(nl_resp);
+	rc = cfg80211_vendor_cmd_reply(nl_resp);
 	nl_resp = NULL;
 	if (rc) {
-		hdd_err("wlan_cfg80211_vendor_cmd_reply failed: %d", rc);
+		hdd_err("cfg80211_vendor_cmd_reply failed: %d", rc);
 		goto end;
 	}
 end:
-	wlan_cfg80211_vendor_free_skb(nl_resp);
+	if (nl_resp)
+		kfree_skb(nl_resp);
+
 	return rc;
 }
 
@@ -1704,7 +1701,7 @@ static int __wlan_hdd_cfg80211_dcc_get_stats(struct wiphy *wiphy,
 		return -EINVAL;
 	}
 
-	if (!wma_is_vdev_up(adapter->deflink->vdev_id)) {
+	if (!wma_is_vdev_up(adapter->vdev_id)) {
 		hdd_err("The device has not been started");
 		return -EINVAL;
 	}
@@ -1744,12 +1741,12 @@ static int __wlan_hdd_cfg80211_dcc_get_stats(struct wiphy *wiphy,
 	}
 	cookie = osif_request_cookie(request);
 
-	dcc_request.vdev_id = adapter->deflink->vdev_id;
+	dcc_request.vdev_id = adapter->vdev_id;
 	dcc_request.channel_count = channel_count;
 	dcc_request.request_array_len = request_array_len;
 	dcc_request.request_array = request_array;
 
-	vdev = hdd_objmgr_get_vdev_by_user(adapter->deflink, WLAN_OSIF_OCB_ID);
+	vdev = hdd_objmgr_get_vdev_by_user(adapter, WLAN_OSIF_OCB_ID);
 	if (!vdev) {
 		rc = -EINVAL;
 		goto end;
@@ -1855,7 +1852,7 @@ static int __wlan_hdd_cfg80211_dcc_clear_stats(struct wiphy *wiphy,
 		return -EINVAL;
 	}
 
-	if (!wma_is_vdev_up(adapter->deflink->vdev_id)) {
+	if (!wma_is_vdev_up(adapter->vdev_id)) {
 		hdd_err("The device has not been started");
 		return -EINVAL;
 	}
@@ -1875,12 +1872,12 @@ static int __wlan_hdd_cfg80211_dcc_clear_stats(struct wiphy *wiphy,
 		return -EINVAL;
 	}
 
-	vdev = hdd_objmgr_get_vdev_by_user(adapter->deflink, WLAN_OSIF_OCB_ID);
+	vdev = hdd_objmgr_get_vdev_by_user(adapter, WLAN_OSIF_OCB_ID);
 	if (!vdev)
 		return -EINVAL;
 
 	if (ucfg_ocb_dcc_clear_stats(
-		vdev, adapter->deflink->vdev_id,
+		vdev, adapter->vdev_id,
 		nla_get_u32(
 			tb[QCA_WLAN_VENDOR_ATTR_DCC_CLEAR_STATS_BITMAP])) !=
 			QDF_STATUS_SUCCESS) {
@@ -2004,7 +2001,7 @@ static int __wlan_hdd_cfg80211_dcc_update_ndl(struct wiphy *wiphy,
 		return -EINVAL;
 	}
 
-	if (!wma_is_vdev_up(adapter->deflink->vdev_id)) {
+	if (!wma_is_vdev_up(adapter->vdev_id)) {
 		hdd_err("The device has not been started");
 		return -EINVAL;
 	}
@@ -2050,14 +2047,14 @@ static int __wlan_hdd_cfg80211_dcc_update_ndl(struct wiphy *wiphy,
 	cookie = osif_request_cookie(request);
 
 	/* Copy the parameters to the request structure. */
-	dcc_request.vdev_id = adapter->deflink->vdev_id;
+	dcc_request.vdev_id = adapter->vdev_id;
 	dcc_request.channel_count = channel_count;
 	dcc_request.dcc_ndl_chan_list_len = ndl_channel_array_len;
 	dcc_request.dcc_ndl_chan_list = ndl_channel_array;
 	dcc_request.dcc_ndl_active_state_list_len = ndl_active_state_array_len;
 	dcc_request.dcc_ndl_active_state_list = ndl_active_state_array;
 
-	vdev = hdd_objmgr_get_vdev_by_user(adapter->deflink, WLAN_OSIF_OCB_ID);
+	vdev = hdd_objmgr_get_vdev_by_user(adapter, WLAN_OSIF_OCB_ID);
 	if (!vdev) {
 		rc = -EINVAL;
 		goto end;
@@ -2132,20 +2129,18 @@ static void wlan_hdd_dcc_stats_event_callback(void *context_ptr,
 	struct hdd_context *hdd_ctx = (struct hdd_context *)context_ptr;
 	struct ocb_dcc_get_stats_response *resp = response_ptr;
 	struct sk_buff *vendor_event;
-	enum qca_nl80211_vendor_subcmds_index index =
-		QCA_NL80211_VENDOR_SUBCMD_DCC_STATS_EVENT_INDEX;
 
 	hdd_enter();
 
 	vendor_event =
-		wlan_cfg80211_vendor_event_alloc(hdd_ctx->wiphy, NULL,
-						 sizeof(uint32_t) +
-						 resp->channel_stats_array_len +
-						 NLMSG_HDRLEN,
-						 index, GFP_KERNEL);
+		cfg80211_vendor_event_alloc(hdd_ctx->wiphy,
+			NULL, sizeof(uint32_t) + resp->channel_stats_array_len +
+			NLMSG_HDRLEN,
+			QCA_NL80211_VENDOR_SUBCMD_DCC_STATS_EVENT_INDEX,
+			GFP_KERNEL);
 
 	if (!vendor_event) {
-		hdd_err("wlan_cfg80211_vendor_event_alloc failed");
+		hdd_err("cfg80211_vendor_event_alloc failed");
 		return;
 	}
 
@@ -2157,11 +2152,11 @@ static void wlan_hdd_dcc_stats_event_callback(void *context_ptr,
 			resp->channel_stats_array_len,
 			resp->channel_stats_array)) {
 		hdd_err("nla put failed");
-		wlan_cfg80211_vendor_free_skb(vendor_event);
+		kfree_skb(vendor_event);
 		return;
 	}
 
-	wlan_cfg80211_vendor_event(vendor_event, GFP_KERNEL);
+	cfg80211_vendor_event(vendor_event, GFP_KERNEL);
 }
 
 /**

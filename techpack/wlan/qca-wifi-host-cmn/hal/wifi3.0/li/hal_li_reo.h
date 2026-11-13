@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2019, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -25,25 +24,11 @@
 
 #define HAL_REO_QUEUE_EXT_DESC 9
 
-/**
- * hal_get_ba_aging_timeout_li() - Get BA Aging timeout
- * @hal_soc_hdl: Opaque HAL SOC handle
- * @ac: Access category
- * @value: window size to get
- */
+/* Proto-types */
 void hal_get_ba_aging_timeout_li(hal_soc_handle_t hal_soc_hdl, uint8_t ac,
 				 uint32_t *value);
-
-/**
- * hal_set_ba_aging_timeout_li() - Set BA Aging timeout
- * @hal_soc_hdl: Opaque HAL SOC handle
- * @ac: Access category
- * ac: 0 - Background, 1 - Best Effort, 2 - Video, 3 - Voice
- * @value: Input value to set
- */
 void hal_set_ba_aging_timeout_li(hal_soc_handle_t hal_soc_hdl, uint8_t ac,
 				 uint32_t value);
-
 uint32_t hal_get_reo_reg_base_offset_li(void);
 
 int hal_reo_send_cmd_li(hal_soc_handle_t hal_soc_hdl,
@@ -82,8 +67,8 @@ hal_reo_rx_update_queue_status_li(hal_ring_desc_t ring_desc,
 /**
  * hal_reo_init_cmd_ring_li() - Initialize descriptors of REO command SRNG
  * with command number
- * @hal_soc_hdl: Handle to HAL SoC structure
- * @hal_ring_hdl: Handle to HAL SRNG structure
+ * @hal_soc: Handle to HAL SoC structure
+ * @hal_ring: Handle to HAL SRNG structure
  *
  * Return: none
  */
@@ -92,5 +77,5 @@ void hal_reo_init_cmd_ring_li(hal_soc_handle_t hal_soc_hdl,
 
 uint8_t hal_get_tlv_hdr_size_li(void);
 
-uint64_t hal_rx_get_qdesc_addr_li(uint8_t *dst_ring_desc, uint8_t *buf);
+uint8_t *hal_rx_get_qdesc_addr_li(uint8_t *dst_ring_desc, uint8_t *buf);
 #endif /* _HAL_LI_REO_H_ */

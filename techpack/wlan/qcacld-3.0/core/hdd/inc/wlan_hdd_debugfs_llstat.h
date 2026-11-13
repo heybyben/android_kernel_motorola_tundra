@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -27,8 +27,6 @@
 #ifndef _WLAN_HDD_DEBUGFS_LLSTAT_H
 #define _WLAN_HDD_DEBUGFS_LLSTAT_H
 
-#include <wlan_hdd_main.h>
-
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(CFG80211_11BE_BASIC)
 #define DEBUGFS_LLSTATS_BUF_SIZE 32768
 #else
@@ -37,6 +35,8 @@
 
 #define DEBUGFS_LLSTATS_REQID   4294967295UL
 #define DEBUGFS_LLSTATS_REQMASK 0x7
+
+#include <wlan_hdd_main.h>
 
 #if defined(WLAN_FEATURE_LINK_LAYER_STATS) && defined(WLAN_DEBUGFS)
 /**
@@ -67,8 +67,8 @@ void hdd_debugfs_process_radio_stats(struct hdd_adapter *adapter,
 		uint32_t more_data, void *data, uint32_t num_radio);
 
 /**
- * hdd_debugfs_process_iface_stats() - This function is called after
- * @link_info: Link info pointer in HDD adapter
+ * hdd_link_layer_process_iface_stats() - This function is called after
+ * @adapter: Pointer to device adapter
  * @data: Pointer to stats data
  * @num_peers: Number of peers
  *
@@ -78,8 +78,8 @@ void hdd_debugfs_process_radio_stats(struct hdd_adapter *adapter,
  *
  * Return: None
  */
-void hdd_debugfs_process_iface_stats(struct wlan_hdd_link_info *link_info,
-				     void *data, uint32_t num_peers);
+void hdd_debugfs_process_iface_stats(struct hdd_adapter *adapter,
+		void *data, uint32_t num_peers);
 
 /**
  * wlan_hdd_create_ll_stats_file() - API to create Link Layer stats file
@@ -100,12 +100,11 @@ static inline void hdd_debugfs_process_radio_stats(
 {
 }
 
-static inline void
-hdd_debugfs_process_iface_stats(struct wlan_hdd_link_info *link_info,
+static inline void hdd_debugfs_process_iface_stats(
+				struct hdd_adapter *adapter,
 				void *data, uint32_t num_peers)
 {
 }
-
 static inline int wlan_hdd_create_ll_stats_file(struct hdd_adapter *adapter)
 {
 	return 0;

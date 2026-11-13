@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -39,8 +38,32 @@
 #define    be32toh(_x)    be32_to_cpu(_x)
 #define    htobe32(_x)    cpu_to_be32(_x)
 
+#ifdef CONFIG_SMP
+/* Undo the one provided by the kernel to debug spin locks */
+#undef spin_lock
+#undef spin_unlock
+#undef spin_trylock
+
+#define spin_lock(x)  spin_lock_bh(x)
+
+#define spin_unlock(x) \
+	do { \
+		if (!spin_is_locked(x)) { \
+			WARN_ON(1); \
+			qdf_info("unlock addr=%pK, %s", x, \
+				      !spin_is_locked(x) ? "Not locked" : ""); \
+		} \
+		spin_unlock_bh(x); \
+	} while (0)
+#define spin_trylock(x) spin_trylock_bh(x)
+#define OS_SUPPORT_ASYNC_Q 1    /* support for handling asyn function calls */
+
+#else
+#define OS_SUPPORT_ASYNC_Q 0
+#endif /* ifdef CONFIG_SMP */
+
 /**
- * typedef os_mesg_t - maintain attributes of message
+ * struct os_mest_t - maintain attributes of message
  * @mesg_next: pointer to the nexgt message
  * @mest_type: type of message
  * @mesg_len: length of the message
@@ -116,13 +139,11 @@ typedef struct {
  * @qdf_dev: qdf device
  * @bdev: bus device handle
  * @netdev: net device handle (wifi%d)
- * @ops: net device operation
  * @intr_tq: tasklet
  * @devstats: net device statistics
  * @bc: hal bus context
  * @device: generic device
  * @event_queue: instance to wait queue
- * @async_q:
  * @is_device_asleep: keep device status, sleep or awakei
  * @acfg_event_list: event list
  * @acfg_event_queue_lock: queue lock
@@ -136,7 +157,6 @@ struct _NIC_DEV {
 	qdf_device_t qdf_dev;
 	void *bdev;
 	struct net_device *netdev;
-	struct net_device_ops ops;
 	qdf_bh_t intr_tq;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 36)
 	struct rtnl_link_stats64 devstats;
@@ -148,6 +168,9 @@ struct _NIC_DEV {
 	struct device *device;
 	wait_queue_head_t event_queue;
 #endif /* PERF_PWR_OFFLOAD */
+#if OS_SUPPORT_ASYNC_Q
+	os_mesg_queue_t async_q;
+#endif
 #ifdef ATH_BUS_PM
 	uint8_t is_device_asleep;
 #endif /* ATH_BUS_PM */

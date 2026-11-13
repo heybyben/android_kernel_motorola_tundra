@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2014-2018, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -64,9 +63,9 @@ int qdf_hrtimer_cancel(qdf_hrtimer_data_t *timer);
  * qdf_hrtimer_init() - init hrtimer based on context
  * @timer: pointer to the qdf_hrtimer_data_t object
  * @callback: callback function to be fired
- * @clock: clock type
- * @mode: mode of qdf_hrtimer_data_t
- * @ctx: interrupt context mode
+ * @qdf_clock_id: clock type
+ * @qdf_hrtimer_mode: mode of qdf_hrtimer_data_t
+ * @qdf_context_mode: interrupt context mode
  *
  * starts hrtimer in a context passed as per qdf_context_mode
  *
@@ -77,14 +76,6 @@ void qdf_hrtimer_init(qdf_hrtimer_data_t *timer,
 		      enum qdf_clock_id clock,
 		      enum qdf_hrtimer_mode mode,
 		      enum qdf_context_mode ctx);
-
-/**
- * qdf_time_ms_to_ktime() - Converts milliseconds to a qdf_ktime_t object
- * @ms: time in milliseconds
- *
- * Return: milliseconds as ktime object
- */
-qdf_ktime_t qdf_time_ms_to_ktime(uint64_t ms);
 
 /**
  * qdf_hrtimer_kill() - kills hrtimer in given context
@@ -163,8 +154,6 @@ qdf_ktime_t qdf_hrtimer_cb_get_time(qdf_hrtimer_data_t *timer);
 uint64_t qdf_hrtimer_forward(qdf_hrtimer_data_t *timer,
 			     qdf_ktime_t now,
 			     qdf_ktime_t interval);
-
-void qdf_hrtimer_add_expires(qdf_hrtimer_data_t *timer, qdf_ktime_t interval);
 #else
 /**
  * qdf_hrtimer_start() - Starts hrtimer in given context
@@ -201,9 +190,9 @@ int qdf_hrtimer_cancel(qdf_hrtimer_data_t *timer)
  * qdf_hrtimer_init() - init hrtimer based on context
  * @timer: pointer to the qdf_hrtimer_data_t object
  * @callback: callback function to be fired
- * @clock: clock type
- * @mode: mode of qdf_hrtimer_data_t
- * @ctx: interrupt context mode
+ * @qdf_clock_id: clock type
+ * @qdf_hrtimer_mode: mode of qdf_hrtimer_data_t
+ * @qdf_context_mode: interrupt context mode
  *
  * starts hrtimer in a context passed as per qdf_context_mode
  *
@@ -216,17 +205,6 @@ static inline void qdf_hrtimer_init(qdf_hrtimer_data_t *timer,
 				    enum qdf_context_mode ctx)
 {
 	__qdf_hrtimer_init(timer, callback, clock, mode, ctx);
-}
-
-/**
- * qdf_time_ms_to_ktime() - Converts milliseconds to a qdf_ktime_t object
- * @ms: time in milliseconds
- *
- * Return: milliseconds as qdf_ktime_t object
- */
-static inline qdf_ktime_t qdf_time_ms_to_ktime(uint64_t ms)
-{
-	return __qdf_time_ms_to_ktime(ms);
 }
 
 /**
@@ -328,22 +306,6 @@ static inline uint64_t qdf_hrtimer_forward(qdf_hrtimer_data_t *timer,
 {
 	return __qdf_hrtimer_forward(timer, now, interval);
 }
-
-/**
- * qdf_hrtimer_add_expires() - Add expiry to hrtimer with given interval
- * @timer: pointer to the qdf_hrtimer_data_t object
- * @interval: interval to add as qdf_ktime_t object
- *
- * Add the timer expiry so it will expire in the future
- *
- * Return: None
- */
-static inline
-void qdf_hrtimer_add_expires(qdf_hrtimer_data_t *timer, qdf_ktime_t interval)
-{
-	return __qdf_hrtimer_add_expires(timer, interval);
-}
-
 #endif
 
 #endif /* _QDF_HRTIMER_H */

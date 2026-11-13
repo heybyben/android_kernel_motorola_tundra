@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2011-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -262,8 +261,31 @@ QDF_STATUS cm_handle_reassoc_timer(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 static QDF_STATUS cm_host_roam_start(struct cnx_mgr *cm_ctx,
 				     struct cm_req *cm_req)
 {
-	cm_req->roam_req.cur_candidate = NULL;
+	struct wlan_cm_roam_req *req;
+	struct qdf_mac_addr connected_bssid;
 
+	req = &cm_req->roam_req.req;
+
+	wlan_vdev_get_bss_peer_mac(cm_ctx->vdev, &connected_bssid);
+	if (qdf_is_macaddr_equal(&req->bssid, &connected_bssid)) {
+		mlme_info(CM_PREFIX_FMT "Self reassoc with" QDF_MAC_ADDR_FMT,
+			  CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev),
+					cm_req->cm_id),
+			  QDF_MAC_ADDR_REF(req->bssid.bytes));
+		req->self_reassoc = true;
+	}
+
+	/* if self reassoc continue with reassoc and skip preauth */
+	if (req->self_reassoc)
+		return cm_sm_deliver_event_sync(cm_ctx,
+						WLAN_CM_SM_EV_START_REASSOC,
+						sizeof(cm_req->roam_req),
+						&cm_req->roam_req);
+	/*
+	 * if not self reassoc reset cur candidate to perform preauth with
+	 * all candidate.
+	 */
+	cm_req->roam_req.cur_candidate = NULL;
 	return cm_host_roam_preauth_start(cm_ctx, cm_req);
 }
 
@@ -341,6 +363,10 @@ QDF_STATUS cm_reassoc_active(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 
 	cm_ctx->active_cm_id = *cm_id;
 
+	/* For self reassoc no need to disconnect or create peer */
+	if (cm_req->roam_req.req.self_reassoc)
+		return cm_resume_reassoc_after_peer_create(cm_ctx, cm_id);
+
 	qdf_mem_zero(&req, sizeof(req));
 	req.cm_id = *cm_id;
 	req.req.vdev_id = wlan_vdev_get_id(cm_ctx->vdev);
@@ -406,12 +432,13 @@ cm_resume_reassoc_after_peer_create(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 
 	req->vdev_id = wlan_vdev_get_id(cm_ctx->vdev);
 	req->cm_id = *cm_id;
+	req->self_reassoc = cm_req->roam_req.req.self_reassoc;
 	req->bss = cm_req->roam_req.cur_candidate;
 
-	mlme_nofl_info(CM_PREFIX_FMT "Reassoc to " QDF_SSID_FMT " " QDF_MAC_ADDR_FMT " rssi: %d freq: %d source %d",
+	mlme_nofl_info(CM_PREFIX_FMT "Reassoc to %.*s " QDF_MAC_ADDR_FMT " rssi: %d freq: %d source %d",
 		       CM_PREFIX_REF(req->vdev_id, req->cm_id),
-		       QDF_SSID_REF(req->bss->entry->ssid.length,
-				    req->bss->entry->ssid.ssid),
+		       req->bss->entry->ssid.length,
+		       req->bss->entry->ssid.ssid,
 		       QDF_MAC_ADDR_REF(req->bss->entry->bssid.bytes),
 		       req->bss->entry->rssi_raw,
 		       req->bss->entry->channel.chan_freq,
@@ -421,7 +448,9 @@ cm_resume_reassoc_after_peer_create(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 	if (QDF_IS_STATUS_ERROR(status)) {
 		mlme_err(CM_PREFIX_FMT "Reassoc request failed",
 			 CM_PREFIX_REF(req->vdev_id, req->cm_id));
-		mlme_cm_bss_peer_delete_req(cm_ctx->vdev);
+		/* Delete peer only if not self reassoc */
+		if (!cm_req->roam_req.req.self_reassoc)
+			mlme_cm_bss_peer_delete_req(cm_ctx->vdev);
 		status = cm_send_reassoc_start_fail(cm_ctx, *cm_id,
 						    CM_JOIN_FAILED, true);
 	}
@@ -571,8 +600,6 @@ cm_ser_reassoc_cb(struct wlan_serialization_command *cmd,
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	struct wlan_objmgr_vdev *vdev;
 	struct cnx_mgr *cm_ctx;
-	enum qdf_hang_reason hang_reason =
-				QDF_VDEV_ACTIVE_SER_REASSOC_TIMEOUT;
 
 	if (!cmd) {
 		mlme_err("cmd is NULL, reason: %d", reason);
@@ -616,7 +643,7 @@ cm_ser_reassoc_cb(struct wlan_serialization_command *cmd,
 	case WLAN_SER_CB_ACTIVE_CMD_TIMEOUT:
 		mlme_err(CM_PREFIX_FMT "Active command timeout",
 			 CM_PREFIX_REF(wlan_vdev_get_id(vdev), cmd->cmd_id));
-		cm_trigger_panic_on_cmd_timeout(cm_ctx->vdev, hang_reason);
+		cm_trigger_panic_on_cmd_timeout(cm_ctx->vdev);
 		cm_reassoc_cmd_timeout(cm_ctx, cmd->cmd_id);
 		break;
 	case WLAN_SER_CB_RELEASE_MEM_CMD:
@@ -754,7 +781,7 @@ void cm_reassoc_hw_mode_change_resp(struct wlan_objmgr_pdev *pdev,
 	 * new command has been received reassoc should be
 	 * aborted from here with reassoc req cleanup.
 	 */
-	if (QDF_IS_STATUS_ERROR(qdf_status))
+	if (QDF_IS_STATUS_ERROR(status))
 		cm_reassoc_handle_event_post_fail(cm_ctx, cm_id);
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_MLME_CM_ID);
 }
@@ -773,6 +800,10 @@ cm_check_for_reassoc_hw_mode_change(struct cnx_mgr *cm_ctx,
 
 	if (!cm_req->cur_candidate)
 		return QDF_STATUS_E_EMPTY;
+
+	/* HW mode change not required for self reassoc */
+	if (cm_req->req.self_reassoc)
+		return QDF_STATUS_E_ALREADY;
 
 	candidate_freq = cm_req->cur_candidate->entry->channel.chan_freq;
 	status = policy_mgr_handle_conc_multiport(
@@ -831,7 +862,6 @@ QDF_STATUS cm_reassoc_rsp(struct wlan_objmgr_vdev *vdev,
 	wlan_cm_id cm_id;
 	uint32_t prefix;
 	enum wlan_cm_sm_evt event;
-	struct qdf_mac_addr pmksa_mac = QDF_MAC_ADDR_ZERO_INIT;
 
 	cm_ctx = cm_get_cm_ctx(vdev);
 	if (!cm_ctx)
@@ -849,8 +879,6 @@ QDF_STATUS cm_reassoc_rsp(struct wlan_objmgr_vdev *vdev,
 		goto post_err;
 	}
 
-	cm_connect_rsp_get_mld_addr_or_bssid(resp, &pmksa_mac);
-
 	if (QDF_IS_STATUS_SUCCESS(resp->connect_status)) {
 		/*
 		 * On successful connection to sae single pmk AP,
@@ -858,7 +886,7 @@ QDF_STATUS cm_reassoc_rsp(struct wlan_objmgr_vdev *vdev,
 		 */
 		if (cm_is_cm_id_current_candidate_single_pmk(cm_ctx, cm_id))
 			wlan_crypto_selective_clear_sae_single_pmk_entries(
-					vdev, &pmksa_mac);
+					vdev, &resp->bssid);
 		event = WLAN_CM_SM_EV_REASSOC_DONE;
 	} else {
 		event = WLAN_CM_SM_EV_REASSOC_FAILURE;
@@ -898,33 +926,26 @@ QDF_STATUS cm_roam_bss_peer_create_rsp(struct wlan_objmgr_vdev *vdev,
 		return QDF_STATUS_E_INVAL;
 	}
 
-	if (QDF_IS_STATUS_SUCCESS(status)) {
-		qdf_status = cm_bss_peer_create_resp_mlo_attach(vdev, peer_mac);
-		if (QDF_IS_STATUS_ERROR(qdf_status)) {
-			mlme_cm_bss_peer_delete_req(vdev);
-			goto send_err;
-		}
+	if (QDF_IS_STATUS_ERROR(status)) {
+		cm_req = cm_get_req_by_cm_id(cm_ctx, cm_id);
+		if (!cm_req)
+			return QDF_STATUS_E_INVAL;
 
-		qdf_status =
-		    cm_sm_deliver_event(vdev,
-					WLAN_CM_SM_EV_BSS_CREATE_PEER_SUCCESS,
-					sizeof(wlan_cm_id), &cm_id);
-
-		if (QDF_IS_STATUS_ERROR(qdf_status)) {
-			mlme_cm_bss_peer_delete_req(vdev);
-			cm_reassoc_handle_event_post_fail(cm_ctx, cm_id);
-		}
-
-		return qdf_status;
+		return cm_send_reassoc_start_fail(
+				cm_ctx, cm_id,
+				CM_PEER_CREATE_FAILED, false);
 	}
 
-send_err:
-	cm_req = cm_get_req_by_cm_id(cm_ctx, cm_id);
-	if (!cm_req)
-		return QDF_STATUS_E_INVAL;
+	qdf_status = cm_sm_deliver_event(
+			vdev, WLAN_CM_SM_EV_BSS_CREATE_PEER_SUCCESS,
+			sizeof(wlan_cm_id), &cm_id);
+	if (QDF_IS_STATUS_SUCCESS(qdf_status))
+		return qdf_status;
 
-	return cm_send_reassoc_start_fail(cm_ctx, cm_id,
-					  CM_PEER_CREATE_FAILED, false);
+	mlme_cm_bss_peer_delete_req(vdev);
+	cm_reassoc_handle_event_post_fail(cm_ctx, cm_id);
+
+	return qdf_status;
 }
 
 QDF_STATUS cm_roam_disconnect_rsp(struct wlan_objmgr_vdev *vdev,

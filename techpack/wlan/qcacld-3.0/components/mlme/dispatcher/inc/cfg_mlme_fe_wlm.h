@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -90,7 +90,7 @@
  *
  * @min: 0
  * @max: 3
- * @default: 0
+ * @defalut: 0
  *
  * 0 - normal
  * 1 - xr
@@ -161,7 +161,7 @@
  * bit 8-9: Reserve for roaming
  * bit 10: Disable css power collapse if setting
  * bit 11: Disable sys sleep if setting
- * bit 12-31: Reserve for future usage
+ * bit 12-31: Reserve for future useage
  *
  * |63  50|  49  |  48    |47        40|39   33|    32     |
  * +------+------+--------+------------+-------+-----------+
@@ -221,7 +221,7 @@
  * bit 8-9: Reserve for roaming
  * bit 10: Disable css power collapse if setting
  * bit 11: Disable sys sleep if setting
- * bit 12-31: Reserve for future usage
+ * bit 12-31: Reserve for future useage
  *
  * |63  50|  49  |  48    |47        40|39   33|    32     |
  * +------+------+--------+------------+-------+-----------+
@@ -281,7 +281,7 @@
  * bit 8-9: Reserve for roaming
  * bit 10: Disable css power collapse if setting
  * bit 11: Disable sys sleep if setting
- * bit 12-31: Reserve for future usage
+ * bit 12-31: Reserve for future useage
  *
  * |63  50|  49  |  48    |47        40|39   33|    32     |
  * +------+------+--------+------------+-------+-----------+
@@ -316,11 +316,11 @@
  * @max: 0xffffffffffffffff
  * @default: 0xc83
  *
- * |31  25|  24  |23  12|  11  |  10  |9    8|7    6|5    4|3    2|  1  |  0  |
- * +------+------+------+------+------+------+------+------+------+-----+-----+
- * | RSVD | MLMR | RSVD | SSLP | CSLP | RSVD | Roam | RSVD | DWLT | DFS | SUP |
- * +------+------+------+-------------+-------------+-------------------------+
- * |  WAL |  PS  |  WAL |      PS     |     Roam    |         Scan            |
+ * |31  12|  11  |  10  |9    8|7    6|5    4|3    2|  1  |  0  |
+ * +------+------+------+------+------+------+------+-----+-----+
+ * | RSVD | SSLP | CSLP | RSVD | Roam | RSVD | DWLT | DFS | SUP |
+ * +------+-------------+-------------+-------------------------+
+ * |  WAL |      PS     |     Roam    |         Scan            |
  *
  * bit 0: Avoid scan request from HLOS if setting
  * bit 1: Skip DFS channel SCAN if setting
@@ -340,9 +340,7 @@
  * bit 8-9: Reserve for roaming
  * bit 10: Disable css power collapse if setting
  * bit 11: Disable sys sleep if setting
- * bit 12-23: Reserve for future usage
- * bit 24: Disable MLMR mode
- * bit 25-31: Reserved for future use
+ * bit 12-31: Reserve for future useage
  *
  * |63  50|  49  |  48    |47        40|39   33|    32     |
  * +------+------+--------+------------+-------+-----------+
@@ -361,7 +359,7 @@
  *
  * </ini>
  */
-#define CFG_DEFAULT_ULTLOW_FLAGS "0xc83"
+#define CFG_DEFAULT_ULTLOW_FLAGS "0xc82"	// IKSWU-66655, allow scan request in ULL mode
 #define CFG_LATENCY_FLAGS_ULTLOW \
 		CFG_INI_STRING("wlm_latency_flags_ultralow",\
 			       0, \

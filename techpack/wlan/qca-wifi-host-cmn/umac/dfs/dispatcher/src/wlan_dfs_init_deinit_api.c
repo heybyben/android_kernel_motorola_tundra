@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -79,7 +79,7 @@ register_dfs_precac_auto_chan_callbacks_freq(struct dfs_to_mlme *mlme_callback)
  * @mlme_callback: Pointer to dfs_to_mlme.
  */
 #ifndef MOBILE_DFS_SUPPORT
-#if defined(QCA_SUPPORT_DFS_CHAN_POSTNOL) || defined(QCA_DFS_BW_EXPAND)
+#ifdef QCA_SUPPORT_DFS_CHAN_POSTNOL
 static inline void
 register_dfs_postnol_csa_callback(struct dfs_to_mlme *mlme_callback)
 {
@@ -95,29 +95,7 @@ register_dfs_postnol_csa_callback(struct dfs_to_mlme *mlme_callback)
 {
 }
 #endif
-
-/**
- * register_dfs_unpunc_chan_switch_callback() - Register unpuncture channel VDEV
- *                                              restart callback.
- * @mlme_callback:                            Pointer to dfs_to_mlme.
- */
-#if defined(QCA_DFS_BW_PUNCTURE) && !defined(CONFIG_REG_CLIENT)
-static inline void
-register_dfs_unpunc_chan_switch_callback(struct dfs_to_mlme *mlme_callback)
-{
-	if (!mlme_callback)
-		return;
-
-	mlme_callback->mlme_unpunc_chan_switch =
-		mlme_dfs_unpunc_chan_switch;
-}
-#else
-static inline void
-register_dfs_unpunc_chan_switch_callback(struct dfs_to_mlme *mlme_callback)
-{
-}
 #endif
-#endif /* MOBILE_DFS_SUPPORT */
 
 /*
  * register_dfs_callbacks_for_freq() - Register dfs callbacks.
@@ -140,22 +118,6 @@ register_dfs_callbacks_for_freq(struct dfs_to_mlme *mlme_callback)
 	mlme_callback->mlme_start_csa_for_freq = mlme_dfs_start_csa_for_freq;
 }
 #endif
-#endif
-
-#if defined(WLAN_DFS_PARTIAL_OFFLOAD) && defined(HOST_DFS_SPOOF_TEST)
-static void register_dfs_callbacks_spoof_success_failure(
-		struct dfs_to_mlme *tmp_dfs_to_mlme)
-{
-	tmp_dfs_to_mlme->mlme_rebuild_chan_list_with_non_dfs_channels =
-		mlme_dfs_rebuild_chan_list_with_non_dfs_channels;
-	tmp_dfs_to_mlme->mlme_proc_spoof_success =
-		mlme_dfs_proc_spoof_success;
-}
-#else
-static inline void register_dfs_callbacks_spoof_success_failure(
-		struct dfs_to_mlme *tmp_dfs_to_mlme)
-{
-}
 #endif
 
 #ifndef MOBILE_DFS_SUPPORT
@@ -181,9 +143,8 @@ void register_dfs_callbacks(void)
 	tmp_dfs_to_mlme->mlme_nol_timeout_notification =
 		mlme_dfs_nol_timeout_notification;
 	tmp_dfs_to_mlme->mlme_clist_update = mlme_dfs_clist_update;
-
-	register_dfs_callbacks_spoof_success_failure(tmp_dfs_to_mlme);
-
+	tmp_dfs_to_mlme->mlme_rebuild_chan_list_with_non_dfs_channels =
+		mlme_dfs_rebuild_chan_list_with_non_dfs_channels;
 	tmp_dfs_to_mlme->mlme_restart_vaps_with_non_dfs_chan =
 		mlme_dfs_restart_vaps_with_non_dfs_chan;
 	tmp_dfs_to_mlme->mlme_is_opmode_sta =
@@ -205,7 +166,8 @@ void register_dfs_callbacks(void)
 		mlme_release_radar_mode_switch_lock;
 	tmp_dfs_to_mlme->mlme_mark_dfs =
 		mlme_dfs_mark_dfs;
-	tmp_dfs_to_mlme->mlme_set_tx_flag = mlme_dfs_set_tx_flag;
+	tmp_dfs_to_mlme->mlme_proc_spoof_success =
+		mlme_dfs_proc_spoof_success;
 	/*
 	 * Register precac auto channel switch feature related callbacks
 	 */
@@ -213,7 +175,6 @@ void register_dfs_callbacks(void)
 	/* Register freq based callbacks */
 	register_dfs_callbacks_for_freq(tmp_dfs_to_mlme);
 	register_dfs_postnol_csa_callback(tmp_dfs_to_mlme);
-	register_dfs_unpunc_chan_switch_callback(tmp_dfs_to_mlme);
 }
 #else
 void register_dfs_callbacks(void)
@@ -267,7 +228,7 @@ static QDF_STATUS dfs_psoc_obj_create_notification(struct wlan_objmgr_psoc *psoc
 	dfs_agile_sm_create(dfs_soc_obj);
 
 	dfs_debug(NULL, WLAN_DEBUG_DFS1,
-		  "DFS obj attach to psoc successfully");
+		"DFS obj attach to psoc successfully");
 
 	return status;
 }
@@ -479,7 +440,7 @@ QDF_STATUS wlan_dfs_pdev_obj_create_notification(struct wlan_objmgr_pdev *pdev,
 
 	if (!is_5ghz) {
 		pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
-		dfs_info(dfs, WLAN_DEBUG_DFS,
+		dfs_info(dfs, WLAN_DEBUG_DFS_ALWAYS,
 				"Do not allocate DFS object for 2G, pdev_id = %d",
 				pdev_id);
 		return QDF_STATUS_SUCCESS;
@@ -508,20 +469,8 @@ QDF_STATUS wlan_dfs_pdev_obj_create_notification(struct wlan_objmgr_pdev *pdev,
 	}
 
 	dfs->dfs_is_offload_enabled = dfs_tx_ops->dfs_is_tgt_offload(psoc);
-	dfs_info(dfs, WLAN_DEBUG_DFS, "dfs_offload %d",
+	dfs_info(dfs, WLAN_DEBUG_DFS_ALWAYS, "dfs_offload %d",
 		 dfs->dfs_is_offload_enabled);
-
-	if (!dfs_tx_ops->dfs_is_tgt_bangradar_320_supp) {
-		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS,
-			"dfs_is_tgt_bangradar_320_supp is null");
-		dfs_destroy_object(dfs);
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	dfs->dfs_is_bangradar_320_supported =
-				dfs_tx_ops->dfs_is_tgt_bangradar_320_supp(psoc);
-	dfs_info(dfs, WLAN_DEBUG_DFS_ALWAYS, "dfs_bangradar_320_support %d",
-		 dfs->dfs_is_bangradar_320_supported);
 
 	if (!dfs_tx_ops->dfs_is_tgt_radar_found_chan_freq_eq_center_freq) {
 		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS,
@@ -540,7 +489,6 @@ QDF_STATUS wlan_dfs_pdev_obj_create_notification(struct wlan_objmgr_pdev *pdev,
 							    WLAN_UMAC_COMP_DFS);
 	dfs->dfs_soc_obj = dfs_soc_obj;
 	dfs_agile_soc_obj_init(dfs, psoc);
-	dfs_create_punc_sm(dfs);
 
 	if (dfs_attach(dfs) == 1) {
 		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS,  "dfs_attch failed");
@@ -565,7 +513,6 @@ QDF_STATUS wlan_dfs_pdev_obj_destroy_notification(struct wlan_objmgr_pdev *pdev,
 
 	/* DFS is NULL during unload. should we call this function before */
 	if (dfs) {
-		dfs_destroy_punc_sm(dfs);
 		dfs_detach(dfs);
 		global_dfs_to_mlme.pdev_component_obj_detach(pdev,
 				WLAN_UMAC_COMP_DFS,

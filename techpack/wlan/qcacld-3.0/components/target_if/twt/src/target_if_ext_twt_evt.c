@@ -24,7 +24,7 @@
 #include <target_if.h>
 #include <target_if_ext_twt.h>
 #include <wlan_twt_api.h>
-#include "twt/core/src/wlan_twt_main.h"
+#include "wlan_twt_main.h"
 
 static int
 target_if_twt_setup_complete_event_handler(ol_scn_t scn, uint8_t *event,
@@ -80,7 +80,6 @@ target_if_twt_setup_complete_event_handler(ol_scn_t scn, uint8_t *event,
 
 done:
 	qdf_mem_free(data);
-
 	return qdf_status_to_os_return(qdf_status);
 }
 
@@ -130,7 +129,6 @@ target_if_twt_teardown_complete_event_handler(ol_scn_t scn, uint8_t *event,
 
 done:
 	qdf_mem_free(data);
-
 	return qdf_status_to_os_return(qdf_status);
 
 }
@@ -189,12 +187,12 @@ target_if_twt_pause_complete_event_handler(ol_scn_t scn, uint8_t *event,
 
 done:
 	qdf_mem_free(param);
-
 	return qdf_status_to_os_return(qdf_status);
 }
 
 /**
- * target_if_twt_resume_complete_event_handler - TWT resume complete evt handler
+ * target_if_twt_resume_dialog_complete_event_handler - TWT resume dlg
+ * complete evt handler
  * @scn: scn
  * @event: buffer with event
  * @len: buffer length
@@ -247,12 +245,12 @@ target_if_twt_resume_complete_event_handler(ol_scn_t scn, uint8_t *event,
 
 done:
 	qdf_mem_free(param);
-
 	return qdf_status_to_os_return(qdf_status);
 }
 
 /**
- * target_if_twt_nudge_complete_event_handler - TWT nudge complete evt handler
+ * target_if_twt_nudge_dialog_complete_event_handler - TWT nudge dlg
+ * complete evt handler
  * @scn: scn
  * @event: buffer with event
  * @len: buffer length
@@ -305,7 +303,6 @@ target_if_twt_nudge_complete_event_handler(ol_scn_t scn, uint8_t *event,
 
 done:
 	qdf_mem_free(param);
-
 	return qdf_status_to_os_return(qdf_status);
 }
 
@@ -354,8 +351,8 @@ target_if_twt_notify_event_handler(ol_scn_t scn, uint8_t *event,
 
 done:
 	qdf_mem_free(data);
-
 	return qdf_status_to_os_return(qdf_status);
+
 }
 
 static int
@@ -403,7 +400,6 @@ target_if_twt_ack_complete_event_handler(ol_scn_t scn, uint8_t *event,
 
 done:
 	qdf_mem_free(data);
-
 	return qdf_status_to_os_return(qdf_status);
 }
 
@@ -412,6 +408,11 @@ target_if_twt_register_ext_events(struct wlan_objmgr_psoc *psoc)
 {
 	QDF_STATUS status;
 	struct wmi_unified *wmi_handle;
+
+	if (!psoc) {
+		target_if_err("psoc obj is null!");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
 
 	wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
 	if (!wmi_handle) {
@@ -497,6 +498,11 @@ target_if_twt_deregister_ext_events(struct wlan_objmgr_psoc *psoc)
 {
 	QDF_STATUS status;
 	struct wmi_unified *wmi_handle;
+
+	if (!psoc) {
+		target_if_err("psoc is NULL!");
+		return QDF_STATUS_E_INVAL;
+	}
 
 	wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
 	if (!wmi_handle) {

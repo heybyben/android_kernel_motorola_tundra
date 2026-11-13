@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -110,7 +109,7 @@ QDF_STATUS pmo_psoc_close(struct wlan_objmgr_psoc *psoc);
  * pmo_get_vdev_bss_peer_mac_addr() - API to get bss peer mac address
  * @vdev: objmgr vdev
  * @bss_peer_mac_address: bss peer mac address
- *
+ *.
  * Helper function to  get bss peer mac address
  *
  * Return: if success pmo vdev ctx else NULL
@@ -131,7 +130,6 @@ bool pmo_is_vdev_in_beaconning_mode(enum QDF_OPMODE vdev_opmode);
 
 /**
  * pmo_core_is_ap_mode_supports_arp_ns() - To check ap mode supports arp/ns
- * @psoc: objmgr psoc handle
  * @vdev_opmode: vdev opmode
  *
  * API to check if ap mode supports arp/ns offload
@@ -386,36 +384,21 @@ pmo_intersect_packet_filter(struct pmo_psoc_priv_obj *psoc_ctx)
 }
 
 /*
- * pmo_host_action_on_page_fault() - Returns action host will take on page fault
- * @psoc: PSOC object manager pointer.
- *
- * Returns: Host action on page fault event
- */
-enum pmo_page_fault_action
-pmo_host_action_on_page_fault(struct wlan_objmgr_psoc *psoc);
-
-#define pmo_is_host_pagefault_action(_psoc, _action) \
-		(pmo_host_action_on_page_fault(_psoc) == (_action))
-
-static inline bool pmo_no_op_on_page_fault(struct wlan_objmgr_psoc *psoc)
-{
-	return pmo_is_host_pagefault_action(psoc, PMO_PF_HOST_ACTION_NO_OP);
-}
-
-static inline bool pmo_enable_ssr_on_page_fault(struct wlan_objmgr_psoc *psoc)
-{
-	return pmo_is_host_pagefault_action(psoc, PMO_PF_HOST_ACTION_TRIGGER_SSR);
-}
-
-/*
- * pmo_get_min_pagefault_wakeups_for_action() - get pagefault wakeups for host
- * to initiate action
+ * pmo_enable_ssr_on_page_fault: Enable/disable ssr on pagefault
  * @psoc: objmgr psoc
  *
- * Return: Min wakeups interval for host action on pagefault
+ * Return: True if SSR is enabled on pagefault
+ */
+bool pmo_enable_ssr_on_page_fault(struct wlan_objmgr_psoc *psoc);
+
+/*
+ * pmo_get_max_pagefault_wakeups_for_ssr: get pagefault wakeups for ssr
+ * @psoc: objmgr psoc
+ *
+ * Return: SSR interval for pagefault
  */
 uint8_t
-pmo_get_min_pagefault_wakeups_for_action(struct wlan_objmgr_psoc *psoc);
+pmo_get_max_pagefault_wakeups_for_ssr(struct wlan_objmgr_psoc *psoc);
 
 /*
  * pmo_get_interval_for_pagefault_wakeup_counts: get ssr interval for pagefault
@@ -434,59 +417,6 @@ pmo_get_interval_for_pagefault_wakeup_counts(struct wlan_objmgr_psoc *psoc);
  */
 uint32_t pmo_get_ssr_frequency_on_pagefault(struct wlan_objmgr_psoc *psoc);
 
-/**
- * pmo_get_vdev_bridge_addr() - API to get Bridge mac address
- * @vdev: vdev object
- * @bridgeaddr: Bridge mac address
- *
- * Helper function to get Bridge mac address
- *
- * Return: if success pmo vdev ctx else NULL
- */
-QDF_STATUS pmo_get_vdev_bridge_addr(struct wlan_objmgr_vdev *vdev,
-				    struct qdf_mac_addr *bridgeaddr);
-
-/**
- * pmo_set_vdev_bridge_addr() - API to set Bridge mac address
- * @vdev: vdev object
- * @bridgeaddr: Bridge mac address
- *
- * API to set the Bridge MAC address
- *
- * Return: if success pmo vdev ctx else NULL
- */
-QDF_STATUS pmo_set_vdev_bridge_addr(struct wlan_objmgr_vdev *vdev,
-				    struct qdf_mac_addr *bridgeaddr);
-
 #endif /* WLAN_POWER_MANAGEMENT_OFFLOAD */
 
-/**
- * pmo_core_get_listen_interval() - function to get configured
- * listen interval
- * @vdev: vdev objmgr vdev
- * @listen_interval: Pointer variable to return listen interval
- *
- * This function allows get configured listen interval
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS pmo_core_get_listen_interval(struct wlan_objmgr_vdev *vdev,
-					uint32_t *listen_interval);
-
-#ifdef FEATURE_WLAN_APF
-/**
- * pmo_core_is_configure_apf_per_screen_state() - To get configure APF
- * per screen state
- * @psoc: objmgr psoc handle
- *
- * Return: true if enabled, else false
- */
-static inline bool
-pmo_core_is_configure_apf_per_screen_state(struct wlan_objmgr_psoc *psoc)
-{
-	struct pmo_psoc_priv_obj *pmo_psoc_ctx = pmo_psoc_get_priv(psoc);
-
-	return pmo_psoc_ctx->psoc_cfg.is_apf_configure_per_screen_state;
-}
-#endif
 #endif /* end  of _WLAN_PMO_MAIN_H_ */

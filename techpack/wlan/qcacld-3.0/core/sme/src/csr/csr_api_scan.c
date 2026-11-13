@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -42,7 +42,7 @@
 #include "wlan_hdd_main.h"
 #include "pld_common.h"
 #include "csr_internal.h"
-#include <wlan_scan_api.h>
+#include <wlan_scan_ucfg_api.h>
 #include <wlan_scan_api.h>
 #include <wlan_scan_utils_api.h>
 #include <wlan_objmgr_vdev_obj.h>
@@ -50,7 +50,7 @@
 #include <wlan_utility.h>
 #include "wlan_reg_services_api.h"
 #include "sch_api.h"
-#include "wlan_dlm_api.h"
+#include "wlan_blm_api.h"
 #include "qdf_crypto.h"
 #include <wlan_crypto_global_api.h>
 #include "wlan_reg_ucfg_api.h"
@@ -148,14 +148,6 @@ static void csr_purge_channel_power(struct mac_context *mac,
 	csr_ll_unlock(pChannelList);
 }
 
-#define FREQ_SIZE 4
-#define SPACE_SIZE 2
-#define SIZEOFNULL 1
-#define BUF24GHZSIZE (NUM_24GHZ_CHANNELS * (\
-					FREQ_SIZE + SPACE_SIZE) + SIZEOFNULL)
-#define BUF5GHZSIZE (NUM_5GHZ_CHANNELS * (\
-					FREQ_SIZE + SPACE_SIZE) + SIZEOFNULL)
-
 /*
  * Save the channelList into the ultimate storage as the final stage of channel
  * Input: pCountryInfo -- the country code (e.g. "USI"), channel list, and power
@@ -167,53 +159,41 @@ QDF_STATUS csr_save_to_channel_power2_g_5_g(struct mac_context *mac,
 {
 	uint32_t i = tableSize / sizeof(struct pwr_channel_info);
 	struct pwr_channel_info *pChannelInfo;
-	struct csr_channel_powerinfo *pchannelset;
+	struct csr_channel_powerinfo *pChannelSet;
 	bool f2GHzInfoFound = false;
 	bool f2GListPurged = false, f5GListPurged = false;
-	uint8_t *buf24ghz = qdf_mem_malloc(BUF24GHZSIZE);
-	uint8_t *buf5ghz = qdf_mem_malloc(BUF5GHZSIZE);
-	uint32_t size24ghz = 0, size5ghz = 0;
 
-	if (!buf24ghz || !buf5ghz) {
-		if (buf24ghz)
-			qdf_mem_free(buf24ghz);
-		if (buf5ghz)
-			qdf_mem_free(buf5ghz);
-		return QDF_STATUS_E_NOMEM;
-	}
 	pChannelInfo = channelTable;
 	/* atleast 3 bytes have to be remaining  -- from "countryString" */
 	while (i--) {
-	pchannelset = qdf_mem_malloc(sizeof(struct csr_channel_powerinfo));
-		if (!pchannelset) {
+	pChannelSet = qdf_mem_malloc(sizeof(struct csr_channel_powerinfo));
+		if (!pChannelSet) {
 			pChannelInfo++;
 			continue;
 		}
-		pchannelset->first_chan_freq = pChannelInfo->first_freq;
-		pchannelset->numChannels = pChannelInfo->num_chan;
+		pChannelSet->first_chan_freq = pChannelInfo->first_freq;
+		pChannelSet->numChannels = pChannelInfo->num_chan;
 		/*
 		 * Now set the inter-channel offset based on the frequency band
 		 * the channel set lies in
 		 */
-		if (WLAN_REG_IS_24GHZ_CH_FREQ(pchannelset->first_chan_freq) &&
-		    (pchannelset->first_chan_freq + 5 * (pchannelset->numChannels - 1) <=
+		if (WLAN_REG_IS_24GHZ_CH_FREQ(pChannelSet->first_chan_freq) &&
+		    (pChannelSet->first_chan_freq + 5 * (pChannelSet->numChannels - 1) <=
 		     WLAN_REG_MAX_24GHZ_CHAN_FREQ)) {
-			pchannelset->interChannelOffset = 5;
+			pChannelSet->interChannelOffset = 5;
 			f2GHzInfoFound = true;
-		} else if (WLAN_REG_IS_5GHZ_CH_FREQ(pchannelset->first_chan_freq) &&
-			   (pchannelset->first_chan_freq + 20 * (pchannelset->numChannels - 1) <=
+		} else if (WLAN_REG_IS_5GHZ_CH_FREQ(pChannelSet->first_chan_freq) &&
+			   (pChannelSet->first_chan_freq + 20 * (pChannelSet->numChannels - 1) <=
 			   WLAN_REG_MAX_5GHZ_CHAN_FREQ)) {
-			pchannelset->interChannelOffset = 20;
+			pChannelSet->interChannelOffset = 20;
 			f2GHzInfoFound = false;
 		} else {
 			sme_warn("Invalid Channel freq %d Present in Country IE",
-				 pchannelset->first_chan_freq);
-			qdf_mem_free(pchannelset);
-			qdf_mem_free(buf24ghz);
-			qdf_mem_free(buf5ghz);
+				 pChannelSet->first_chan_freq);
+			qdf_mem_free(pChannelSet);
 			return QDF_STATUS_E_FAILURE;
 		}
-		pchannelset->txPower = pChannelInfo->max_tx_pwr;
+		pChannelSet->txPower = pChannelInfo->max_tx_pwr;
 		if (f2GHzInfoFound) {
 			if (!f2GListPurged) {
 				/* purge previous results if found new */
@@ -226,14 +206,13 @@ QDF_STATUS csr_save_to_channel_power2_g_5_g(struct mac_context *mac,
 				/* add to the list of 2.4 GHz channel sets */
 				csr_ll_insert_tail(&mac->scan.
 						   channelPowerInfoList24,
-						   &pchannelset->link,
+						   &pChannelSet->link,
 						   LL_ACCESS_LOCK);
 			} else {
-				size24ghz += qdf_scnprintf(
-					buf24ghz + size24ghz,
-					BUF24GHZSIZE - size24ghz, "  %d",
-					pchannelset->first_chan_freq);
-				qdf_mem_free(pchannelset);
+				sme_debug(
+					"Adding 11B/G ch in 11A. 1st ch freq %d",
+					pChannelSet->first_chan_freq);
+				qdf_mem_free(pChannelSet);
 			}
 		} else {
 			/* 5GHz info found */
@@ -248,26 +227,20 @@ QDF_STATUS csr_save_to_channel_power2_g_5_g(struct mac_context *mac,
 				/* add to the list of 5GHz channel sets */
 				csr_ll_insert_tail(&mac->scan.
 						   channelPowerInfoList5G,
-						   &pchannelset->link,
+						   &pChannelSet->link,
 						   LL_ACCESS_LOCK);
 			} else {
-				size5ghz += qdf_scnprintf(
-						buf5ghz + size5ghz,
-						BUF5GHZSIZE - size5ghz, "  %d",
-						pchannelset->first_chan_freq);
-				qdf_mem_free(pchannelset);
+				sme_debug(
+					"Adding 11A ch in B/G. 1st ch freq %d",
+					pChannelSet->first_chan_freq);
+				qdf_mem_free(pChannelSet);
 			}
 		}
 		pChannelInfo++; /* move to next entry */
 	}
-	if (size24ghz)
-		sme_nofl_debug("Adding 11B/G ch in 11A:%s", buf24ghz);
-	qdf_mem_free(buf24ghz);
-	if (size5ghz)
-		sme_nofl_debug("Adding 11A ch in B/G:%s", buf5ghz);
-	qdf_mem_free(buf5ghz);
 	return QDF_STATUS_SUCCESS;
 }
+
 void csr_apply_power2_current(struct mac_context *mac)
 {
 	sme_debug("Updating Cfg with power settings");
@@ -479,7 +452,9 @@ static void csr_set_cfg_valid_channel_list(struct mac_context *mac,
 	QDF_STATUS status;
 	uint8_t i;
 
-	sme_debug("dump valid channel list(NumChannels(%d))", NumChannels);
+	QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_DEBUG,
+		  "%s: dump valid channel list(NumChannels(%d))",
+		  __func__, NumChannels);
 	QDF_TRACE_HEX_DUMP(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_DEBUG,
 			   pchan_freq_list, NumChannels);
 	for (i = 0; i < NumChannels; i++) {
@@ -488,7 +463,8 @@ static void csr_set_cfg_valid_channel_list(struct mac_context *mac,
 
 	mac->mlme_cfg->reg.valid_channel_list_num = NumChannels;
 
-	sme_debug("Scan offload is enabled, update default chan list");
+	QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_DEBUG,
+		  "Scan offload is enabled, update default chan list");
 	/*
 	 * disable fcc constraint since new country code
 	 * is being set
@@ -496,7 +472,8 @@ static void csr_set_cfg_valid_channel_list(struct mac_context *mac,
 	mac->scan.fcc_constraint = false;
 	status = csr_update_channel_list(mac);
 	if (QDF_STATUS_SUCCESS != status) {
-		sme_err("failed to update the supported channel list");
+		QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_ERROR,
+			  "failed to update the supported channel list");
 	}
 }
 
@@ -617,10 +594,6 @@ static void csr_fill_rsn_auth_type(enum csr_akm_type *auth_type, uint32_t akm)
 		*auth_type = eCSR_AUTH_TYPE_FILS_SHA384;
 	else if (QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FILS_SHA256))
 		*auth_type = eCSR_AUTH_TYPE_FILS_SHA256;
-	else if (QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_SAE_EXT_KEY))
-		*auth_type = eCSR_AUTH_TYPE_FT_SAE_EXT_KEY;
-	else if (QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_SAE_EXT_KEY))
-		*auth_type = eCSR_AUTH_TYPE_SAE_EXT_KEY;
 	else if (QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_SAE))
 		*auth_type = eCSR_AUTH_TYPE_FT_SAE;
 	else if (QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_SAE))
@@ -799,10 +772,9 @@ static QDF_STATUS csr_fill_bss_from_scan_entry(struct mac_context *mac_ctx,
 	enum channel_state ap_channel_state;
 
 	ap_channel_state =
-		wlan_reg_get_channel_state_for_pwrmode(
+		wlan_reg_get_channel_state_for_freq(
 				mac_ctx->pdev,
-				scan_entry->channel.chan_freq,
-				REG_CURRENT_PWR_MODE);
+				scan_entry->channel.chan_freq);
 	if (ap_channel_state == CHANNEL_STATE_DISABLE ||
 	    ap_channel_state == CHANNEL_STATE_INVALID) {
 		sme_err("BSS "QDF_MAC_ADDR_FMT" channel %d invalid, not populating this BSSID",
@@ -822,6 +794,7 @@ static QDF_STATUS csr_fill_bss_from_scan_entry(struct mac_context *mac_ctx,
 		return QDF_STATUS_E_NOMEM;
 
 	csr_fill_neg_crypto_info(bss, &scan_entry->neg_sec_info);
+	bss->bss_score = scan_entry->bss_score;
 
 	result_info = &bss->Result;
 	result_info->ssId.length = scan_entry->ssid.length;
@@ -892,7 +865,7 @@ QDF_STATUS csr_scan_get_result(struct mac_context *mac_ctx,
 		return QDF_STATUS_E_INVAL;
 	}
 
-	list = wlan_scan_get_result(pdev, filter);
+	list = ucfg_scan_get_result(pdev, filter);
 	if (list) {
 		num_bss = qdf_list_size(list);
 		sme_debug("num_entries %d", num_bss);
@@ -940,7 +913,7 @@ QDF_STATUS csr_scan_get_result(struct mac_context *mac_ctx,
 
 error:
 	if (list)
-		wlan_scan_purge_results(list);
+		ucfg_scan_purge_results(list);
 	if (pdev)
 		wlan_objmgr_pdev_release_ref(pdev, WLAN_LEGACY_MAC_ID);
 
@@ -949,12 +922,19 @@ error:
 
 QDF_STATUS csr_scan_get_result_for_bssid(struct mac_context *mac_ctx,
 					 struct qdf_mac_addr *bssid,
-					 qdf_list_t **ret_list)
+					 tCsrScanResultInfo *res)
 {
+	QDF_STATUS status = QDF_STATUS_E_FAILURE;
 	struct scan_filter *scan_filter;
-	qdf_list_t *list = NULL;
+	tScanResultHandle filtered_scan_result = NULL;
+	tCsrScanResultInfo *scan_result;
 
-	*ret_list = NULL;
+	if (!mac_ctx) {
+		QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_ERROR,
+				FL("mac_ctx is NULL"));
+		return QDF_STATUS_E_FAILURE;
+	}
+
 	scan_filter = qdf_mem_malloc(sizeof(*scan_filter));
 	if (!scan_filter)
 		return QDF_STATUS_E_NOMEM;
@@ -962,23 +942,95 @@ QDF_STATUS csr_scan_get_result_for_bssid(struct mac_context *mac_ctx,
 	scan_filter->num_of_bssid = 1;
 	qdf_mem_copy(scan_filter->bssid_list[0].bytes, bssid->bytes,
 		     QDF_MAC_ADDR_SIZE);
-	scan_filter->ignore_auth_enc_type = true;
 
-	list = wlan_scan_get_result(mac_ctx->pdev, scan_filter);
-	qdf_mem_free(scan_filter);
-	if (!list || (list && !qdf_list_size(list)))
-		goto purge_list;
+	status = csr_scan_get_result(mac_ctx, scan_filter,
+				&filtered_scan_result);
 
-	*ret_list = list;
-	return QDF_STATUS_SUCCESS;
+	if (!QDF_IS_STATUS_SUCCESS(status)) {
+		sme_err("Failed to get scan result");
+		goto free_filter;
+	}
 
-purge_list:
-	if (list)
-		wlan_scan_purge_results(list);
+	scan_result = csr_scan_result_get_first(mac_ctx, filtered_scan_result);
 
-	return QDF_STATUS_E_FAILURE;
+	if (scan_result) {
+		res->pvIes = NULL;
+		res->ssId.length = scan_result->ssId.length;
+		qdf_mem_copy(&res->ssId.ssId, &scan_result->ssId.ssId,
+			res->ssId.length);
+		res->timer = scan_result->timer;
+		qdf_mem_copy(&res->BssDescriptor, &scan_result->BssDescriptor,
+			sizeof(struct bss_description));
+		status = QDF_STATUS_SUCCESS;
+	} else {
+		status = QDF_STATUS_E_FAILURE;
+	}
+
+	csr_scan_result_purge(mac_ctx, filtered_scan_result);
+
+free_filter:
+	if (scan_filter)
+		qdf_mem_free(scan_filter);
+
+	return status;
 }
 
+static inline QDF_STATUS
+csr_flush_scan_results(struct mac_context *mac_ctx,
+		       struct scan_filter *filter)
+{
+	struct wlan_objmgr_pdev *pdev = NULL;
+	QDF_STATUS status;
+
+	pdev = wlan_objmgr_get_pdev_by_id(mac_ctx->psoc,
+		0, WLAN_LEGACY_MAC_ID);
+	if (!pdev) {
+		sme_err("pdev is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+	status = ucfg_scan_flush_results(pdev, filter);
+
+	wlan_objmgr_pdev_release_ref(pdev, WLAN_LEGACY_MAC_ID);
+	return status;
+}
+
+static inline void csr_flush_bssid(struct mac_context *mac_ctx,
+				   uint8_t *bssid)
+{
+	struct scan_filter *filter;
+
+	filter = qdf_mem_malloc(sizeof(*filter));
+	if (!filter)
+		return;
+
+	filter->num_of_bssid = 1;
+	qdf_mem_copy(filter->bssid_list[0].bytes,
+		     bssid, QDF_MAC_ADDR_SIZE);
+
+	csr_flush_scan_results(mac_ctx, filter);
+	sme_debug("Removed BSS entry:"QDF_MAC_ADDR_FMT,
+		   QDF_MAC_ADDR_REF(bssid));
+	if (filter)
+		qdf_mem_free(filter);
+}
+
+void csr_remove_bssid_from_scan_list(struct mac_context *mac_ctx,
+				     tSirMacAddr bssid)
+{
+	csr_flush_bssid(mac_ctx, bssid);
+}
+
+/**
+ * csr_scan_filter_results: filter scan result based
+ * on valid channel list number.
+ * @mac_ctx: mac context
+ *
+ * Get scan result from scan list and Check Scan result channel number
+ * with 11d channel list if channel number is found in 11d channel list
+ * then do not remove scan result entry from scan list
+ *
+ * return: QDF Status
+ */
 QDF_STATUS csr_scan_filter_results(struct mac_context *mac_ctx)
 {
 	uint32_t len = mac_ctx->mlme_cfg->reg.valid_channel_list_num;

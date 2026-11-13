@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -99,7 +98,7 @@ static void hal_tx_set_dscp_tid_map_6290(struct hal_soc *soc,
 
 	HAL_REG_WRITE(soc, cmn_reg_addr, regval);
 
-	/* Write 8 (24 bits) DSCP-TID mappings in each iteration */
+	/* Write 8 (24 bits) DSCP-TID mappings in each interation */
 	for (i = 0; i < 64; i += 8) {
 		value = (map[i] |
 			(map[i + 1] << 0x3) |
@@ -121,7 +120,7 @@ static void hal_tx_set_dscp_tid_map_6290(struct hal_soc *soc,
 		addr += 4;
 	}
 
-	/* Disable read/write access */
+	/* Diasble read/write access */
 	regval = HAL_REG_READ(soc, cmn_reg_addr);
 	regval &=
 	~(HWIO_TCL_R0_CONS_RING_CMN_CTRL_REG_DSCP_TID_MAP_PROGRAM_EN_BMSK);
@@ -170,9 +169,9 @@ static void hal_tx_set_dscp_tid_map_6290(struct hal_soc *soc,
 #ifdef QCA_WIFI_QCA6290_11AX
 /**
  * hal_tx_update_dscp_tid_6290() - Update the dscp tid map table as updated
- *                                 by the user
+ *					by the user
  * @soc: HAL SoC context
- * @tid: TID
+ * @map: DSCP-TID mapping table
  * @id : MAP ID
  * @dscp: DSCP_TID map index
  *
@@ -235,7 +234,7 @@ static void hal_tx_update_dscp_tid_6290(struct hal_soc *soc, uint8_t tid,
 
 #ifdef QCA_WIFI_QCA6290_11AX
 /**
- * hal_tx_desc_set_lmac_id_6290() - Set the lmac_id value
+ * hal_tx_desc_set_lmac_id - Set the lmac_id value
  * @desc: Handle to Tx Descriptor
  * @lmac_id: mac Id to ast matching
  *		     b00 – mac 0
@@ -259,7 +258,7 @@ static void hal_tx_desc_set_lmac_id_6290(void *desc, uint8_t lmac_id)
 /**
  * hal_tx_init_cmd_credit_ring_6290() - Initialize command/credit SRNG
  * @hal_soc_hdl: Handle to HAL SoC structure
- * @hal_ring_hdl: Handle to HAL SRNG structure
+ * @hal_srng: Handle to HAL SRNG structure
  *
  * Return: none
  */

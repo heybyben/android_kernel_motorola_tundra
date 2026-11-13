@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -931,7 +931,7 @@ htt_rx_restitch_mpdu_from_msdus(htt_pdev_handle pdev,
 
 	/* Allocate a new nbuf for holding the 802.11 header retrieved from the
 	 * status of the now decapped first msdu. Leave enough headroom for
-	 * accommodating any radio-tap /prism like PHY header
+	 * accomodating any radio-tap /prism like PHY header
 	 */
 #define HTT_MAX_MONITOR_HEADER (512)
 	mpdu_buf = qdf_nbuf_alloc(pdev->osdev,

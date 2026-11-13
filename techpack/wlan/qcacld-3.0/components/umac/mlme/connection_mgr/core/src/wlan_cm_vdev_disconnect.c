@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2015, 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -16,7 +16,7 @@
  */
 
 /**
- * DOC: Implements legacy disconnect connect specific APIs of
+ * DOC: Implements leagcy disconnect connect specific APIs of
  * connection mgr to initiate vdev manager operations
  */
 
@@ -33,11 +33,6 @@
 #include "wni_api.h"
 #include "connection_mgr/core/src/wlan_cm_roam.h"
 #include <wlan_mlo_mgr_sta.h>
-#include "wlan_mlo_mgr_roam.h"
-#include "wlan_t2lm_api.h"
-#include "wlan_mlo_link_force.h"
-#include <wlan_mlo_mgr_public_api.h>
-#include <wlan_cp_stats_chipset_stats.h>
 
 static void cm_abort_connect_request_timers(struct wlan_objmgr_vdev *vdev)
 {
@@ -76,104 +71,23 @@ QDF_STATUS cm_disconnect_start_ind(struct wlan_objmgr_vdev *vdev,
 		mlme_err("vdev_id: %d psoc not found", req->vdev_id);
 		return QDF_STATUS_E_INVAL;
 	}
-	mlo_sta_stop_reconfig_timer(vdev);
-	if (req->source != CM_MLO_LINK_SWITCH_DISCONNECT)
-		ml_nlink_conn_change_notify(
-			psoc, wlan_vdev_get_id(vdev),
-			ml_nlink_disconnect_start_evt, NULL);
+
 	if (cm_csr_is_ss_wait_for_key(req->vdev_id)) {
 		mlme_debug("Stop Wait for key timer");
 		cm_stop_wait_for_key_timer(psoc, req->vdev_id);
 		cm_csr_set_ss_none(req->vdev_id);
 	}
 
-	user_disconnect =
-		(req->source == CM_OSIF_DISCONNECT ||
-		 req->source == CM_MLO_LINK_SWITCH_DISCONNECT) ? true : false;
-	if (user_disconnect)
-		wlan_p2p_cleanup_roc_by_vdev(vdev, false);
-
-	/*
-	 * For link switch disconnect avoid posting msg to PE to
-	 * delete all the TDLS peers since pe_session can get deleted before
-	 * TDLS msg is processed, causing the TDLS peers to be not deleted.
-	 * The AID bitmap also gets cleared during pe_session deletion,
-	 * so during subsequent disconnects also to not deleted the TDLS peers
-	 * TODO: Move all TDLS peers deletion logic from IF_MGR to be symmetric
-	 */
-	if (req->source == CM_OSIF_DISCONNECT)
+	user_disconnect = req->source == CM_OSIF_DISCONNECT ? true : false;
+	if (user_disconnect) {
+		wlan_p2p_cleanup_roc_by_vdev(vdev);
 		wlan_tdls_notify_sta_disconnect(req->vdev_id, false,
-						true, vdev);
-
-	cm_abort_connect_request_timers(vdev);
-
-	if (req->source != CM_MLO_ROAM_INTERNAL_DISCONNECT &&
-	    req->source != CM_MLO_LINK_SWITCH_DISCONNECT) {
-		mlme_debug("Free copied reassoc rsp");
-		mlo_roam_free_copied_reassoc_rsp(vdev);
+						user_disconnect, vdev);
 	}
-
-	wlan_t2lm_clear_all_tid_mapping(vdev);
+	cm_abort_connect_request_timers(vdev);
 
 	return QDF_STATUS_SUCCESS;
 }
-
-#ifdef WLAN_CHIPSET_STATS
-static void
-cm_cp_stats_cstats_disconn_req_event(struct wlan_objmgr_vdev *vdev,
-				     struct wlan_cm_vdev_discon_req *req)
-{
-	struct cstats_sta_disconnect_req stat = {0};
-
-	stat.cmn.hdr.evt_id = WLAN_CHIPSET_STATS_STA_DISCONNECT_REQ_EVENT_ID;
-	stat.cmn.hdr.length = sizeof(struct cstats_sta_disconnect_req) -
-			      sizeof(struct cstats_hdr);
-	stat.cmn.opmode = wlan_vdev_mlme_get_opmode(vdev);
-	stat.cmn.vdev_id = req->req.vdev_id;
-	stat.cmn.timestamp_us = qdf_get_time_of_the_day_us();
-	stat.cmn.time_tick = qdf_get_log_timestamp();
-	stat.reason_code = req->req.reason_code;
-	stat.source = req->req.source;
-	stat.is_no_disassoc_disconnect = req->req.is_no_disassoc_disconnect;
-	CSTATS_MAC_COPY(stat.bssid, req->req.bssid.bytes);
-
-	wlan_cstats_host_stats(sizeof(struct cstats_sta_disconnect_req), &stat);
-}
-
-static void
-cm_cp_stats_cstats_disconn_resp_event(struct wlan_objmgr_vdev *vdev,
-				      struct wlan_cm_discon_rsp *rsp)
-{
-	struct cstats_sta_disconnect_resp stat = {0};
-
-	stat.cmn.hdr.evt_id = WLAN_CHIPSET_STATS_STA_DISCONNECT_DONE_EVENT_ID;
-	stat.cmn.hdr.length = sizeof(struct cstats_sta_disconnect_resp) -
-			      sizeof(struct cstats_hdr);
-	stat.cmn.opmode = wlan_vdev_mlme_get_opmode(vdev);
-	stat.cmn.vdev_id = wlan_vdev_get_id(vdev);
-	stat.cmn.timestamp_us = qdf_get_time_of_the_day_us();
-	stat.cmn.time_tick = qdf_get_log_timestamp();
-	stat.cm_id = rsp->req.cm_id;
-	stat.reason_code = rsp->req.req.reason_code;
-	stat.source = rsp->req.req.source;
-	CSTATS_MAC_COPY(stat.bssid, rsp->req.req.bssid.bytes);
-
-	wlan_cstats_host_stats(sizeof(struct cstats_sta_disconnect_resp),
-			       &stat);
-}
-#else
-static inline void
-cm_cp_stats_cstats_disconn_req_event(struct wlan_objmgr_vdev *vdev,
-				     struct wlan_cm_vdev_discon_req *req)
-{
-}
-
-static inline void
-cm_cp_stats_cstats_disconn_resp_event(struct wlan_objmgr_vdev *vdev,
-				      struct wlan_cm_discon_rsp *rsp)
-{
-}
-#endif /* WLAN_CHIPSET_STATS */
 
 QDF_STATUS
 cm_handle_disconnect_req(struct wlan_objmgr_vdev *vdev,
@@ -213,13 +127,12 @@ cm_handle_disconnect_req(struct wlan_objmgr_vdev *vdev,
 	discon_req = qdf_mem_malloc(sizeof(*discon_req));
 	if (!discon_req)
 		return QDF_STATUS_E_NOMEM;
-	cm_cp_stats_cstats_disconn_req_event(vdev, req);
 
 	cm_csr_handle_diconnect_req(vdev, req);
-	wlan_roam_reset_roam_params(vdev);
+	wlan_roam_reset_roam_params(psoc);
 	cm_roam_restore_default_config(pdev, vdev_id);
 	opmode = wlan_vdev_mlme_get_opmode(vdev);
-	if (opmode == QDF_STA_MODE && !wlan_vdev_mlme_is_link_sta_vdev(vdev))
+	if (opmode == QDF_STA_MODE)
 		wlan_cm_roam_state_change(pdev, vdev_id,
 					  WLAN_ROAM_DEINIT,
 					  REASON_DISCONNECTED);
@@ -310,7 +223,7 @@ cm_disconnect_complete_ind(struct wlan_objmgr_vdev *vdev,
 		mlme_err("vdev or rsp is NULL");
 		return QDF_STATUS_E_INVAL;
 	}
-	cm_csr_disconnect_done_ind(vdev, rsp);
+	cm_csr_diconnect_done_ind(vdev, rsp);
 
 	vdev_id = wlan_vdev_get_id(vdev);
 	op_mode = wlan_vdev_mlme_get_opmode(vdev);
@@ -326,17 +239,9 @@ cm_disconnect_complete_ind(struct wlan_objmgr_vdev *vdev,
 			 CM_PREFIX_REF(vdev_id, rsp->req.cm_id));
 		return QDF_STATUS_E_INVAL;
 	}
-	cm_cp_stats_cstats_disconn_resp_event(vdev, rsp);
-
 	cm_disconnect_diag_event(vdev, rsp);
 	wlan_tdls_notify_sta_disconnect(vdev_id, false, false, vdev);
 	policy_mgr_decr_session_set_pcl(psoc, op_mode, vdev_id);
-	if (rsp->req.req.source != CM_MLO_LINK_SWITCH_DISCONNECT) {
-		wlan_clear_mlo_sta_link_removed_flag(vdev);
-		ml_nlink_conn_change_notify(
-			psoc, vdev_id, ml_nlink_disconnect_completion_evt,
-			NULL);
-	}
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -398,15 +303,9 @@ QDF_STATUS cm_send_sb_disconnect_req(struct scheduler_msg *msg)
 		return QDF_STATUS_E_INVAL;
 	}
 
-	status = wlan_mlo_mgr_link_switch_defer_disconnect_req(vdev,
-							       ind->disconnect_param.source,
-							       ind->disconnect_param.reason_code);
-	if (status != QDF_STATUS_E_ALREADY && QDF_IS_STATUS_ERROR(status)) {
-		status = mlo_disconnect(vdev, ind->disconnect_param.source,
-					ind->disconnect_param.reason_code,
-					&ind->disconnect_param.bssid);
-	}
-
+	status = mlo_disconnect(vdev, ind->disconnect_param.source,
+				ind->disconnect_param.reason_code,
+				&ind->disconnect_param.bssid);
 	qdf_mem_free(ind);
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_MLME_CM_ID);
 
@@ -523,14 +422,6 @@ wlan_cm_mlo_update_disconnecting_vdev_id(struct wlan_objmgr_psoc *psoc,
 		goto done;
 	}
 
-	/*
-	 * During the link vdev disconnection the RSO stop vdev id will be of
-	 * assoc vdev (changed during cm_handle_mlo_rso_state_change), So try
-	 * to get the link vdev on which disconnect was actually happening i.e
-	 * the one with active disconnecting state from the mlo links, so that
-	 * continue disconnect is initiated on a proper vdev in connection
-	 * manager.
-	 */
 	mlo_get_ml_vdev_list(vdev, &num_links, vdev_list);
 	if (!num_links) {
 		mlme_err("No VDEVs under vdev id: %d", *vdev_id);
@@ -545,11 +436,8 @@ wlan_cm_mlo_update_disconnecting_vdev_id(struct wlan_objmgr_psoc *psoc,
 	}
 
 	for (i = 0; i < num_links; i++) {
-		if (wlan_vdev_mlme_is_mlo_link_vdev(vdev_list[i]) &&
-		    (wlan_cm_is_vdev_disconnecting(vdev_list[i]) ||
-		     wlan_cm_is_vdev_connecting(vdev_list[i])) &&
-		    wlan_cm_get_active_req_type(vdev_list[i]) ==
-							CM_DISCONNECT_ACTIVE) {
+		if (wlan_vdev_mlme_is_mlo_vdev(vdev_list[i]) &&
+		    wlan_cm_is_vdev_disconnecting(vdev_list[i])) {
 			/*
 			 * This is expected to match only once as per current
 			 * design.
@@ -560,7 +448,7 @@ wlan_cm_mlo_update_disconnecting_vdev_id(struct wlan_objmgr_psoc *psoc,
 	}
 
 release_mlo_ref:
-	for (i = 0; i < num_links; i++)
+	for (i = 0; i < QDF_ARRAY_SIZE(vdev_list); i++)
 		mlo_release_vdev_ref(vdev_list[i]);
 
 done:
@@ -605,15 +493,7 @@ wlan_cm_rso_stop_continue_disconnect(struct wlan_objmgr_psoc *psoc,
 		status = QDF_STATUS_E_EXISTS;
 		goto done;
 	}
-
-	if (is_ho_fail) {
-		req->req.source = CM_MLME_DISCONNECT;
-		req->req.reason_code = REASON_FW_TRIGGERED_ROAM_FAILURE;
-		mlme_debug(CM_PREFIX_FMT "Updating source(%d) and reason code (%d) to RSO reason and source as ho fail is received in RSO stop",
-			   CM_PREFIX_REF(req->req.vdev_id, req->cm_id),
-			   req->req.source, req->req.reason_code);
-	}
-	wlan_cm_disc_cont_after_rso_stop(vdev, req);
+	wlan_cm_disc_cont_after_rso_stop(vdev, is_ho_fail, req);
 
 done:
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_MLME_SB_ID);

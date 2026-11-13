@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2014-2016, 2019, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -20,16 +19,24 @@
 #if !defined(__I_CDS_PACKET_H)
 #define __I_CDS_PACKET_H
 
-/**
- * DOC: i_cds_packet.h
- *      Connectivity driver services network packet APIs
- *      Network Protocol packet/buffer internal include file
- */
+/**=========================================================================
 
+   \file        i_cds_packet.h
+
+   \brief       Connectivity driver services network packet APIs
+
+   Network Protocol packet/buffer internal include file
+
+   ========================================================================*/
+
+/*--------------------------------------------------------------------------
+   Include Files
+   ------------------------------------------------------------------------*/
 #include "qdf_types.h"
-
 /**
- * struct packetmeta - Rx Packet Struct
+ * Rx Packet Struct
+ * Buffer for the packet received from WMA has pointers to 802.11
+ * frame fields and additional information based on the type of frame.
  * @frequency: Frequency
  * @snr: Signal to noise ratio
  * @rssi: Received signal strength indicator, normalized to -96 dBm as
@@ -48,12 +55,9 @@
  * @session_id: PE session
  * @tsf_delta: Delta between tsf in frame and local value of tsf
  * @rssi_raw: rssi based on actual noise floor in hardware.
- * @pkt_qdf_buf: Pointer to Packet
- *
- * Buffer for the packet received from WMA has pointers to 802.11
- * frame fields and additional information based on the type of frame.
+ * @pkt_buf: Pointer to Packet
  */
-struct packetmeta {
+typedef struct {
 	uint32_t frequency;
 	uint8_t snr;
 	uint32_t rssi;
@@ -71,9 +75,7 @@ struct packetmeta {
 	uint32_t tsf_delta;
 	uint32_t rssi_raw;
 	void *pkt_qdf_buf;
-};
-
-typedef struct packetmeta t_packetmeta, *tp_packetmeta;
+} t_packetmeta, *tp_packetmeta;
 
 /* implementation specific cds packet type */
 struct cds_pkt_t {

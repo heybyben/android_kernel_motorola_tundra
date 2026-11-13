@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019 The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -30,14 +30,28 @@
 #include <wlan_vdev_mgr_utils_api.h>
 #include <wlan_vdev_mlme_api.h>
 #include <qdf_module.h>
-#include <wlan_vdev_mgr_api.h>
 
 void ucfg_wlan_vdev_mgr_get_param_bssid(
 				struct wlan_objmgr_vdev *vdev,
 				uint8_t *bssid)
 {
-	wlan_vdev_mgr_get_param_bssid(vdev, bssid);
+	struct vdev_mlme_mgmt *mlme_mgmt;
+	struct vdev_mlme_obj *vdev_mlme;
+
+	vdev_mlme = wlan_objmgr_vdev_get_comp_private_obj(
+						vdev, WLAN_UMAC_COMP_MLME);
+
+	if (!vdev_mlme) {
+		mlme_err("VDEV_MLME is NULL");
+		return;
+	}
+
+	mlme_mgmt = &vdev_mlme->mgmt;
+
+	qdf_mem_copy(bssid, mlme_mgmt->generic.bssid,
+		     QDF_MAC_ADDR_SIZE);
 }
+
 qdf_export_symbol(ucfg_wlan_vdev_mgr_get_param_bssid);
 
 void ucfg_wlan_vdev_mgr_get_param_ssid(
@@ -63,6 +77,28 @@ void ucfg_wlan_vdev_mgr_get_param_ssid(
 }
 
 qdf_export_symbol(ucfg_wlan_vdev_mgr_get_param_ssid);
+
+void ucfg_wlan_vdev_mgr_get_beacon_buffer(
+				struct wlan_objmgr_vdev *vdev,
+				qdf_nbuf_t buf)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+	struct vdev_mlme_mgmt *mlme_mgmt;
+
+	vdev_mlme = wlan_objmgr_vdev_get_comp_private_obj(
+			vdev, WLAN_UMAC_COMP_MLME);
+
+	if (!vdev_mlme) {
+		QDF_ASSERT(0);
+		return;
+	}
+
+	mlme_mgmt = &vdev_mlme->mgmt;
+
+	buf = mlme_mgmt->beacon_info.beacon_buffer;
+}
+
+qdf_export_symbol(ucfg_wlan_vdev_mgr_get_beacon_buffer);
 
 void ucfg_wlan_vdev_mgr_get_trans_bssid(
 				struct wlan_objmgr_vdev *vdev,
@@ -184,10 +220,3 @@ QDF_STATUS ucfg_vdev_mgr_cdp_vdev_detach(struct wlan_objmgr_vdev *vdev)
 
 qdf_export_symbol(ucfg_vdev_mgr_cdp_vdev_detach);
 #endif
-
-void
-ucfg_util_vdev_mgr_set_acs_mode_for_vdev(struct wlan_objmgr_vdev *vdev,
-					 bool is_acs_mode)
-{
-	wlan_util_vdev_mgr_set_acs_mode_for_vdev(vdev, is_acs_mode);
-}

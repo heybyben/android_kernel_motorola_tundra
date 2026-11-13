@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -72,9 +72,9 @@ qdf_list_t *util_scan_unpack_beacon_frame(
 /**
  * util_scan_add_hidden_ssid() - func to add hidden ssid
  * @pdev: pdev pointer
- * @bcnbuf: beacon buf
+ * @frame: beacon buf
  *
- * Return: QDF_STATUS_SUCCESS on success, otherwise a QDF_STATUS error
+ * Return:
  */
 #ifdef WLAN_DFS_CHAN_HIDDEN_SSID
 QDF_STATUS
@@ -99,7 +99,7 @@ const char *util_scan_get_ev_type_name(enum scan_event_type event);
 
 /**
  * util_scan_get_ev_reason_name() - converts enum reason to printable string
- * @reason: enum of scan completion reason
+ * @reason      enum of scan completion reason
  *
  * API, converts enum event to printable character string
  *
@@ -120,54 +120,6 @@ util_scan_entry_macaddr(struct scan_cache_entry *scan_entry)
 {
 	return &(scan_entry->mac_addr.bytes[0]);
 }
-
-#ifdef WLAN_FEATURE_11BE_MLO
-/**
- * util_scan_entry_mldaddr() - Function to get MLD address
- * @scan_entry: Scan entry
- *
- * API will return the MLD address of the scan entry.
- *
- * Return: Pointer to MLD address.
- */
-
-static inline struct qdf_mac_addr *
-util_scan_entry_mldaddr(struct scan_cache_entry *scan_entry)
-{
-	struct qdf_mac_addr *mld_addr = &scan_entry->ml_info.mld_mac_addr;
-
-	if (qdf_is_macaddr_zero(mld_addr))
-		return NULL;
-
-	return mld_addr;
-}
-
-/**
- * util_scan_entry_self_linkid() - Function to get self IEEE link id
- * @scan_entry: scan entry
- *
- * API will return self IEEE link ID
- *
- * Return: Value of self IEEE link ID
- */
-static inline uint8_t
-util_scan_entry_self_linkid(struct scan_cache_entry *scan_entry)
-{
-	return scan_entry->ml_info.self_link_id;
-}
-#else
-static inline struct qdf_mac_addr *
-util_scan_entry_mldaddr(struct scan_cache_entry *scan_entry)
-{
-	return NULL;
-}
-
-static inline uint8_t
-util_scan_entry_self_linkid(struct scan_cache_entry *scan_entry)
-{
-	return WLAN_INVALID_LINK_ID;
-}
-#endif
 
 /**
  * util_scan_entry_bssid() - function to read bssid
@@ -450,7 +402,7 @@ static inline bool util_is_bss_type_match(enum wlan_bss_type bss_type,
 /**
  * util_country_code_match() - to check if country match
  * @country: country code pointer
- * @cc: country IE in beacon
+ * @country_ie: country IE in beacon
  *
  * Return: true if country match
  */
@@ -630,9 +582,6 @@ util_scan_entry_frame_ptr(struct scan_cache_entry *scan_entry)
 /**
  * util_scan_entry_copy_ie_data() - function to get a copy of all tagged IEs
  * @scan_entry: scan entry
- * @iebuf: destination IE buffer. May be NULL if only the
- * @ie_len: pointer to the ie buffer length. On input must hold the size of
- *          @iebuf. On output it will be filled with the length of the IEs.
  *
  * API, function to get a copy of all tagged IEs in passed memory
  *
@@ -789,18 +738,10 @@ util_scan_copy_beacon_data(struct scan_cache_entry *new_entry,
 	/* This macro will be removed once 11be is enabled */
 	ie_lst->ehtcap = conv_ptr(ie_lst->ehtcap, old_ptr, new_ptr);
 	ie_lst->ehtop = conv_ptr(ie_lst->ehtop, old_ptr, new_ptr);
-	ie_lst->bw_ind =
-		conv_ptr(ie_lst->bw_ind, old_ptr, new_ptr);
 #endif
 #ifdef WLAN_FEATURE_11BE_MLO
-	ie_lst->multi_link_bv =
-			conv_ptr(ie_lst->multi_link_bv, old_ptr, new_ptr);
-	ie_lst->multi_link_rv =
-			conv_ptr(ie_lst->multi_link_rv, old_ptr, new_ptr);
-	for (i = 0; i < WLAN_MAX_T2LM_IE; i++)
-		ie_lst->t2lm[i] = conv_ptr(ie_lst->t2lm[i], old_ptr, new_ptr);
+	ie_lst->multi_link = conv_ptr(ie_lst->multi_link, old_ptr, new_ptr);
 #endif
-	ie_lst->qcn = conv_ptr(ie_lst->qcn, old_ptr, new_ptr);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -809,7 +750,6 @@ util_scan_copy_beacon_data(struct scan_cache_entry *new_entry,
 /**
  * util_scan_get_ml_partner_info() - Get partner links info of an ML connection
  * @scan_entry: scan entry
- * @partner_info: partner link info
  *
  * API, function to get partner link information from an ML scan cache entry
  *
@@ -825,7 +765,8 @@ util_scan_get_ml_partner_info(struct scan_cache_entry *scan_entry,
 		return QDF_STATUS_E_FAILURE;
 
 	partner_info->num_partner_links =
-				scan_entry->ml_info.num_links;
+			qdf_min((uint8_t)WLAN_UMAC_MLO_MAX_VDEVS - 1,
+				scan_entry->ml_info.num_links - 1);
 	/* TODO: Make sure that scan_entry->ml_info->link_info is a sorted
 	 * list */
 	for (i = 0; i < partner_info->num_partner_links; i++) {
@@ -1543,12 +1484,12 @@ util_scan_entry_get_extcap(struct scan_cache_entry *scan_entry,
 }
 
 /**
- * util_scan_entry_mlme_info() - function to read MLME info
+ * util_scan_entry_athcaps() - function to read ath caps vendor ie
  * @scan_entry: scan entry
  *
- * API, function to read MLME info
+ * API, function to read ath caps vendor ie
  *
- * Return: MLME info or NULL if it is not present
+ * Return: ath caps vendorie or NULL if ie is not present
  */
 static inline struct mlme_info*
 util_scan_entry_mlme_info(struct scan_cache_entry *scan_entry)
@@ -1641,64 +1582,6 @@ util_scan_entry_ehtop(struct scan_cache_entry *scan_entry)
 	return scan_entry->ie_list.ehtop;
 }
 
-static inline uint8_t*
-util_scan_entry_bw_ind(struct scan_cache_entry *scan_entry)
-{
-	return scan_entry->ie_list.bw_ind;
-}
-#else
-
-static inline uint8_t*
-util_scan_entry_ehtcap(struct scan_cache_entry *scan_entry)
-{
-	return NULL;
-}
-
-static inline uint8_t*
-util_scan_entry_bw_ind(struct scan_cache_entry *scan_entry)
-{
-	return NULL;
-}
-#endif
-
-#ifdef WLAN_FEATURE_11BE_MLO
-static inline uint8_t*
-util_scan_entry_bv_ml_ie(struct scan_cache_entry *scan_entry)
-{
-	return scan_entry->ie_list.multi_link_bv;
-}
-
-static inline uint8_t*
-util_scan_entry_t2lm(struct scan_cache_entry *scan_entry)
-{
-	return scan_entry->ie_list.t2lm[0];
-}
-
-/**
- * util_scan_entry_t2lm_len() - API to get t2lm IE length
- * @scan_entry: scan entry
- *
- * Return, Length or 0 if ie is not present
- */
-uint32_t util_scan_entry_t2lm_len(struct scan_cache_entry *scan_entry);
-#else
-static inline uint8_t*
-util_scan_entry_bv_ml_ie(struct scan_cache_entry *scan_entry)
-{
-	return NULL;
-}
-
-static inline uint8_t*
-util_scan_entry_t2lm(struct scan_cache_entry *scan_entry)
-{
-	return NULL;
-}
-
-static inline uint32_t
-util_scan_entry_t2lm_len(struct scan_cache_entry *scan_entry)
-{
-	return 0;
-}
 #endif
 
 /**
@@ -1771,7 +1654,6 @@ util_get_last_scan_time(struct wlan_objmgr_vdev *vdev);
 
 /**
  * util_scan_entry_update_mlme_info() - function to update mlme info
- * @pdev: pdev object
  * @scan_entry: scan entry object
  *
  * API, function to update mlme info in scan DB
@@ -1809,7 +1691,7 @@ util_scan_entry_is_hidden_ap(struct scan_cache_entry *scan_entry)
 }
 
 /**
- * util_scan_entry_esp_info() - function to read ESP info
+ * util_scan_entry_espinfo() - function to read ESP info
  * @scan_entry: scan entry
  *
  * API, function to read ESP info
@@ -1849,29 +1731,6 @@ util_scan_entry_rsnxe(struct scan_cache_entry *scan_entry)
 {
 	return scan_entry->ie_list.rsnxe;
 }
-
-/**
- * util_is_rsnxe_h2e_capable() - API to check whether the RSNXE has
- * H2E capable or not.
- * @rsnxe: Pointer to RSNXE IE.
- *
- * Returns true if RSNXE caps has H2E capable bit set or else false.
- *
- * Return: bool
- */
-bool util_is_rsnxe_h2e_capable(const uint8_t *rsnxe);
-
-/**
- * util_scan_entry_sae_h2e_capable() - API to check whether the
- * current scan entry is SAE-H2E capable
- * @scan_entry: Scan cache entry
- *
- * Returns true if the current scan entry has RSNXE IE with H2E bit
- * set.
- *
- * Return: bool
- */
-bool util_scan_entry_sae_h2e_capable(struct scan_cache_entry *scan_entry);
 
 /**
  * util_scan_scm_freq_to_band() - API to get band from frequency
@@ -1958,9 +1817,9 @@ static inline bool util_scan_is_null_ssid(struct wlan_ssid *ssid)
 /**
  * util_scan_get_6g_oper_channel() - function to get primary channel
  * from he op IE
- * @he_op_ie : ie pointer
+ * he_op_ie : ie pointer
  *
- * Return: primary channel or 0 if 6g params is not present.
+ * Return : primary channel or 0 if 6g params is not present.
  */
 #ifdef CONFIG_BAND_6GHZ
 uint8_t util_scan_get_6g_oper_channel(uint8_t *he_op_ie);
@@ -1971,27 +1830,4 @@ util_scan_get_6g_oper_channel(uint8_t *he_op_ie)
 	return 0;
 }
 #endif
-
-/*
- * util_is_bssid_non_tx() - Is the given BSSID a non-tx neighbor
- * entry in the RNR db
- * @psoc: psoc
- * @bssid: bssid
- * @freq: frequency corresponding to the bssid
- *
- * Return: Is bssid non tx
- */
-bool util_is_bssid_non_tx(struct wlan_objmgr_psoc *psoc,
-			  struct qdf_mac_addr *bssid, qdf_freq_t freq);
-
-/**
- * util_scan_get_phymode() - function to get phy mode
- * @pdev : pdev object
- * @scan_params: scan entry
- *
- * Return: phy mode.
- */
-enum wlan_phymode
-util_scan_get_phymode(struct wlan_objmgr_pdev *pdev,
-		      struct scan_cache_entry *scan_params);
 #endif

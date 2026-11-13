@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -21,7 +20,7 @@
  * DOC: wlan_cp_stats_mc_defs.h
  *
  * This file provide definition for structure/enums/defines related to control
- * path stats component
+ * path stats componenet
  */
 
 #ifndef __WLAN_CP_STATS_MC_DEFS_H__
@@ -31,7 +30,6 @@
 #include "qdf_event.h"
 /* For WMI_MAX_CHAINS */
 #include "wmi_unified.h"
-#include "wlan_mlo_mgr_cmn.h"
 
 #ifdef QCA_SUPPORT_MC_CP_STATS
 #include "wlan_cp_stats_public_structs.h"
@@ -64,7 +62,6 @@
  * @TYPE_PEER_STATS_INFO_EXT: peer stats info ext was requested
  * @TYPE_CONGESTION_STATS: congestion stats was requested
  * @TYPE_BIG_DATA_STATS: big data stats was requested
- * @TYPE_MAX: maximum value
  */
 enum stats_req_type {
 	TYPE_CONNECTION_TX_POWER = 0,
@@ -92,11 +89,6 @@ enum stats_req_type {
  * @TX_RATE_HE80: HE 80 rates
  * @TX_RATE_HE160: HE 160 rates
  * @TX_RATE_VHT160: VHT 160 rates
- * @TX_RATE_EHT20: EHT 20 rates
- * @TX_RATE_EHT40: EHT 40 rates
- * @TX_RATE_EHT80: EHT 80 rates
- * @TX_RATE_EHT160: EHT 160 rates
- * @TX_RATE_EHT320: EHT 320 rates
  */
 enum tx_rate_info {
 	TX_RATE_LEGACY = 0x1,
@@ -112,19 +104,14 @@ enum tx_rate_info {
 	TX_RATE_HE80 = 0x400,
 	TX_RATE_HE160 = 0x800,
 	TX_RATE_VHT160 = 0x1000,
-	TX_RATE_EHT20 = 0x2000,
-	TX_RATE_EHT40 = 0x4000,
-	TX_RATE_EHT80 = 0x8000,
-	TX_RATE_EHT160 = 0x10000,
-	TX_RATE_EHT320 = 0x20000,
 };
 
 /**
- * enum txrate_gi - Guard Intervals
- * @TXRATE_GI_0_8_US: guard interval 0.8 us
- * @TXRATE_GI_0_4_US: guard interval 0.4 us for legacy
- * @TXRATE_GI_1_6_US: guard interval 1.6 us
- * @TXRATE_GI_3_2_US: guard interval 3.2 us
+ * enum - txrate_gi
+ * @txrate_gi_0_8_US: guard interval 0.8 us
+ * @txrate_gi_0_4_US: guard interval 0.4 us for legacy
+ * @txrate_gi_1_6_US: guard interval 1.6 us
+ * @txrate_gi_3_2_US: guard interval 3.2 us
  */
 enum txrate_gi {
 	TXRATE_GI_0_8_US = 0,
@@ -153,15 +140,15 @@ enum txrate_gi {
  * @uc_drop_wake_up_count:      local data uc drop wakeup count
  * @fatal_event_wake_up_count:  fatal event wakeup count
  * @pwr_save_fail_detected:     pwr save fail detected wakeup count
- * @scan_11d:                   11d scan wakeup count
+ * @scan_11d                    11d scan wakeup count
  * @mgmt_assoc: association request management frame
  * @mgmt_disassoc: disassociation management frame
  * @mgmt_assoc_resp: association response management frame
  * @mgmt_reassoc: reassociate request management frame
  * @mgmt_reassoc_resp: reassociate response management frame
- * @mgmt_auth: authentication management frame
+ * @mgmt_auth: authentication managament frame
  * @mgmt_deauth: deauthentication management frame
- * @mgmt_action: action management frame
+ * @mgmt_action: action managament frame
  */
 struct wake_lock_stats {
 	uint32_t ucast_wake_up_count;
@@ -219,21 +206,17 @@ struct big_data_stats_event {
 
 /**
  * struct medium_assess_data - medium assess data from firmware
- * @part1_valid: the flag for part1 data, include cycle_count,
- *    rx_clear_count and tx_frame_count
+ * @part1_valid: the flag for part1 data
  * @cycle_count: accumulative cycle count (total time)
  * @rx_clear_count: accumulative rx clear count (busy time)
  * @tx_frame_count: accumulative tx frame count (total time)
- * @part2_valid: the flag for part2 data, include my_rx_count
- * @my_rx_count: my RX count
  */
 struct medium_assess_data {
-	bool part1_valid;
+	/* part1 data */
+	uint8_t part1_valid;
 	uint32_t cycle_count;
 	uint32_t rx_clear_count;
 	uint32_t tx_frame_count;
-	bool part2_valid;
-	uint32_t my_rx_count;
 };
 
 /**
@@ -245,8 +228,6 @@ struct medium_assess_data {
  * @vdev_id: vdev_id of request
  * @pdev_id: pdev_id of request
  * @peer_mac_addr: peer mac address
- * @ml_vdev_info: mlo_stats_vdev_params structure
- * @ml_peer_mac_addr: Array of ml peer mac addresses
  */
 struct request_info {
 	void *cookie;
@@ -260,8 +241,7 @@ struct request_info {
 		void (*get_peer_stats_cb)(struct stats_event *ev,
 					  void *cookie);
 		void (*congestion_notif_cb)(uint8_t vdev_id,
-					  struct medium_assess_data *data,
-					  bool last);
+					  struct medium_assess_data *data);
 #ifdef WLAN_FEATURE_BIG_DATA_STATS
 		void (*get_big_data_stats_cb)(struct big_data_stats_event *ev,
 					      void *cookie);
@@ -270,10 +250,6 @@ struct request_info {
 	uint32_t vdev_id;
 	uint32_t pdev_id;
 	uint8_t peer_mac_addr[QDF_MAC_ADDR_SIZE];
-#ifdef WLAN_FEATURE_11BE_MLO
-	struct mlo_stats_vdev_params ml_vdev_info;
-	uint8_t ml_peer_mac_addr[WLAN_UMAC_MLO_MAX_VDEVS][QDF_MAC_ADDR_SIZE];
-#endif
 };
 
 /**
@@ -315,94 +291,12 @@ struct psoc_mc_cp_stats {
 };
 
 /**
- * struct pdev_mc_cp_extd_stats - pdev extd stats
- * @pdev_id: pdev id
- * @my_rx_count: What portion of time, as measured by the MAC HW clock was
- *               occupied, by receiving PPDUs addressed to one of the vdevs
- *               within this pdev.
- * @rx_matched_11ax_msdu_cnt: number of Rx 11ax MSDUs with matching BSS color
- *                            counter updated at EOP (end of packet)
- * @rx_other_11ax_msdu_cnt: number of Rx 11ax MSDUs with other BSS color counter
- *                          updated at EOP (end of packet)
- */
-struct pdev_mc_cp_extd_stats {
-	uint32_t pdev_id;
-	uint32_t my_rx_count;
-	uint32_t rx_matched_11ax_msdu_cnt;
-	uint32_t rx_other_11ax_msdu_cnt;
-};
-
-/* Max supported bandwidth is 320Mhz, so max 16 subbands for 20Mhz */
-#define MAX_WIDE_BAND_SCAN_CHAN 16
-
-/**
- * struct wide_band_scan_chan_info - wide band scan channel info
- * @vdev_id: vdev id
- * @num_chan: number of channels (for each subbands fo 20Mhz)
- * @is_wide_band_scan: wide band scan or not
- * @cca_busy_subband_info: CCA busy for each possible 20Mhz subbands
- * of the wideband scan channel
- */
-struct wide_band_scan_chan_info {
-	uint32_t vdev_id;
-	uint8_t num_chan;
-	bool is_wide_band_scan;
-	uint32_t cca_busy_subband_info[MAX_WIDE_BAND_SCAN_CHAN];
-};
-
-/**
- * struct channel_status
- * @channel_freq: Channel freq
- * @noise_floor: Noise Floor value
- * @rx_clear_count: rx clear count
- * @cycle_count: cycle count
- * @chan_tx_pwr_range: channel tx power per range in 0.5dBm steps
- * @chan_tx_pwr_throughput: channel tx power per throughput
- * @rx_frame_count: rx frame count (cumulative)
- * @bss_rx_cycle_count: BSS rx cycle count
- * @rx_11b_mode_data_duration: b-mode data rx time (units are microseconds)
- * @tx_frame_count: BSS tx cycle count
- * @mac_clk_mhz: sample frequency
- * @channel_id: channel index
- * @cmd_flags: indicate which stat event is this status coming from
- * @subband_info: wide band scan channel info
- */
-struct channel_status {
-	uint32_t    channel_freq;
-	uint32_t    noise_floor;
-	uint32_t    rx_clear_count;
-	uint32_t    cycle_count;
-	uint32_t    chan_tx_pwr_range;
-	uint32_t    chan_tx_pwr_throughput;
-	uint32_t    rx_frame_count;
-	uint32_t    bss_rx_cycle_count;
-	uint32_t    rx_11b_mode_data_duration;
-	uint32_t    tx_frame_count;
-	uint32_t    mac_clk_mhz;
-	uint32_t    channel_id;
-	uint32_t    cmd_flags;
-	struct wide_band_scan_chan_info subband_info;
-};
-
-/**
- * struct per_channel_stats
- * @total_channel: total number of be scanned channel
- * @channel_status_list: channel status info store in this array
- */
-struct per_channel_stats {
-	uint8_t total_channel;
-	struct channel_status
-		 channel_status_list[NUM_CHANNELS];
-};
-
-/**
  * struct pdev_mc_cp_stats: pdev specific stats
  * @max_pwr: max tx power for pdev
  * @pdev_id: pdev id
  * @rx_clear_count: accumulative rx clear count (busy time) of pdev
  * @cycle_count: accumulative cycle count (total time) of pdev
  * @tx_frame_count: accumulative tx frame count (total time) of pdev
- * @chan_stats: per channel info stats
  */
 struct pdev_mc_cp_stats {
 	int32_t max_pwr;
@@ -410,7 +304,6 @@ struct pdev_mc_cp_stats {
 	uint32_t rx_clear_count;
 	uint32_t cycle_count;
 	uint32_t tx_frame_count;
-	struct per_channel_stats chan_stats;
 };
 
 /**
@@ -462,25 +355,12 @@ struct pmf_bcn_protect_stats {
 };
 
 /**
- * struct vdev_summary_extd_stats - vdev summary extended stats
- * @vdev_id: vdev_id of the event
- * @is_mlo_vdev_active: is the mlo vdev currently active
- * @vdev_tx_power: vdev tx power
- */
-struct vdev_summary_extd_stats {
-	uint8_t vdev_id;
-	bool is_mlo_vdev_active;
-	uint32_t vdev_tx_power;
-};
-
-/**
  * struct vdev_mc_cp_stats - vdev specific stats
  * @cca: cca stats
  * @tx_rate_flags: tx rate flags (enum tx_rate_info)
  * @chain_rssi: chain rssi
  * @vdev_summary_stats: vdev's summary stats
  * @pmf_bcn_stats: pmf beacon protect stats
- * @vdev_extd_stats: vdev summary extended stats
  */
 struct vdev_mc_cp_stats {
 	struct cca_stats cca;
@@ -488,7 +368,6 @@ struct vdev_mc_cp_stats {
 	int8_t chain_rssi[MAX_NUM_CHAINS];
 	struct summary_stats vdev_summary_stats;
 	struct pmf_bcn_protect_stats pmf_bcn_stats;
-	struct vdev_summary_extd_stats vdev_extd_stats;
 };
 
 /**
@@ -572,8 +451,8 @@ struct dot11_counters {
 
 /**
  * struct dot11_mac_statistics - mib stats information on the operation of MAC
- * @retry_cnt: retries done by mac for successful transmission
- * @multi_retry_cnt: multiple retries done before successful transmission
+ * @retry_cnt: retries done by mac for successful transmition
+ * @multi_retry_cnt: multiple retries done before successful transmition
  * @frame_dup_cnt: duplicate no of frames
  * @rts_success_cnt: number of CTS received (in response to RTS)
  * @rts_fail_cnt: number of CTS not received (in response to RTS)
@@ -589,7 +468,7 @@ struct dot11_mac_statistics {
 };
 
 /**
- * struct dot11_qos_counters - qos mac counters
+ * dot11_qos_counters - qos mac counters
  * @qos_tx_frag_cnt: transmitted QoS fragments
  * @qos_failed_cnt: failed Qos fragments
  * @qos_retry_cnt: Qos frames transmitted after retransmissions
@@ -623,7 +502,7 @@ struct dot11_qos_counters {
 };
 
 /**
- * struct dot11_rsna_stats - mib rsn stats
+ * dot11_rsna_stats - mib rsn stats
  * @rm_ccmp_replays: received robust management CCMP MPDUs discarded
  *                   by the replay mechanism
  * @tkip_icv_err: TKIP ICV errors encountered
@@ -644,7 +523,7 @@ struct dot11_rsna_stats {
 };
 
 /**
- * struct dot11_counters_group3 - dot11 group3 stats
+ * dot11_counters_group3 - dot11 group3 stats
  * @tx_ampdu_cnt: transmitted AMPDUs
  * @tx_mpdus_in_ampdu_cnt: number of MPDUs in the A-MPDU in transmitted AMPDUs
  * @tx_octets_in_ampdu_cnt: octets in the transmitted A-MPDUs
@@ -664,7 +543,7 @@ struct dot11_counters_group3 {
 };
 
 /**
- * struct mib_stats_metrics - mib stats counters
+ * mib_stats_metrics - mib stats counters
  * @mib_counters: dot11Counters group
  * @mib_mac_statistics: dot11MACStatistics group
  * @mib_qos_counters: dot11QoSCounters group
@@ -726,10 +605,6 @@ struct chain_rssi_event {
  * @rx_rate: last used rx bitrate (kbps)
  * @rx_rate_code: last rx rate code (last_rx_rate_code of wmi_peer_stats_info)
  * @peer_rssi_per_chain: the average value of RSSI (dbm) per chain
- * @num_tx_rate_counts: Num tx rate count for current peer
- * @num_rx_rate_counts: Num rx rate count for current peer
- * @tx_pkt_per_mcs: Number of tx packets for each MCS
- * @rx_pkt_per_mcs: Number of rx packets for each MCS
  */
 struct peer_stats_info_ext_event {
 	struct qdf_mac_addr peer_macaddr;
@@ -746,19 +621,12 @@ struct peer_stats_info_ext_event {
 	uint32_t rx_rate;
 	uint32_t rx_rate_code;
 	int32_t peer_rssi_per_chain[WMI_MAX_CHAINS];
-	uint32_t num_tx_rate_counts;
-	uint32_t num_rx_rate_counts;
-	uint32_t *tx_pkt_per_mcs;
-	uint32_t *rx_pkt_per_mcs;
 };
 
 /**
  * struct stats_event - parameters populated by stats event
  * @num_pdev_stats: num pdev stats
  * @pdev_stats: if populated array indicating pdev stats (index = pdev_id)
- * @num_pdev_extd_stats: num pdev extended stats
- * @pdev_extd_stats: if populated array indicating pdev extended stats
- *                   (index = pdev_id)
  * @num_peer_stats: num peer stats
  * @peer_stats: if populated array indicating peer stats
  * @peer_adv_stats: if populated, indicates peer adv (extd2) stats
@@ -773,22 +641,16 @@ struct peer_stats_info_ext_event {
  * @num_chain_rssi_stats: number of chain rssi stats
  * @vdev_chain_rssi: if populated indicates array of chain rssi per vdev
  * @tx_rate: tx rate (kbps)
- * @rx_rate: rx rate (kbps)
  * @tx_rate_flags: tx rate flags, (enum tx_rate_info)
  * @last_event: The LSB indicates if the event is the last event or not and the
  *              MSB indicates if this feature is supported by FW or not.
- * @mac_seq_num: sequence number of event when fw update to host
  * @num_peer_stats_info_ext: number of peer extended stats info
  * @peer_stats_info_ext: peer extended stats info
- * @bcn_protect_stats: pmf bcn protect stats
- * @num_vdev_extd_stats: number of vdev extended stats
- * @vdev_extd_stats: if populated indicates array of ext summary stats per vdev
+ * @pmf_bcn_protect_stats: pmf bcn protect stats
  */
 struct stats_event {
 	uint32_t num_pdev_stats;
 	struct pdev_mc_cp_stats *pdev_stats;
-	uint32_t num_pdev_extd_stats;
-	struct pdev_mc_cp_extd_stats *pdev_extd_stats;
 	uint32_t num_peer_stats;
 	struct peer_mc_cp_stats *peer_stats;
 	uint32_t num_peer_adv_stats;
@@ -808,12 +670,9 @@ struct stats_event {
 	uint32_t rx_rate;
 	enum tx_rate_info tx_rate_flags;
 	uint32_t last_event;
-	uint8_t mac_seq_num;
 	uint32_t num_peer_stats_info_ext;
 	struct peer_stats_info_ext_event *peer_stats_info_ext;
 	struct pmf_bcn_protect_stats bcn_protect_stats;
-	uint32_t num_vdev_extd_stats;
-	struct vdev_summary_extd_stats *vdev_extd_stats;
 };
 
 /**
@@ -846,10 +705,6 @@ struct peer_stats_request_params {
  * @peer_rssi: peer rssi
  * @tx_succeed: tx succeed MPDU
  * @peer_rssi_per_chain: peer rssi per chain
- * @num_tx_rate_counts: Num tx rate count for current peer
- * @num_rx_rate_counts: Num rx rate count for current peer
- * @tx_pkt_per_mcs: Number of tx rate counts for each MCS
- * @rx_pkt_per_mcs: Number of rx rate counts for each MCS
  */
 typedef struct {
 	struct qdf_mac_addr peer_macaddr;
@@ -866,10 +721,6 @@ typedef struct {
 	int32_t peer_rssi;
 	uint32_t tx_succeed;
 	int32_t peer_rssi_per_chain[WMI_MAX_CHAINS];
-	uint32_t num_tx_rate_counts;
-	uint32_t num_rx_rate_counts;
-	uint32_t *tx_pkt_per_mcs;
-	uint32_t *rx_pkt_per_mcs;
 } wmi_host_peer_stats_info;
 
 #endif /* __WLAN_CP_STATS_MC_DEFS_H__ */

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023, 2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -154,6 +154,7 @@ enum wmamsgtype {
 	WMA_P2P_NOA_ATTR_IND = SIR_HAL_P2P_NOA_ATTR_IND,
 	WMA_PWR_SAVE_CFG = SIR_HAL_PWR_SAVE_CFG,
 
+	WMA_IBSS_STA_ADD = SIR_HAL_IBSS_STA_ADD,
 	WMA_TIMER_ADJUST_ADAPTIVE_THRESHOLD_IND =
 				SIR_HAL_TIMER_ADJUST_ADAPTIVE_THRESHOLD_IND,
 	WMA_SET_LINK_STATE = SIR_HAL_SET_LINK_STATE,
@@ -263,8 +264,11 @@ enum wmamsgtype {
 	WMA_NAN_REQUEST = SIR_HAL_NAN_REQUEST,
 #endif
 
+	WMA_START_SCAN_OFFLOAD_REQ = SIR_HAL_START_SCAN_OFFLOAD_REQ,
+	WMA_STOP_SCAN_OFFLOAD_REQ = SIR_HAL_STOP_SCAN_OFFLOAD_REQ,
 	WMA_UPDATE_CHAN_LIST_REQ = SIR_HAL_UPDATE_CHAN_LIST_REQ,
 	WMA_RX_SCAN_EVENT = SIR_HAL_RX_SCAN_EVENT,
+	WMA_RX_CHN_STATUS_EVENT = SIR_HAL_RX_CHN_STATUS_EVENT,
 
 	WMA_CLI_SET_CMD = SIR_HAL_CLI_SET_CMD,
 
@@ -383,6 +387,7 @@ enum wmamsgtype {
 	WMA_DCC_UPDATE_NDL_CMD = SIR_HAL_DCC_UPDATE_NDL_CMD,
 	WMA_SET_IE_INFO = SIR_HAL_SET_IE_INFO,
 
+	WMA_LRO_CONFIG_CMD = SIR_HAL_LRO_CONFIG_CMD,
 	WMA_GW_PARAM_UPDATE_REQ = SIR_HAL_GATEWAY_PARAM_UPDATE_REQ,
 	WMA_ADD_BCN_FILTER_CMDID = SIR_HAL_ADD_BCN_FILTER_CMDID,
 	WMA_REMOVE_BCN_FILTER_CMDID = SIR_HAL_REMOVE_BCN_FILTER_CMDID,
@@ -438,12 +443,6 @@ enum wmamsgtype {
 	WMA_TWT_RESUME_DIALOG_REQUEST =  SIR_HAL_TWT_RESUME_DIALOG_REQUEST,
 	WMA_PEER_CREATE_REQ = SIR_HAL_PEER_CREATE_REQ,
 	WMA_TWT_NUDGE_DIALOG_REQUEST = SIR_HAL_TWT_NUDGE_DIALOG_REQUEST,
-	WMA_PASN_PEER_DELETE_REQUEST = SIR_HAL_PASN_PEER_DELETE_REQUEST,
-	WMA_UPDATE_EDCA_PIFS_PARAM_IND = SIR_HAL_UPDATE_EDCA_PIFS_PARAM_IND,
-#ifdef FEATURE_WLAN_APF
-	WMA_ENABLE_ACTIVE_APF_MODE_IND = SIR_HAL_ENABLE_ACTIVE_APF_MODE_IND,
-	WMA_DISABLE_ACTIVE_APF_MODE_IND = SIR_HAL_DISABLE_ACTIVE_APF_MODE_IND,
-#endif
 };
 
 /* Bit 6 will be used to control BD rate for Management frames */
@@ -466,12 +465,11 @@ enum wmamsgtype {
 		      (false), \
 		      (channel_freq), \
 		      (rid), \
-		      (peer_rssi), \
-		      (0)))
+		      (peer_rssi)))
 
 #define wma_tx_frameWithTxComplete(hHal, pFrmBuf, frmLen, frmType, txDir, tid, \
 	 pCompFunc, pData, pCBackFnTxComp, txFlag, sessionid, \
-	 tdlsflag, channel_freq, rid, peer_rssi, action) \
+	 tdlsflag, channel_freq, rid, peer_rssi) \
 	(QDF_STATUS)( wma_tx_packet( \
 		      cds_get_context(QDF_MODULE_ID_WMA), \
 		      (pFrmBuf), \
@@ -487,8 +485,7 @@ enum wmamsgtype {
 		      (tdlsflag), \
 		      (channel_freq), \
 		      (rid), \
-		      (peer_rssi), \
-		      (action)))
+		      (peer_rssi)))
 
 /**
  * struct sUapsd_Params - Powersave Offload Changes
@@ -651,16 +648,9 @@ void wma_get_rx_retry_cnt(struct mac_context *mac, uint8_t vdev_id,
 QDF_STATUS wma_set_wlm_latency_level(void *wma_ptr,
 			struct wlm_latency_level_param *latency_params);
 
-/**
- * wma_ds_peek_rx_packet_info() - peek rx packet info
- * @pkt: packet
- * @pkt_meta: packet meta
- *
- * Function fills the rx packet meta info from the the cds packet
- *
- * Return: QDF status
- */
-QDF_STATUS wma_ds_peek_rx_packet_info(cds_pkt_t *pkt, void **pkt_meta);
+QDF_STATUS
+wma_ds_peek_rx_packet_info
+	(cds_pkt_t *vosDataBuff, void **ppRxHeader, bool bSwap);
 
 /**
  * wma_tx_abort() - abort tx
@@ -689,7 +679,6 @@ void wma_tx_abort(uint8_t vdev_id);
  * @channel_freq: channel frequency
  * @rid: rate id
  * @peer_rssi: peer RSSI value
- * @action: action code
  *
  * This function sends the frame corresponding to the
  * given vdev id.
@@ -704,7 +693,7 @@ QDF_STATUS wma_tx_packet(void *wma_context, void *tx_frame, uint16_t frmLen,
 			 wma_tx_ota_comp_callback tx_frm_ota_comp_cb,
 			 uint8_t tx_flag, uint8_t vdev_id, bool tdls_flag,
 			 uint16_t channel_freq, enum rateid rid,
-			 int8_t peer_rssi, uint16_t action);
+			 int8_t peer_rssi);
 
 /**
  * wma_open() - Allocate wma context and initialize it.
@@ -743,29 +732,25 @@ QDF_STATUS wma_register_roaming_callbacks(
 		QDF_STATUS (*csr_roam_auth_event_handle_cb)(
 			struct mac_context *mac,
 			uint8_t vdev_id,
-			struct qdf_mac_addr bssid,
-			uint32_t akm),
+			struct qdf_mac_addr bssid),
 		pe_roam_synch_fn_t pe_roam_synch_cb,
 		QDF_STATUS (*pe_disconnect_cb) (struct mac_context *mac,
 			uint8_t vdev_id,
 			uint8_t *deauth_disassoc_frame,
 			uint16_t deauth_disassoc_frame_len,
-			uint16_t reason_code),
-		set_ies_fn_t pe_roam_set_ie_cb);
+			uint16_t reason_code));
 #else
 static inline QDF_STATUS wma_register_roaming_callbacks(
 		QDF_STATUS (*csr_roam_auth_event_handle_cb)(
 			struct mac_context *mac,
 			uint8_t vdev_id,
-			struct qdf_mac_addr bssid,
-			uint32_t akm),
+			struct qdf_mac_addr bssid),
 		pe_roam_synch_fn_t pe_roam_synch_cb,
 		QDF_STATUS (*pe_disconnect_cb) (struct mac_context *mac,
 			uint8_t vdev_id,
 			uint8_t *deauth_disassoc_frame,
 			uint16_t deauth_disassoc_frame_len,
-			uint16_t reason_code),
-		set_ies_fn_t pe_roam_set_ie_cb)
+			uint16_t reason_code))
 {
 	return QDF_STATUS_E_NOSUPPORT;
 }

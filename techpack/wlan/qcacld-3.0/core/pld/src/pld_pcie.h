@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -57,27 +57,8 @@ static inline int pld_pcie_get_ce_id(struct device *dev, int irq)
 	return 0;
 }
 #else
-/**
- * pld_pcie_register_driver() - Register PCIE device callback functions
- *
- * Return: int
- */
 int pld_pcie_register_driver(void);
-
-/**
- * pld_pcie_unregister_driver() - Unregister PCIE device callback functions
- *
- * Return: void
- */
 void pld_pcie_unregister_driver(void);
-
-/**
- * pld_pcie_get_ce_id() - Get CE number for the provided IRQ
- * @dev: device
- * @irq: IRQ number
- *
- * Return: CE number
- */
 int pld_pcie_get_ce_id(struct device *dev, int irq);
 #endif
 
@@ -95,53 +76,10 @@ static inline int pld_pcie_wlan_disable(struct device *dev,
 {
 	return 0;
 }
-
-static inline int pld_pcie_wlan_hw_enable(void)
-{
-	return 0;
-}
-
 #else
-
-/**
- * pld_pcie_wlan_enable() - Enable WLAN
- * @dev: device
- * @config: WLAN configuration data
- * @mode: WLAN mode
- * @host_version: host software version
- *
- * This function enables WLAN FW. It passed WLAN configuration data,
- * WLAN mode and host software version to FW.
- *
- * Return: 0 for success
- *         Non zero failure code for errors
- */
 int pld_pcie_wlan_enable(struct device *dev, struct pld_wlan_enable_cfg *config,
 			 enum pld_driver_mode mode, const char *host_version);
-
-/**
- * pld_pcie_wlan_disable() - Disable WLAN
- * @dev: device
- * @mode: WLAN mode
- *
- * This function disables WLAN FW. It passes WLAN mode to FW.
- *
- * Return: 0 for success
- *         Non zero failure code for errors
- */
 int pld_pcie_wlan_disable(struct device *dev, enum pld_driver_mode mode);
-
-#ifdef FEATURE_CNSS_HW_SECURE_DISABLE
-static inline int pld_pcie_wlan_hw_enable(void)
-{
-	return cnss_wlan_hw_enable();
-}
-#else
-static inline int pld_pcie_wlan_hw_enable(void)
-{
-	return -EINVAL;
-}
-#endif
 #endif
 
 #if defined(CONFIG_PLD_PCIE_CNSS)
@@ -195,6 +133,23 @@ static inline int pld_pcie_wlan_pm_control(struct device *dev, bool vote)
 }
 #else
 static inline int pld_pcie_wlan_pm_control(struct device *dev, bool vote)
+{
+	return 0;
+}
+#endif
+
+#ifdef FEATURE_WLAN_FULL_POWER_DOWN_SUPPORT
+/**
+ * pld_pcie_set_suspend_mode() - Set current WLAN suspend mode
+ *
+ * This function is to set current wlan suspend mode for CNSS2
+ *
+ * Return: 0 for success
+ *         Non zero failure code for errors
+ */
+int pld_pcie_set_suspend_mode(enum pld_suspend_mode mode);
+#else
+static inline int pld_pcie_set_suspend_mode(enum pld_suspend_mode mode)
 {
 	return 0;
 }
@@ -326,14 +281,6 @@ static inline void pld_pcie_remove_pm_qos(struct device *dev)
 {
 }
 
-static inline void pld_pcie_set_tsf_sync_period(struct device *dev, u32 val)
-{
-}
-
-static inline void pld_pcie_reset_tsf_sync_period(struct device *dev)
-{
-}
-
 static inline int pld_pcie_request_bus_bandwidth(struct device *dev,
 						 int bandwidth)
 {
@@ -383,6 +330,14 @@ static inline int pld_pcie_force_wake_release(struct device *dev)
 	return 0;
 }
 
+static inline void pld_pcie_lock_pm_sem(struct device *dev)
+{
+}
+
+static inline void pld_pcie_release_pm_sem(struct device *dev)
+{
+}
+
 static inline void pld_pcie_lock_reg_window(struct device *dev,
 					    unsigned long *flags)
 {
@@ -396,11 +351,6 @@ static inline void pld_pcie_unlock_reg_window(struct device *dev,
 static inline int pld_pcie_get_pci_slot(struct device *dev)
 {
 	return 0;
-}
-
-static inline struct kobject *pld_pcie_get_wifi_kobj(struct device *dev)
-{
-	return NULL;
 }
 
 static inline int pld_pcie_power_on(struct device *dev)
@@ -451,14 +401,6 @@ pld_pcie_qmi_send(struct device *dev, int type, void *cmd,
 	return -EINVAL;
 }
 
-static inline int
-pld_pcie_register_qmi_ind(struct device *dev, void *cb_ctx,
-			  int (*cb)(void *ctx, uint16_t type,
-				    void *event, int event_len))
-{
-	return -EINVAL;
-}
-
 static inline int pld_pcie_get_user_msi_assignment(struct device *dev,
 						   char *user_name,
 						   int *num_vectors,
@@ -471,11 +413,6 @@ static inline int pld_pcie_get_user_msi_assignment(struct device *dev,
 static inline int pld_pcie_get_msi_irq(struct device *dev, unsigned int vector)
 {
 	return 0;
-}
-
-static inline bool pld_pcie_is_one_msi(struct device *dev)
-{
-	return false;
 }
 
 static inline void pld_pcie_get_msi_address(struct device *dev,
@@ -495,48 +432,11 @@ static inline bool pld_pcie_platform_driver_support(void)
 	return false;
 }
 
-static inline bool pld_pcie_is_direct_link_supported(struct device *dev)
-{
-	return false;
-}
-
-static inline
-int pld_pcie_audio_smmu_map(struct device *dev, phys_addr_t paddr,
-			    dma_addr_t iova, size_t size)
-{
-	return 0;
-}
-
-static inline
-void pld_pcie_audio_smmu_unmap(struct device *dev, dma_addr_t iova, size_t size)
-{
-}
-
 static inline int pld_pcie_set_wfc_mode(struct device *dev,
 					enum pld_wfc_mode wfc_mode)
 {
 	return 0;
 }
-
-static inline int pld_pci_thermal_register(struct device *dev,
-					   unsigned long max_state,
-					   int mon_id)
-{
-	return 0;
-}
-
-static inline void pld_pci_thermal_unregister(struct device *dev,
-					      int mon_id)
-{
-}
-
-static inline int pld_pci_get_thermal_state(struct device *dev,
-					    unsigned long *thermal_state,
-					    int mon_id)
-{
-	return 0;
-}
-
 #else
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
 int pld_pcie_set_wfc_mode(struct device *dev,
@@ -549,63 +449,13 @@ static inline int pld_pcie_set_wfc_mode(struct device *dev,
 }
 #endif
 
-/**
- * pld_pcie_get_fw_files_for_target() - Get FW file names
- * @dev: device
- * @pfw_files: buffer for FW file names
- * @target_type: target type
- * @target_version: target version
- *
- * Return target specific FW file names to the buffer.
- *
- * Return: 0 for success
- *         Non zero failure code for errors
- */
 int pld_pcie_get_fw_files_for_target(struct device *dev,
 				     struct pld_fw_files *pfw_files,
 				     u32 target_type, u32 target_version);
-
-/**
- * pld_pcie_get_platform_cap() - Get platform capabilities
- * @dev: device
- * @cap: buffer to the capabilities
- *
- * Return capabilities to the buffer.
- *
- * Return: 0 for success
- *         Non zero failure code for errors
- */
 int pld_pcie_get_platform_cap(struct device *dev, struct pld_platform_cap *cap);
-
-/**
- * pld_pcie_get_soc_info() - Get SOC information
- * @dev: device
- * @info: buffer to SOC information
- *
- * Return SOC info to the buffer.
- *
- * Return: 0 for success
- *         Non zero failure code for errors
- */
 int pld_pcie_get_soc_info(struct device *dev, struct pld_soc_info *info);
-
-/**
- * pld_pcie_schedule_recovery_work() - schedule recovery work
- * @dev: device
- * @reason: recovery reason
- *
- * Return: void
- */
 void pld_pcie_schedule_recovery_work(struct device *dev,
 				     enum pld_recovery_reason reason);
-
-/**
- * pld_pcie_device_self_recovery() - device self recovery
- * @dev: device
- * @reason: recovery reason
- *
- * Return: void
- */
 void pld_pcie_device_self_recovery(struct device *dev,
 				   enum pld_recovery_reason reason);
 static inline int pld_pcie_collect_rddm(struct device *dev)
@@ -630,25 +480,6 @@ pld_pcie_qmi_send(struct device *dev, int type, void *cmd,
 {
 	return cnss_qmi_send(dev, type, cmd, cmd_len, cb_ctx, cb);
 }
-
-#if defined(WLAN_CHIPSET_STATS) && \
-	(LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
-static inline int
-pld_pcie_register_qmi_ind(struct device *dev, void *cb_ctx,
-			  int (*cb)(void *ctx, uint16_t type,
-				    void *event, int event_len))
-{
-	return cnss_register_driver_async_data_cb(dev, cb_ctx, cb);
-}
-#else
-static inline int
-pld_pcie_register_qmi_ind(struct device *dev, void *cb_ctx,
-			  int (*cb)(void *ctx, uint16_t type,
-				    void *event, int event_len))
-{
-	return 0;
-}
-#endif
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 0))
 static inline void *pld_pcie_smmu_get_domain(struct device *dev)
@@ -778,25 +609,6 @@ static inline void pld_pcie_remove_pm_qos(struct device *dev)
 	cnss_remove_pm_qos(dev);
 }
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
-static inline void pld_pcie_set_tsf_sync_period(struct device *dev, u32 val)
-{
-	cnss_update_time_sync_period(dev, val);
-}
-
-static inline void pld_pcie_reset_tsf_sync_period(struct device *dev)
-{
-	cnss_reset_time_sync_period(dev);
-}
-#else
-static inline void pld_pcie_set_tsf_sync_period(struct device *dev, u32 val)
-{
-}
-
-static inline void pld_pcie_reset_tsf_sync_period(struct device *dev)
-{
-}
-#endif
 static inline int pld_pcie_request_bus_bandwidth(struct device *dev,
 						 int bandwidth)
 {
@@ -834,6 +646,16 @@ static inline int pld_pcie_force_wake_release(struct device *dev)
 	return cnss_pci_force_wake_release(dev);
 }
 
+static inline void pld_pcie_lock_pm_sem(struct device *dev)
+{
+	cnss_lock_pm_sem(dev);
+}
+
+static inline void pld_pcie_release_pm_sem(struct device *dev)
+{
+	cnss_release_pm_sem(dev);
+}
+
 static inline void pld_pcie_lock_reg_window(struct device *dev,
 					    unsigned long *flags)
 {
@@ -846,7 +668,7 @@ static inline void pld_pcie_unlock_reg_window(struct device *dev,
 	cnss_pci_unlock_reg_window(dev, flags);
 }
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
 static inline int pld_pcie_get_pci_slot(struct device *dev)
 {
 	return cnss_get_pci_slot(dev);
@@ -855,18 +677,6 @@ static inline int pld_pcie_get_pci_slot(struct device *dev)
 static inline int pld_pcie_get_pci_slot(struct device *dev)
 {
 	return 0;
-}
-#endif
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
-static inline struct kobject *pld_pcie_get_wifi_kobj(struct device *dev)
-{
-	return cnss_get_wifi_kobj(dev);
-}
-#else
-static inline struct kobject *pld_pcie_get_wifi_kobj(struct device *dev)
-{
-	return NULL;
 }
 #endif
 
@@ -910,18 +720,6 @@ static inline int pld_pcie_get_msi_irq(struct device *dev, unsigned int vector)
 	return cnss_get_msi_irq(dev, vector);
 }
 
-#ifdef WLAN_ONE_MSI_VECTOR
-static inline bool pld_pcie_is_one_msi(struct device *dev)
-{
-	return cnss_is_one_msi(dev);
-}
-#else
-static inline bool pld_pcie_is_one_msi(struct device *dev)
-{
-	return false;
-}
-#endif
-
 static inline void pld_pcie_get_msi_address(struct device *dev,
 					    uint32_t *msi_addr_low,
 					    uint32_t *msi_addr_high)
@@ -938,62 +736,5 @@ static inline bool pld_pcie_platform_driver_support(void)
 {
 	return true;
 }
-
-static inline int pld_pci_thermal_register(struct device *dev,
-					   unsigned long max_state,
-					   int mon_id)
-{
-	return cnss_thermal_cdev_register(dev, max_state, mon_id);
-}
-
-static inline void pld_pci_thermal_unregister(struct device *dev,
-					      int mon_id)
-{
-	cnss_thermal_cdev_unregister(dev, mon_id);
-}
-
-static inline int pld_pci_get_thermal_state(struct device *dev,
-					    unsigned long *thermal_state,
-					    int mon_id)
-{
-	return cnss_get_curr_therm_cdev_state(dev, thermal_state, mon_id);
-}
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
-static inline bool pld_pcie_is_direct_link_supported(struct device *dev)
-{
-	return cnss_get_fw_cap(dev, CNSS_FW_CAP_DIRECT_LINK_SUPPORT);
-}
-
-static inline
-int pld_pcie_audio_smmu_map(struct device *dev, phys_addr_t paddr,
-			    dma_addr_t iova, size_t size)
-{
-	return cnss_audio_smmu_map(dev, paddr, iova, size);
-}
-
-static inline
-void pld_pcie_audio_smmu_unmap(struct device *dev, dma_addr_t iova, size_t size)
-{
-	cnss_audio_smmu_unmap(dev, iova, size);
-}
-#else
-static inline bool pld_pcie_is_direct_link_supported(struct device *dev)
-{
-	return false;
-}
-
-static inline
-int pld_pcie_audio_smmu_map(struct device *dev, phys_addr_t paddr,
-			    dma_addr_t iova, size_t size)
-{
-	return 0;
-}
-
-static inline
-void pld_pcie_audio_smmu_unmap(struct device *dev, dma_addr_t iova, size_t size)
-{
-}
-#endif
 #endif
 #endif

@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -157,7 +156,7 @@ ATH_DEBUG_INSTANTIATE_MODULE_VAR(hif,
 #endif
 
 /**
- * add_to_async_list() - add bus request to async task list
+ * add_to_async_list() - add bus reqest to async task list
  * @device: pointer to hif device
  * @busrequest: pointer to type of bus request
  *
@@ -376,7 +375,6 @@ err_attach1:
 /**
  * power_state_change_notify() - SDIO bus power notification handler
  * @ol_sc: HIF device context
- * @device: SDIO device
  * @config: hif device power change type
  *
  * Return: 0 on success, error number otherwise.
@@ -446,7 +444,7 @@ power_state_change_notify(struct hif_softc *ol_sc,
  * @device: pointer to hif device structure
  * @opcode: configuration type
  * @config: configuration value to set
- * @config_len: configuration length
+ * @configLen: configuration length
  *
  * Return: 0 on success, error number otherwise.
  */
@@ -707,10 +705,10 @@ void hif_ack_interrupt(struct hif_sdio_dev *device)
 
 /**
  * hif_sdio_configure_pipes - Configure pipes for the lower layer bus
- * @dev: HIF layer object
- * @func: SDIO bus function object
+ * @pdev - HIF layer object
+ * @func - SDIO bus function object
  *
- * Return: error in case of failure to configure, else success
+ * Return - error in case of failure to configure, else success
  */
 int hif_sdio_configure_pipes(struct hif_sdio_dev *dev, struct sdio_func *func)
 {
@@ -746,7 +744,7 @@ struct bus_request *hif_allocate_bus_request(struct hif_sdio_dev *device)
 /**
  * hif_free_bus_request() - Free hif bus request
  * @device: pointer to struct hif_sdio_dev
- * @busrequest: bus request
+ *
  *
  * Return: None.
  */
@@ -878,7 +876,7 @@ int hif_device_resume(struct hif_softc *ol_sc, struct device *dev)
 
 /**
  * hif_sdio_remove() - remove sdio device
- * @context: sdio device context
+ * @conext: sdio device context
  * @hif_handle: pointer to sdio function
  *
  * Return: 0 for success and non-zero for failure

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -18,8 +18,8 @@
  */
 
 /**
- * DOC: cdp_txrx_cmn.h
- * Define the host data path converged API functions
+ * @file cdp_txrx_cmn.h
+ * @brief Define the host data path converged API functions
  * called by the host control SW and the OS interface module
  */
 #ifndef _CDP_TXRX_CMN_H_
@@ -30,12 +30,6 @@
 #include "cdp_txrx_ops.h"
 #include "cdp_txrx_handle.h"
 #include "cdp_txrx_cmn_struct.h"
-#include "wlan_objmgr_global_obj.h"
-
-#ifdef WLAN_SUPPORT_DPDK
-#include <cfgmgr_api_if.h>
-#include <dpdk_wlan_msg_types.h>
-#endif
 
 #ifdef ENABLE_VERBOSE_DEBUG
 extern bool is_dp_verbose_debug_enabled;
@@ -65,7 +59,7 @@ extern bool is_dp_verbose_debug_enabled;
 
 #ifdef ENABLE_VERBOSE_DEBUG
 /**
- * enum verbose_debug_module -
+ * @enum verbose_debug_module:
  * if INI "enable_verbose_debug" has to set following bit positions to enable
  * respective module's excessive logging,
  *
@@ -74,13 +68,10 @@ extern bool is_dp_verbose_debug_enabled;
  * @dp_verbose_debug_mask:  3rd bit [2nd index] is for DP module
  */
 enum verbose_debug_module {
-	hif_verbose_debug_mask   = 1 << 0,
+	hif_vebose_debug_mask    = 1 << 0,
 	hal_verbose_debug_mask   = 1 << 1,
 	dp_verbose_debug_mask    = 1 << 2,
 };
-
-/* legacy misspelled enumerator */
-#define hif_vebose_debug_mask hif_verbose_debug_mask
 
 #define dp_verbose_debug(params...) \
 		if (unlikely(is_dp_verbose_debug_enabled)) \
@@ -98,7 +89,7 @@ enum verbose_debug_module {
 #define dp_nofl_warn(params...) \
 	QDF_TRACE_WARN_NO_FL(QDF_MODULE_ID_DP, params)
 #define dp_nofl_info(params...) \
-	QDF_TRACE_INFO_NO_FL(QDF_MODULE_ID_DP, params)
+	QDF_TRACE_DEBUG_NO_FL(QDF_MODULE_ID_DP, params)
 #define dp_nofl_debug(params...) \
 	QDF_TRACE_DEBUG_NO_FL(QDF_MODULE_ID_DP, params)
 
@@ -125,134 +116,17 @@ enum verbose_debug_module {
 #define dp_cdp_nofl_debug(params...) \
 	QDF_TRACE_DEBUG_NO_FL(QDF_MODULE_ID_DP_CDP, params)
 
-#define DP_PEER_INFO_PARAMS_INIT(peer_info, _vdev_id, \
-				_peer_mac, _addr_align, _peer_type) \
-({	typeof(peer_info) _peer_info = (peer_info); \
-	do {								\
-		(_peer_info)->vdev_id = (_vdev_id);			\
-		(_peer_info)->mac_addr = (_peer_mac);			\
-		(_peer_info)->mac_addr_is_aligned = (_addr_align);	\
-		(_peer_info)->peer_type = (_peer_type);			\
-	} while (0); })
-
-#ifdef WLAN_FEATURE_11BE_MLO
-#define CDP_RX_ML_PEER_VALID_MASK  (0x00002000)
-#define CDP_RX_ML_PEER_VALID_SHIFT (13)
-#define CDP_RX_GET_ML_PEER_VALID(skb) \
-	((QDF_NBUF_CB_RX_PEER_ID(skb) & \
-	  CDP_RX_ML_PEER_VALID_MASK) >> CDP_RX_ML_PEER_VALID_SHIFT)
-#endif
-
 /**
- * enum vdev_host_stats_id -
+ * @enum vdev_host_stats_id:
  * host stats update from CDP have to set one of the following stats ID
  *
  * @DP_VDEV_STATS_PKT_CNT_ONLY: update Tx packet count only
  * @DP_VDEV_STATS_TX_ME: update Tx ingress stats
  */
-enum vdev_host_stats_id {
+enum {
 	DP_VDEV_STATS_PKT_CNT_ONLY,
 	DP_VDEV_STATS_TX_ME,
 };
-
-/*
- * BW types used for RX PPDU
- */
-enum rx_tlv_bw {
-	RX_TLV_BW_20MHZ,
-	RX_TLV_BW_40MHZ,
-	RX_TLV_BW_80MHZ,
-	RX_TLV_BW_160MHZ,
-	RX_TLV_BW_320MHZ,
-	RX_TLV_BW_240MHZ,
-	RX_TLV_BW_CNT,
-};
-
-/**
- * typedef ipa_uc_op_cb_type() - Register OP handler function
- * @op_msg: message
- * @osif_ctxt: OSIF context
- */
-typedef void (*ipa_uc_op_cb_type)(uint8_t *op_msg,
-				  void *osif_ctxt);
-
-#ifdef QCA_SUPPORT_DP_GLOBAL_CTX
-/* Global level structure for win contexts */
-struct dp_global_context {
-	struct dp_rx_fst *fst_ctx;
-	struct dp_tx_desc_pool_s *tx_desc[2][4];
-	struct dp_hw_cookie_conversion_t *tx_cc_ctx[4];
-	struct dp_tx_desc_pool_s *spcl_tx_desc[2][4];
-	struct dp_hw_cookie_conversion_t *spcl_tx_cc_ctx[4];
-	qdf_atomic_t rx_fst_ref_cnt;
-	qdf_atomic_t global_descriptor_in_use;
-	int tx_cookie_ctx_alloc_cnt;
-	int tx_desc_pool_alloc_cnt[2];
-	int tx_desc_pool_init_cnt[2];
-	int spcl_tx_cookie_ctx_alloc_cnt;
-	int spcl_tx_desc_pool_alloc_cnt[2];
-	int spcl_tx_desc_pool_init_cnt[2];
-};
-
-/**
- * cdp_global_ctx_init() - to initialise global context for tx descriptors
- *
- * Return: QDF_STATUS on success
- */
-static inline QDF_STATUS cdp_global_ctx_init(void)
-{
-	struct dp_global_context *dp_global;
-	QDF_STATUS status = QDF_STATUS_SUCCESS;
-
-	if (wlan_objmgr_get_global_ctx()) {
-		dp_err("Global object is already created");
-		return QDF_STATUS_SUCCESS;
-	}
-
-	dp_global =  (struct dp_global_context *)
-			qdf_mem_malloc(sizeof(*dp_global));
-
-	if (!dp_global)
-		return QDF_STATUS_E_FAILURE;
-
-	qdf_mem_zero(dp_global, sizeof(*dp_global));
-	wlan_objmgr_set_global_ctx(dp_global);
-	qdf_atomic_set(&dp_global->global_descriptor_in_use, 0);
-	dp_global->fst_ctx = NULL;
-	qdf_atomic_set(&dp_global->rx_fst_ref_cnt, 0);
-
-	return status;
-}
-
-/**
- * cdp_global_ctx_deinit() - to deinitialise global context for tx descriptors
- *
- * Return: SUCCESS status on success
- */
-static inline QDF_STATUS cdp_global_ctx_deinit(void)
-{
-	struct dp_global_context *dp_global = wlan_objmgr_get_global_ctx();
-	QDF_STATUS status = QDF_STATUS_SUCCESS;
-
-	if (!dp_global)
-		return QDF_STATUS_SUCCESS;
-
-	qdf_mem_free(dp_global);
-	wlan_objmgr_set_global_ctx(NULL);
-
-	return status;
-}
-#else
-static inline QDF_STATUS cdp_global_ctx_init(void)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-static inline QDF_STATUS cdp_global_ctx_deinit(void)
-{
-	return QDF_STATUS_SUCCESS;
-}
-#endif
 
 static inline QDF_STATUS
 cdp_soc_attach_target(ol_txrx_soc_handle soc)
@@ -297,7 +171,7 @@ cdp_vdev_attach(ol_txrx_soc_handle soc, uint8_t pdev_id,
  *
  * Create per vdev flow pool.
  *
- * Return: QDF_STATUS
+ * return none
  */
 static inline QDF_STATUS cdp_flow_pool_map(ol_txrx_soc_handle soc,
 					   uint8_t pdev_id, uint8_t vdev_id)
@@ -324,7 +198,7 @@ static inline QDF_STATUS cdp_flow_pool_map(ol_txrx_soc_handle soc,
  *
  * Delete flow pool
  *
- * Return: none
+ * return none
  */
 static inline void cdp_flow_pool_unmap(ol_txrx_soc_handle soc,
 				       uint8_t pdev_id, uint8_t vdev_id)
@@ -361,28 +235,6 @@ cdp_vdev_detach(ol_txrx_soc_handle soc, uint8_t vdev_id,
 	return soc->ops->cmn_drv_ops->txrx_vdev_detach(soc, vdev_id,
 						       callback, cb_context);
 }
-
-#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
-static inline void
-cdp_vdev_recovery_flush_peers(ol_txrx_soc_handle soc,
-			      uint8_t vdev_id,
-			      bool mlo_peers_only)
-{
-	if (!soc || !soc->ops) {
-		dp_cdp_debug("Invalid Instance:");
-		QDF_BUG(0);
-		return;
-	}
-
-	if (!soc->ops->cmn_drv_ops ||
-	    !soc->ops->cmn_drv_ops->txrx_recovery_vdev_flush_peers)
-		return;
-
-	soc->ops->cmn_drv_ops->txrx_recovery_vdev_flush_peers(soc,
-							      vdev_id,
-							      mlo_peers_only);
-}
-#endif
 
 static inline int
 cdp_pdev_attach_target(ol_txrx_soc_handle soc, uint8_t pdev_id)
@@ -520,26 +372,26 @@ static inline QDF_STATUS cdp_peer_create
 			peer_mac_addr, CDP_LINK_PEER_TYPE);
 }
 
-static inline  QDF_STATUS cdp_peer_setup
+static inline void cdp_peer_setup
 	(ol_txrx_soc_handle soc, uint8_t vdev_id, uint8_t *peer_mac,
 	 struct cdp_peer_setup_info *setup_info)
 {
 	if (!soc || !soc->ops) {
 		dp_cdp_debug("Invalid Instance:");
 		QDF_BUG(0);
-		return  QDF_STATUS_E_FAILURE;
+		return;
 	}
 
 	if (!soc->ops->cmn_drv_ops ||
 	    !soc->ops->cmn_drv_ops->txrx_peer_setup)
-		return QDF_STATUS_E_FAILURE;
+		return;
 
-	return soc->ops->cmn_drv_ops->txrx_peer_setup(soc, vdev_id,
-						      peer_mac, setup_info);
+	soc->ops->cmn_drv_ops->txrx_peer_setup(soc, vdev_id,
+			peer_mac, setup_info);
 }
 
-/**
- * cdp_cp_peer_del_response() - Call the peer delete response handler
+/*
+ * cdp_cp_peer_del_response - Call the peer delete response handler
  * @soc: Datapath SOC handle
  * @vdev_id: id of virtual device object
  * @peer_mac_addr: Mac address of the peer
@@ -571,11 +423,11 @@ static inline QDF_STATUS cdp_cp_peer_del_response
  *                                  of first ast entry found in the
  *                                  table with given mac address
  *
- * @soc: data path soc handle
- * @ast_mac_addr: AST entry mac address
- * @ast_entry_info: ast entry information
+ * @soc - data path soc handle
+ * @ast_mac_addr - AST entry mac address
+ * @ast_entry_info - ast entry information
  *
- * return: true if ast entry found with ast_mac_addr
+ * return - true if ast entry found with ast_mac_addr
  *          false if ast entry not found
  */
 static inline bool cdp_peer_get_ast_info_by_soc
@@ -602,12 +454,12 @@ static inline bool cdp_peer_get_ast_info_by_soc
  *                                   and return ast entry information
  *                                   if mac address and pdev_id matches
  *
- * @soc: data path soc handle
- * @ast_mac_addr: AST entry mac address
- * @pdev_id: pdev_id
- * @ast_entry_info: ast entry information
+ * @soc - data path soc handle
+ * @ast_mac_addr - AST entry mac address
+ * @pdev_id - pdev_id
+ * @ast_entry_info - ast entry information
  *
- * return: true if ast entry found with ast_mac_addr
+ * return - true if ast entry found with ast_mac_addr
  *          false if ast entry not found
  */
 static inline bool cdp_peer_get_ast_info_by_pdev
@@ -636,12 +488,12 @@ static inline bool cdp_peer_get_ast_info_by_pdev
  * cdp_peer_ast_delete_by_soc() - delete the ast entry from soc AST hash table
  *                                with given mac address
  *
- * @soc: data path soc handle
- * @ast_mac_addr: AST entry mac address
- * @callback: callback function to called on ast delete response from FW
- * @cookie: argument to be passed to callback
+ * @soc - data path soc handle
+ * @ast_mac_addr - AST entry mac address
+ * @callback - callback function to called on ast delete response from FW
+ * @cookie - argument to be passed to callback
  *
- * return: QDF_STATUS_SUCCESS if ast entry found with ast_mac_addr and delete
+ * return - QDF_STATUS_SUCCESS if ast entry found with ast_mac_addr and delete
  *          is sent
  *          QDF_STATUS_E_INVAL false if ast entry not found
  */
@@ -671,13 +523,13 @@ static inline QDF_STATUS cdp_peer_ast_delete_by_soc
  * cdp_peer_ast_delete_by_pdev() - delete the ast entry from soc AST hash table
  *                                 if mac address and pdev_id matches
  *
- * @soc: data path soc handle
- * @ast_mac_addr: AST entry mac address
- * @pdev_id: pdev id
- * @callback: callback function to called on ast delete response from FW
- * @cookie: argument to be passed to callback
+ * @soc - data path soc handle
+ * @ast_mac_addr - AST entry mac address
+ * @pdev_id - pdev id
+ * @callback - callback function to called on ast delete response from FW
+ * @cookie - argument to be passed to callback
  *
- * return: QDF_STATUS_SUCCESS if ast entry found with ast_mac_addr and delete
+ * return - QDF_STATUS_SUCCESS if ast entry found with ast_mac_addr and delete
  *          is sent
  *          QDF_STATUS_E_INVAL false if ast entry not found
  */
@@ -702,42 +554,6 @@ static inline QDF_STATUS cdp_peer_ast_delete_by_pdev
 					 pdev_id,
 					 callback,
 					 cookie);
-}
-
-/**
- * cdp_peer_HMWDS_ast_delete() - delete the ast entry from soc AST hash table
- *                               for HMWDS rem-addr command
- *
- * @soc: data path soc handle
- * @vdev_id: vdev id
- * @dest_mac: AST entry mac address to delete
- * @type: cdp_txrx_ast_entry_type to send to FW
- * @delete_in_fw: flag to indicate AST entry deletion in FW
- *
- * Return: QDF_STATUS_SUCCESS if ast entry found with ast_mac_addr and delete
- *         is sent
- *         QDF_STATUS_E_INVAL false if ast entry not found
- */
-static inline QDF_STATUS cdp_peer_HMWDS_ast_delete
-	(ol_txrx_soc_handle soc, uint8_t vdev_id, uint8_t *dest_mac,
-	 uint8_t type, uint8_t delete_in_fw)
-{
-	if (!soc || !soc->ops) {
-		dp_cdp_debug("Invalid Instance:");
-		QDF_BUG(0);
-		return QDF_STATUS_E_INVAL;
-	}
-
-	if (!soc->ops->cmn_drv_ops ||
-	    !soc->ops->cmn_drv_ops->txrx_peer_HMWDS_ast_delete)
-		return QDF_STATUS_E_INVAL;
-
-	return soc->ops->cmn_drv_ops->txrx_peer_HMWDS_ast_delete
-					(soc,
-					 vdev_id,
-					 dest_mac,
-					 type,
-					 delete_in_fw);
 }
 
 static inline int cdp_peer_add_ast
@@ -865,8 +681,7 @@ cdp_peer_delete(ol_txrx_soc_handle soc, uint8_t vdev_id,
 	    !soc->ops->cmn_drv_ops->txrx_peer_delete)
 		return;
 
-	soc->ops->cmn_drv_ops->txrx_peer_delete(soc, vdev_id, peer_mac,
-						bitmap, CDP_LINK_PEER_TYPE);
+	soc->ops->cmn_drv_ops->txrx_peer_delete(soc, vdev_id, peer_mac, bitmap);
 }
 
 #ifdef DP_RX_UDP_OVER_PEER_ROAM
@@ -896,11 +711,11 @@ cdp_update_roaming_peer_in_vdev(ol_txrx_soc_handle soc, uint8_t vdev_id,
 }
 #endif
 /**
- * cdp_peer_delete_sync() - peer delete sync callback
+ * cdp_peer_detach_sync() - peer detach sync callback
  * @soc: datapath soc handle
  * @vdev_id: virtual device/interface id
  * @peer_mac: peer mac address
- * @delete_cb: peer delete sync cb.
+ * @peer_unmap_sync: peer unmap sync cb.
  * @bitmap: bitmap indicating special handling of request.
  *
  * Return: None
@@ -997,7 +812,7 @@ cdp_set_monitor_filter(ol_txrx_soc_handle soc, uint8_t pdev_id,
 /******************************************************************************
  * Data Interface (B Interface)
  *****************************************************************************/
-static inline struct cdp_vdev *
+static inline void
 cdp_vdev_register(ol_txrx_soc_handle soc, uint8_t vdev_id,
 		  ol_osif_vdev_handle osif_vdev,
 		  struct ol_txrx_ops *txrx_ops)
@@ -1005,15 +820,15 @@ cdp_vdev_register(ol_txrx_soc_handle soc, uint8_t vdev_id,
 	if (!soc || !soc->ops) {
 		dp_cdp_debug("Invalid Instance:");
 		QDF_BUG(0);
-		return NULL;
+		return;
 	}
 
 	if (!soc->ops->cmn_drv_ops ||
 	    !soc->ops->cmn_drv_ops->txrx_vdev_register)
-		return NULL;
+		return;
 
-	return soc->ops->cmn_drv_ops->txrx_vdev_register(soc, vdev_id,
-							 osif_vdev, txrx_ops);
+	soc->ops->cmn_drv_ops->txrx_vdev_register(soc, vdev_id,
+			osif_vdev, txrx_ops);
 }
 
 static inline int
@@ -1077,7 +892,7 @@ cdp_mgmt_tx_cb_set(ol_txrx_soc_handle soc, uint8_t pdev_id,
  * cdp_peer_unmap_sync_cb_set() - set peer unmap sync callback
  * @soc: datapath soc handle
  * @pdev_id: physical device instance id
- * @unmap_resp_cb: peer unmap sync callback
+ * @peer_unmap_sync: peer unmap sync callback
  *
  * Return: None
  */
@@ -1103,11 +918,11 @@ cdp_peer_unmap_sync_cb_set(ol_txrx_soc_handle soc,
 							   unmap_resp_cb);
 }
 
-/**
+/*
  * cdp_data_tx_cb_set(): set the callback for non standard tx
- * @soc: datapath soc handle
- * @vdev_id: virtual device/interface id
- * @callback: callback function
+ * @soc - datapath soc handle
+ * @vdev_id - virtual device/interface id
+ * @callback - callback function
  * @ctxt: callback context
  *
  */
@@ -1132,7 +947,7 @@ cdp_data_tx_cb_set(ol_txrx_soc_handle soc, uint8_t vdev_id,
 /******************************************************************************
  * Statistics and Debugging Interface (C Interface)
  *****************************************************************************/
-/*
+/**
  * External Device physical address types
  *
  * Currently, both MAC and IPA uController use the same size addresses
@@ -1237,9 +1052,9 @@ static inline void cdp_print_level_set(ol_txrx_soc_handle soc, unsigned level)
 	soc->ops->cmn_drv_ops->txrx_print_level_set(level);
 }
 
-/**
- * cdp_get_vdev_mac_addr() - Detach txrx peer
- * @soc: Datapath soc handle
+/*
+ * cdp_get_vdev_mac_addr() – Detach txrx peer
+ * @soc_hdl: Datapath soc handle
  * @vdev_id: virtual device/interface id
  *
  * Return: MAC address on success, NULL on failure.
@@ -1316,7 +1131,7 @@ cdp_get_ctrl_pdev_from_vdev(ol_txrx_soc_handle soc, uint8_t vdev_id)
 								   vdev_id);
 }
 
-/**
+/*
  * cdp_get_mon_vdev_from_pdev() - Get vdev handle of monitor mode
  * @soc: datapath soc handle
  * @pdev_id: physical device instance id
@@ -1391,11 +1206,14 @@ cdp_soc_init(ol_txrx_soc_handle soc, u_int16_t devid,
 }
 
 /**
- * cdp_pdev_init() - Initialize txrx pdev
+ * cdp_soc_init() - Initialize txrx SOC
  * @soc: ol_txrx_soc_handle handle
+ * @devid: Device ID
+ * @hif_handle: Opaque HIF handle
+ * @psoc: Opaque Objmgr handle
  * @htc_handle: Opaque HTC handle
  * @qdf_dev: QDF device
- * @pdev_id: pdev id
+ * @dp_ol_if_ops: Offload Operations
  *
  * Return: DP SOC handle on success, NULL on failure
  */
@@ -1741,7 +1559,6 @@ int cdp_ath_get_total_per(ol_txrx_soc_handle soc, uint8_t pdev_id)
 
 /**
  * cdp_set_pdev_dscp_tid_map(): function to change tid values in DSCP-tid map
- * @soc: soc handle
  * @pdev_id: id of pdev handle
  * @map_id: id of the tid map
  * @tos: index value in map that needs to be changed
@@ -1768,7 +1585,6 @@ static inline void cdp_set_pdev_dscp_tid_map(ol_txrx_soc_handle soc,
 
 /**
  * cdp_flush_cache_rx_queue() - flush cache rx queue frame
- * @soc: soc handle
  *
  * Return: None
  */
@@ -1850,89 +1666,9 @@ static inline void cdp_txrx_intr_detach(ol_txrx_soc_handle soc)
 }
 
 /**
- * cdp_txrx_ppeds_stop(): function to stop ppeds
- * @soc: soc handle
- */
-static inline void cdp_txrx_ppeds_stop(ol_txrx_soc_handle soc)
-{
-	if (!soc || !soc->ops) {
-		dp_cdp_debug("Invalid Instance:");
-		QDF_BUG(0);
-		return;
-	}
-
-	if (!soc->ops->cmn_drv_ops ||
-	    !soc->ops->cmn_drv_ops->txrx_ppeds_stop)
-		return;
-
-	soc->ops->cmn_drv_ops->txrx_ppeds_stop(soc);
-}
-
-/**
- * cdp_txrx_umac_reset_init(): De-initialize UMAC HW reset module
- * @soc: soc handle
- */
-static inline void cdp_txrx_umac_reset_init(ol_txrx_soc_handle soc)
-{
-	if (!soc || !soc->ops) {
-		dp_cdp_debug("Invalid Instance:");
-		QDF_BUG(0);
-		return;
-	}
-
-	if (!soc->ops->cmn_drv_ops ||
-	    !soc->ops->cmn_drv_ops->txrx_umac_reset_init)
-		return;
-
-	soc->ops->cmn_drv_ops->txrx_umac_reset_init(soc);
-}
-
-/**
- * cdp_txrx_umac_reset_deinit(): De-initialize UMAC HW reset module
- * @soc: soc handle
- */
-static inline void cdp_txrx_umac_reset_deinit(ol_txrx_soc_handle soc)
-{
-	if (!soc || !soc->ops) {
-		dp_cdp_debug("Invalid Instance:");
-		QDF_BUG(0);
-		return;
-	}
-
-	if (!soc->ops->cmn_drv_ops ||
-	    !soc->ops->cmn_drv_ops->txrx_umac_reset_deinit)
-		return;
-
-	soc->ops->cmn_drv_ops->txrx_umac_reset_deinit(soc);
-}
-
-/**
- * cdp_notify_asserted_soc(): function to notify asserted SoC
- * @soc: soc handle
- *
- * Return: QDF_STATUS
- */
-static inline QDF_STATUS
-cdp_notify_asserted_soc(ol_txrx_soc_handle soc)
-{
-	if (!soc || !soc->ops) {
-		dp_cdp_debug("Invalid Instance:");
-		QDF_BUG(0);
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	if (!soc->ops->cmn_drv_ops ||
-	    !soc->ops->cmn_drv_ops->notify_asserted_soc)
-		return QDF_STATUS_E_NULL_VALUE;
-
-	return soc->ops->cmn_drv_ops->notify_asserted_soc(soc);
-}
-
-/**
  * cdp_display_stats(): function to map to dump stats
  * @soc: soc handle
  * @value: statistics option
- * @level: verbosity level
  */
 static inline QDF_STATUS
 cdp_display_stats(ol_txrx_soc_handle soc, uint16_t value,
@@ -1953,13 +1689,13 @@ cdp_display_stats(ol_txrx_soc_handle soc, uint16_t value,
 
 
 /**
- * cdp_set_pn_check(): function to set pn check
- * @soc: soc handle
- * @vdev_id: id of virtual device
- * @peer_mac: mac address of peer
- * @sec_type: security type
- * @rx_pn: receive pn
- */
+  * cdp_set_pn_check(): function to set pn check
+  * @soc: soc handle
+  * @vdev_id: id of virtual device
+  * @peer_mac: mac address of peer
+  * @sec_type: security type
+  * @rx_pn: receive pn
+  */
 static inline int cdp_set_pn_check(ol_txrx_soc_handle soc,
 		uint8_t vdev_id, uint8_t *peer_mac,
 		enum cdp_sec_type sec_type,  uint32_t *rx_pn)
@@ -1985,7 +1721,7 @@ static inline int cdp_set_pn_check(ol_txrx_soc_handle soc,
  * @vdev_id: id of virtual device
  * @peer_mac: mac address of peer
  * @sec_type: security type
- * @is_unicast: ucast or mcast
+ * #is_unicast: ucast or mcast
  */
 static inline int cdp_set_key_sec_type(ol_txrx_soc_handle soc,
 				       uint8_t vdev_id,
@@ -2153,7 +1889,7 @@ cdp_vdev_set_dp_ext_txrx_handle(ol_txrx_soc_handle soc, uint8_t vdev_id,
 								  size);
 }
 
-/**
+/*
  * cdp_soc_get_dp_txrx_handle() - get extended dp handle from soc
  * @soc: opaque soc handle
  *
@@ -2178,7 +1914,7 @@ cdp_soc_get_dp_txrx_handle(ol_txrx_soc_handle soc)
 /**
  * cdp_soc_set_dp_txrx_handle() - set advanced dp handle in soc
  * @soc: opaque soc handle
- * @dp_handle: opaque pointer for dp_txrx_handle
+ * @dp_hdl: opaque pointer for dp_txrx_handle
  *
  * Return: void
  */
@@ -2204,7 +1940,6 @@ cdp_soc_set_dp_txrx_handle(ol_txrx_soc_handle soc, void *dp_handle)
  * @soc: opaque soc handle
  * @pdev_id: id of data path pdev handle
  * @lmac_id: lmac id
- *
  * Return: QDF_STATUS
  */
 static inline QDF_STATUS
@@ -2279,7 +2014,7 @@ cdp_txrx_set_pdev_status_down(ol_txrx_soc_handle soc,
 
 /**
  * cdp_set_tx_pause() - Pause or resume tx path
- * @soc: Datapath soc handle
+ * @soc_hdl: Datapath soc handle
  * @flag: set or clear is_tx_pause
  *
  * Return: None.
@@ -2360,6 +2095,7 @@ QDF_STATUS cdp_set_pdev_pcp_tid_map(ol_txrx_soc_handle soc,
 /**
  * cdp_get_peer_mac_from_peer_id() - get peer mac addr from peer id
  * @soc: opaque soc handle
+ * @pdev_id: id of data path pdev handle
  * @peer_id: data path peer id
  * @peer_mac: peer_mac
  *
@@ -2379,7 +2115,7 @@ QDF_STATUS cdp_get_peer_mac_from_peer_id(ol_txrx_soc_handle soc,
 /**
  * cdp_vdev_tx_lock() - acquire lock
  * @soc: opaque soc handle
- * @vdev_id: id of data path vdev handle
+ * @vdev: data path vdev handle
  *
  * Return: void
  */
@@ -2464,11 +2200,10 @@ uint32_t cdp_fw_supported_enh_stats_version(ol_txrx_soc_handle soc,
 }
 
 /**
- * cdp_if_mgmt_drain() - Drain management frames
+ * cdp_get_pdev_id_frm_pdev() - return pdev_id from pdev
  * @soc: opaque soc handle
  * @vdev_id: id of vdev device
  * @force: number of frame in SW queue
- *
  * Return: void
  */
 static inline
@@ -2479,12 +2214,12 @@ void cdp_if_mgmt_drain(ol_txrx_soc_handle soc,
 		soc->ops->cmn_drv_ops->txrx_if_mgmt_drain(soc, vdev_id, force);
 }
 
-/**
- * cdp_peer_map_attach() - CDP API to allocate PEER map memory
+/* cdp_peer_map_attach() - CDP API to allocate PEER map memory
  * @soc: opaque soc handle
  * @max_peers: number of peers created in FW
  * @max_ast_index: max number of AST index supported in FW
  * @peer_map_unmap_v: Indicates HTT peer map/unmap versions enabled in FW
+ *
  *
  * Return: QDF_STATUS
  */
@@ -2502,8 +2237,7 @@ cdp_peer_map_attach(ol_txrx_soc_handle soc, uint32_t max_peers,
 	return QDF_STATUS_SUCCESS;
 }
 
-/**
- * cdp_soc_set_param() - CDP API to set soc parameters
+/* cdp_soc_set_param() - CDP API to set soc parameters
  * @soc: opaque soc handle
  * @param: parameter type
  * @value: parameter value
@@ -2523,13 +2257,12 @@ cdp_soc_set_param(ol_txrx_soc_handle soc, enum cdp_soc_param_t param,
 	return QDF_STATUS_SUCCESS;
 }
 
-/**
- * cdp_txrx_classify_and_update() - To classify the packet and update stats
+/* cdp_txrx_classify_and_update() - To classify the packet and update stats
  * @soc: opaque soc handle
- * @vdev_id: vdev id
+ * @vdev: opaque dp vdev handle
  * @skb: data
  * @dir: rx or tx packet
- * @nbuf_class: packet classification object
+ * @nbuf_classify: packet classification object
  *
  * Return: 1 on success else return 0
  */
@@ -2557,7 +2290,7 @@ cdp_txrx_classify_and_update(ol_txrx_soc_handle soc,
 /**
  * cdp_get_dp_capabilities() - get DP capabilities
  * @soc: opaque soc handle
- * @dp_caps: enum of DP capabilities
+ * @dp_cap: enum of DP capabilities
  *
  * Return: bool
  */
@@ -2567,20 +2300,18 @@ cdp_get_dp_capabilities(struct cdp_soc_t *soc, enum cdp_capabilities dp_caps)
 	if (soc && soc->ops && soc->ops->cmn_drv_ops &&
 	    soc->ops->cmn_drv_ops->get_dp_capabilities)
 		return soc->ops->cmn_drv_ops->get_dp_capabilities(soc, dp_caps);
-
-	qdf_err("invalid instance");
 	return false;
 }
 
 #ifdef RECEIVE_OFFLOAD
 /**
  * cdp_register_rx_offld_flush_cb() - register LRO/GRO flush cb function pointer
- * @soc: data path soc handle
- * @rx_ol_flush_cb: Flush callback function
+ * @soc - data path soc handle
+ * @pdev - device instance pointer
  *
  * register rx offload flush callback function pointer
  *
- * Return: none
+ * return none
  */
 static inline void cdp_register_rx_offld_flush_cb(ol_txrx_soc_handle soc,
 						  void (rx_ol_flush_cb)(void *))
@@ -2598,11 +2329,11 @@ static inline void cdp_register_rx_offld_flush_cb(ol_txrx_soc_handle soc,
 
 /**
  * cdp_deregister_rx_offld_flush_cb() - deregister Rx offld flush cb function
- * @soc: data path soc handle
+ * @soc - data path soc handle
  *
  * deregister rx offload flush callback function pointer
  *
- * Return: none
+ * return none
  */
 static inline void cdp_deregister_rx_offld_flush_cb(ol_txrx_soc_handle soc)
 {
@@ -2618,13 +2349,13 @@ static inline void cdp_deregister_rx_offld_flush_cb(ol_txrx_soc_handle soc)
 #endif /* RECEIVE_OFFLOAD */
 
 /**
- * cdp_set_ba_timeout() - set ba aging timeout per AC
+ * @cdp_set_ba_timeout() - set ba aging timeout per AC
  *
- * @soc: pointer to the soc
- * @value: timeout value in millisec
- * @ac: Access category
+ * @soc - pointer to the soc
+ * @value - timeout value in millisec
+ * @ac - Access category
  *
- * Return: void
+ * @return - void
  */
 static inline void cdp_set_ba_timeout(ol_txrx_soc_handle soc,
 				      uint8_t ac, uint32_t value)
@@ -2643,13 +2374,13 @@ static inline void cdp_set_ba_timeout(ol_txrx_soc_handle soc,
 }
 
 /**
- * cdp_get_ba_timeout() - return ba aging timeout per AC
+ * @cdp_get_ba_timeout() - return ba aging timeout per AC
  *
- * @soc: pointer to the soc
- * @ac: access category
- * @value: timeout value in millisec
+ * @soc - pointer to the soc
+ * @ac - access category
+ * @value - timeout value in millisec
  *
- * Return: void
+ * @return - void
  */
 static inline void cdp_get_ba_timeout(ol_txrx_soc_handle soc,
 				      uint8_t ac, uint32_t *value)
@@ -2673,7 +2404,7 @@ static inline void cdp_get_ba_timeout(ol_txrx_soc_handle soc,
  * @soc: pointer to the soc
  * @cfg: cfg enum
  *
- * Return: cfg value
+ * Return - cfg value
  */
 static inline uint32_t cdp_cfg_get(ol_txrx_soc_handle soc, enum cdp_dp_cfg cfg)
 {
@@ -2759,14 +2490,14 @@ cdp_peer_flush_rate_stats(ol_txrx_soc_handle soc, uint8_t pdev_id,
 }
 
 /**
- * cdp_peer_get_peerstats_ctx() - get peer stats context
+ * cdp_peer_get_rdkstats_ctx() - get RDK stats context
  * @soc: opaque soc handle
  * @vdev_id: id of vdev handle
- * @mac_addr: peer mac address
+ * @mac: peer mac address
  */
 static inline void
-*cdp_peer_get_peerstats_ctx(ol_txrx_soc_handle soc, uint8_t vdev_id,
-			    uint8_t *mac_addr)
+*cdp_peer_get_rdkstats_ctx(ol_txrx_soc_handle soc, uint8_t vdev_id,
+			  uint8_t *mac_addr)
 {
 	if (!soc || !soc->ops) {
 		dp_cdp_debug("Invalid Instance:");
@@ -2775,12 +2506,12 @@ static inline void
 	}
 
 	if (!soc->ops->cmn_drv_ops ||
-	    !soc->ops->cmn_drv_ops->txrx_peer_get_peerstats_ctx)
+	    !soc->ops->cmn_drv_ops->txrx_peer_get_rdkstats_ctx)
 		return NULL;
 
-	return soc->ops->cmn_drv_ops->txrx_peer_get_peerstats_ctx(soc,
-								  vdev_id,
-								  mac_addr);
+	return soc->ops->cmn_drv_ops->txrx_peer_get_rdkstats_ctx(soc,
+								   vdev_id,
+								   mac_addr);
 }
 
 /**
@@ -2808,7 +2539,7 @@ cdp_flush_rate_stats_request(struct cdp_soc_t *soc, uint8_t pdev_id)
 /**
  * cdp_set_vdev_pcp_tid_map() - set vdev pcp-tid-map
  * @soc: opaque soc handle
- * @vdev_id: id of data path vdev handle
+ * @vdev: id of data path vdev handle
  * @pcp: pcp value
  * @tid: tid value
  *
@@ -2896,11 +2627,11 @@ cdp_vdev_get_peer_mac_list(ol_txrx_soc_handle soc,
 			(soc, vdev_id, newmac, mac_cnt, limit);
 }
 
-/**
+/*
  * cdp_soc_config_full_mon_mode () - Configure Full monitor mode
  *
- * @soc: dp soc handle
- * @val: value to be configured val should be 0 or 1
+ *@soc: dp soc handle
+ *@val: value to be configured val should be 0 or 1
  *
  * This API is used to enable/disable support for Full monitor mode feature
  *
@@ -2940,8 +2671,9 @@ cdp_rx_get_pending(ol_txrx_soc_handle soc)
 		return 0;
 }
 
+#ifdef QCA_SUPPORT_WDS_EXTENDED
 static inline uint16_t
-cdp_get_peer_id(ol_txrx_soc_handle soc, uint8_t vdev_id, uint8_t *mac)
+cdp_wds_ext_get_peer_id(ol_txrx_soc_handle soc, uint8_t vdev_id, uint8_t *mac)
 {
 	if (!soc || !soc->ops) {
 		dp_cdp_debug("Invalid Instance");
@@ -2950,14 +2682,13 @@ cdp_get_peer_id(ol_txrx_soc_handle soc, uint8_t vdev_id, uint8_t *mac)
 	}
 
 	if (!soc->ops->cmn_drv_ops ||
-	    !soc->ops->cmn_drv_ops->get_peer_id)
+	    !soc->ops->cmn_drv_ops->get_wds_ext_peer_id)
 		return 0;
 
-	return soc->ops->cmn_drv_ops->get_peer_id
+	return soc->ops->cmn_drv_ops->get_wds_ext_peer_id
 			(soc, vdev_id, mac);
 }
 
-#ifdef QCA_SUPPORT_WDS_EXTENDED
 static inline QDF_STATUS
 cdp_wds_ext_set_peer_rx(ol_txrx_soc_handle soc, uint8_t vdev_id,
 			uint8_t *mac, ol_txrx_rx_fp rx,
@@ -2976,72 +2707,26 @@ cdp_wds_ext_set_peer_rx(ol_txrx_soc_handle soc, uint8_t vdev_id,
 	return soc->ops->cmn_drv_ops->set_wds_ext_peer_rx
 			(soc, vdev_id, mac, rx, osif_peer);
 }
-
-static inline QDF_STATUS
-cdp_wds_ext_get_peer_osif_handle(
-			ol_txrx_soc_handle soc, uint8_t vdev_id,
-			uint8_t *mac,
-			ol_osif_peer_handle *osif_peer)
-{
-	if (!soc || !soc->ops) {
-		dp_cdp_debug("Invalid Instance");
-		QDF_BUG(0);
-		return QDF_STATUS_E_FAULT;
-	}
-
-	if (!soc->ops->cmn_drv_ops ||
-	    !soc->ops->cmn_drv_ops->get_wds_ext_peer_osif_handle)
-		return QDF_STATUS_E_FAULT;
-
-	return soc->ops->cmn_drv_ops->get_wds_ext_peer_osif_handle
-			(soc, vdev_id, mac, osif_peer);
-}
-
-/**
- * cdp_wds_ext_set_bit() - set wds-ext peer bit
- * @soc: soc handle
- * @mac: peer mac address
- *
- * Return: QDF_STATUS
- */
-static inline QDF_STATUS
-cdp_wds_ext_set_bit(ol_txrx_soc_handle soc, uint8_t *mac)
-{
-	if (!soc || !soc->ops) {
-		dp_cdp_debug("Invalid Instance");
-		QDF_BUG(0);
-		return QDF_STATUS_E_FAULT;
-	}
-
-	if (!soc->ops->cmn_drv_ops ||
-	    !soc->ops->cmn_drv_ops->set_wds_ext_peer_bit)
-		return QDF_STATUS_E_FAULT;
-
-	return soc->ops->cmn_drv_ops->set_wds_ext_peer_bit(soc, mac);
-}
 #endif /* QCA_SUPPORT_WDS_EXTENDED */
 
 /**
  * cdp_drain_txrx() - drain TX/RX SRNGs
  * @soc: opaque soc handle
- * @rx_only: drain only RX rings
- *
- * Return: QDF_STATUS
  */
-static inline QDF_STATUS
-cdp_drain_txrx(ol_txrx_soc_handle soc, uint8_t rx_only)
+static inline void
+cdp_drain_txrx(ol_txrx_soc_handle soc)
 {
 	if (!soc || !soc->ops) {
 		dp_cdp_debug("Invalid Instance");
 		QDF_BUG(0);
-		return QDF_STATUS_E_FAULT;
+		return;
 	}
 
 	if (!soc->ops->cmn_drv_ops ||
 	    !soc->ops->cmn_drv_ops->txrx_drain)
-		return QDF_STATUS_E_FAULT;
+		return;
 
-	return soc->ops->cmn_drv_ops->txrx_drain(soc, rx_only);
+	return soc->ops->cmn_drv_ops->txrx_drain(soc);
 }
 
 /**
@@ -3093,10 +2778,9 @@ cdp_set_pkt_capture_mode(ol_txrx_soc_handle soc, bool val)
 #endif
 
 /**
- * cdp_get_tx_inqueue() - Get number of Tx frames that are queued
+ * cdp_rx_get_pending() - Get number of pending frames of RX threads
  * @soc: opaque soc handle
- *
- * Return: number of queued frames
+ * Return: number of pending frames
  */
 static inline uint32_t
 cdp_get_tx_inqueue(ol_txrx_soc_handle soc)
@@ -3144,390 +2828,4 @@ void cdp_set_rtpm_tput_policy_requirement(ol_txrx_soc_handle soc,
 
 #endif /* FEATURE_RUNTIME_PM */
 
-/**
- * cdp_enable_mon_reap_timer() - enable/disable reap timer
- * @soc: Datapath soc handle
- * @source: monitor reap source
- * @enable: enable/disable reap timer of monitor status ring
- *
- * Return: true if timer start/stop is performed, false otherwise.
- */
-static inline bool
-cdp_enable_mon_reap_timer(ol_txrx_soc_handle soc,
-			  enum cdp_mon_reap_source source,
-			  bool enable)
-{
-	if (!soc || !soc->ops) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
-			  "%s invalid instance", __func__);
-		QDF_BUG(0);
-		return false;
-	}
-
-	if (!soc->ops->mon_ops ||
-	    !soc->ops->mon_ops->txrx_enable_mon_reap_timer)
-		return false;
-
-	return soc->ops->mon_ops->txrx_enable_mon_reap_timer(soc, source,
-							     enable);
-}
-
-/**
- * cdp_get_tsf_time() - get tsf time
- * @soc: Datapath soc handle
- * @tsf_id:
- * @mac_id: mac_id
- * @tsf: pointer to update tsf value
- * @tsf_sync_soc_time: pointer to update tsf sync time
- *
- * Return: None.
- */
-static inline void
-cdp_get_tsf_time(ol_txrx_soc_handle soc, uint32_t tsf_id, uint32_t mac_id,
-		 uint64_t *tsf, uint64_t *tsf_sync_soc_time)
-{
-	if (!soc) {
-		dp_cdp_debug("Invalid Instance");
-		return;
-	}
-	if (!soc->ops->cmn_drv_ops || !soc->ops->cmn_drv_ops->txrx_get_tsf_time)
-		return;
-
-	soc->ops->cmn_drv_ops->txrx_get_tsf_time(soc, tsf_id, mac_id, tsf,
-						 tsf_sync_soc_time);
-}
-
-/**
- * cdp_get_tsf2_offset() - get tsf2 offset
- * @soc: Datapath soc handle
- * @mac_id: mac_id
- * @value: pointer to update tsf2 value
- *
- * Return: None.
- */
-static inline void
-cdp_get_tsf2_offset(ol_txrx_soc_handle soc, uint8_t mac_id, uint64_t *value)
-{
-	if (!soc) {
-		dp_cdp_debug("Invalid Instance");
-		return;
-	}
-	if (!soc->ops->cmn_drv_ops ||
-	    !soc->ops->cmn_drv_ops->txrx_get_tsf2_offset)
-		return;
-
-	soc->ops->cmn_drv_ops->txrx_get_tsf2_offset(soc, mac_id, value);
-}
-
-/**
- * cdp_get_tqm_offset() - get tqm offset
- * @soc: Datapath soc handle
- * @value: pointer to update tqm value
- *
- * Return: None.
- */
-static inline void
-cdp_get_tqm_offset(ol_txrx_soc_handle soc, uint64_t *value)
-{
-	if (!soc) {
-		dp_cdp_debug("Invalid Instance");
-		return;
-	}
-	if (!soc->ops->cmn_drv_ops ||
-	    !soc->ops->cmn_drv_ops->txrx_get_tqm_offset)
-		return;
-
-	soc->ops->cmn_drv_ops->txrx_get_tqm_offset(soc, value);
-}
-
-static inline uint64_t cdp_get_fst_cem_base(ol_txrx_soc_handle soc,
-					    uint64_t size)
-{
-	if (!soc) {
-		dp_cdp_debug("Invalid Instance");
-		return 0;
-	}
-
-	if (!soc->ops->cmn_drv_ops ||
-	    !soc->ops->cmn_drv_ops->get_fst_cmem_base)
-		return 0;
-
-	return soc->ops->cmn_drv_ops->get_fst_cmem_base(soc, size);
-}
-
-#if defined(WLAN_FEATURE_11BE_MLO)
-/*
- * cdp_mlo_dev_ctxt_create - DP MLO Device context create
- * @soc: soc handle
- * @mld_mac_addr: MLD MAC Address
- *
- * return: QDF_STATUS
- */
-static inline
-QDF_STATUS cdp_mlo_dev_ctxt_create(ol_txrx_soc_handle soc,
-				   uint8_t *mld_mac_addr)
-{
-	if (!soc || !soc->ops) {
-		QDF_BUG(0);
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	if (!soc->ops->cmn_mlo_ops ||
-	    !soc->ops->cmn_mlo_ops->mlo_dev_ctxt_create)
-		return QDF_STATUS_E_FAILURE;
-
-	return soc->ops->cmn_mlo_ops->mlo_dev_ctxt_create(soc, mld_mac_addr);
-}
-
-/*
- * cdp_mlo_dev_ctxt_destroy - DP MLO Device context destroy
- * @soc: soc handle
- * @mld_mac_addr: MLD MAC Address
- *
- * return: QDF_STATUS
- */
-static inline
-QDF_STATUS cdp_mlo_dev_ctxt_destroy(ol_txrx_soc_handle soc,
-				    uint8_t *mld_mac_addr)
-{
-	if (!soc || !soc->ops) {
-		QDF_BUG(0);
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	if (!soc->ops->cmn_mlo_ops ||
-	    !soc->ops->cmn_mlo_ops->mlo_dev_ctxt_destroy)
-		return QDF_STATUS_E_FAILURE;
-
-	return soc->ops->cmn_mlo_ops->mlo_dev_ctxt_destroy(soc, mld_mac_addr);
-}
-
-/*
- * cdp_mlo_dev_ctxt_attach - DP MLO Device context attach vdev
- * @soc: soc handle
- * @vdev_id: vdev id
- * @mld_mac_addr: MLD MAC Address
- *
- * return: QDF_STATUS
- */
-static inline
-QDF_STATUS cdp_mlo_dev_ctxt_attach(ol_txrx_soc_handle soc,
-				   uint8_t vdev_id,
-				   uint8_t *mld_mac_addr)
-{
-	if (!soc || !soc->ops) {
-		QDF_BUG(0);
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	if (!soc->ops->cmn_mlo_ops ||
-	    !soc->ops->cmn_mlo_ops->mlo_dev_ctxt_attach)
-		return QDF_STATUS_E_FAILURE;
-
-	return soc->ops->cmn_mlo_ops->mlo_dev_ctxt_attach(soc, vdev_id,
-							  mld_mac_addr);
-}
-
-/*
- * cdp_mlo_dev_ctxt_detach - DP MLO Device context detach vdev
- * @soc: soc handle
- * @vdev_id: vdev id
- * @mld_mac_addr: MLD MAC Address
- *
- * return: QDF_STATUS
- */
-static inline
-QDF_STATUS cdp_mlo_dev_ctxt_detach(ol_txrx_soc_handle soc,
-				   uint8_t vdev_id,
-				   uint8_t *mld_mac_addr)
-{
-	if (!soc || !soc->ops) {
-		QDF_BUG(0);
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	if (!soc->ops->cmn_mlo_ops ||
-	    !soc->ops->cmn_mlo_ops->mlo_dev_ctxt_detach)
-		return QDF_STATUS_E_FAILURE;
-
-	return soc->ops->cmn_mlo_ops->mlo_dev_ctxt_detach(soc, vdev_id,
-							  mld_mac_addr);
-}
-#else
-static inline
-QDF_STATUS cdp_mlo_dev_ctxt_create(ol_txrx_soc_handle soc,
-				   uint8_t *mld_mac_addr)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-static inline
-QDF_STATUS cdp_mlo_dev_ctxt_destroy(ol_txrx_soc_handle soc,
-				    uint8_t *mld_mac_addr)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-static inline
-QDF_STATUS cdp_mlo_dev_ctxt_attach(ol_txrx_soc_handle soc,
-				   uint8_t vdev_id,
-				   uint8_t *mld_mac_addr)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-static inline
-QDF_STATUS cdp_mlo_dev_ctxt_detach(ol_txrx_soc_handle soc,
-				   uint8_t vdev_id,
-				   uint8_t *mld_mac_addr)
-{
-	return QDF_STATUS_SUCCESS;
-}
-#endif /* WLAN_FEATURE_11BE_MLO */
-
-#ifdef WLAN_SUPPORT_DPDK
-/*
- * cdp_dpdk_get_ring_info - get dp ring info for dpdk
- * @soc: soc handle
- * @uio_info: pointer to fill dp ring info
- *
- * Return: no. of mappings filled
- */
-static inline uint8_t cdp_dpdk_get_ring_info(ol_txrx_soc_handle soc,
-					     qdf_uio_info_t *uio_info)
-{
-	if (!soc) {
-		dp_cdp_debug("Invalid Instance");
-		return 0;
-	}
-
-	if (!soc->ops->cmn_drv_ops ||
-	    !soc->ops->cmn_drv_ops->dpdk_get_ring_info)
-		return 0;
-
-	return soc->ops->cmn_drv_ops->dpdk_get_ring_info(soc, uio_info);
-}
-
-/*
- * cdp_cfgmgr_get_soc_info - get soc info for dpdk
- * @soc: soc handle
- * @soc_id: soc id
- * @ev_buf: pointer to fill soc info
- *
- * Return: 0 if info filled successful, error otherwise
- */
-static inline
-int cdp_cfgmgr_get_soc_info(struct cdp_soc_t *soc, uint8_t soc_id,
-			    struct dpdk_wlan_soc_info_event *ev_buf)
-{
-	if (!soc) {
-		dp_cdp_debug("Invalid Instance");
-		return -EINVAL;
-	}
-
-	if (!soc->ops->cmn_drv_ops ||
-	    !soc->ops->cmn_drv_ops->cfgmgr_get_soc_info)
-		return -EINVAL;
-
-	return soc->ops->cmn_drv_ops->cfgmgr_get_soc_info(soc, soc_id, ev_buf);
-}
-
-/*
- * cdp_cfgmgr_get_vdev_info - get vdev info of a soc for dpdk
- * @soc: soc handle
- * @soc_id: soc id
- * @ev_buf: pointer to fill vdev info
- *
- * Return: 0 if info filled successful, error otherwise
- */
-static inline
-int cdp_cfgmgr_get_vdev_info(struct cdp_soc_t *soc, uint8_t soc_id,
-			     struct dpdk_wlan_vdev_info_event *ev_buf)
-{
-	if (!soc) {
-		dp_cdp_debug("Invalid Instance");
-		return -EINVAL;
-	}
-
-	if (!soc->ops->cmn_drv_ops ||
-	    !soc->ops->cmn_drv_ops->cfgmgr_get_vdev_info)
-		return -EINVAL;
-
-	return soc->ops->cmn_drv_ops->cfgmgr_get_vdev_info(soc, soc_id, ev_buf);
-}
-
-/*
- * cdp_cfgmgr_get_peer_info - get peer info of a soc for dpdk
- * @soc: soc handle
- * @soc_id: soc id
- * @ev_buf: pointer to fill peer info
- *
- * Return: 0 if info filled successful, error otherwise
- */
-static inline
-int cdp_cfgmgr_get_peer_info(struct cdp_soc_t *soc, uint8_t soc_id,
-			     struct dpdk_wlan_peer_info *ev_buf)
-{
-	if (!soc) {
-		dp_cdp_debug("Invalid Instance");
-		return -EINVAL;
-	}
-
-	if (!soc->ops->cmn_drv_ops ||
-	    !soc->ops->cmn_drv_ops->cfgmgr_get_peer_info)
-		return -EINVAL;
-
-	return soc->ops->cmn_drv_ops->cfgmgr_get_peer_info(soc, soc_id, ev_buf);
-}
-
-/*
- * cdp_cfgmgr_get_vdev_create_evt_info - get vdev create info of a soc for dpdk
- * @soc: soc handle
- * @vdev_id: vdev id
- * @ev_buf: pointer to fill vdev info
- *
- * Return: 0 if info filled successful, error otherwise
- */
-static inline
-int cdp_cfgmgr_get_vdev_create_evt_info(struct cdp_soc_t *soc, uint8_t vdev_id,
-					struct dpdk_wlan_vdev_create_info *ev_buf)
-{
-	if (!soc) {
-		dp_cdp_debug("Invalid Instance");
-		return -EINVAL;
-	}
-
-	if (!soc->ops->cmn_drv_ops ||
-	    !soc->ops->cmn_drv_ops->cfgmgr_get_vdev_create_evt_info)
-		return -EINVAL;
-
-	return soc->ops->cmn_drv_ops->cfgmgr_get_vdev_create_evt_info(
-						soc, vdev_id, ev_buf);
-}
-
-/*
- * cdp_cfgmgr_get_peer_create_evt_info - get peer create info of a soc for dpdk
- * @soc: soc handle
- * @peer_id: peer id
- * @ev_buf: pointer to fill peer info
- *
- * Return: 0 if info filled successful, error otherwise
- */
-static inline
-int cdp_cfgmgr_get_peer_create_evt_info(struct cdp_soc_t *soc, uint16_t peer_id,
-					struct dpdk_wlan_peer_create_info *ev_buf)
-{
-	if (!soc) {
-		dp_cdp_debug("Invalid Instance");
-		return -EINVAL;
-	}
-
-	if (!soc->ops->cmn_drv_ops ||
-	    !soc->ops->cmn_drv_ops->cfgmgr_get_peer_create_evt_info)
-		return -EINVAL;
-
-	return soc->ops->cmn_drv_ops->cfgmgr_get_peer_create_evt_info(
-						soc, peer_id, ev_buf);
-}
-#endif
 #endif /* _CDP_TXRX_CMN_H_ */

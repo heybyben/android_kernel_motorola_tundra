@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -17,7 +17,7 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-/**
+ /**
  * DOC: reg_services_public_struct.h
  * This file contains regulatory data structures
  */
@@ -28,6 +28,8 @@
 #ifdef CONFIG_AFC_SUPPORT
 #include <wlan_reg_afc.h>
 #endif
+
+#define REG_SBS_SEPARATION_THRESHOLD 100
 
 #ifdef CONFIG_BAND_6GHZ
 #define REG_MAX_CHANNELS_PER_OPERATING_CLASS        70
@@ -59,7 +61,6 @@
 #define REGULATORY_CHAN_NO_OFDM      BIT(6)
 #define REGULATORY_CHAN_INDOOR_ONLY  BIT(9)
 #define REGULATORY_CHAN_AFC          BIT(13)
-#define REGULATORY_CHAN_AFC_NOT_DONE BIT(16)
 
 #define REGULATORY_CHAN_NO_HT40      BIT(4)
 #define REGULATORY_CHAN_NO_80MHZ     BIT(7)
@@ -92,30 +93,6 @@
 
 #define MAX_NUM_PWR_LEVEL 16
 
-#ifdef CONFIG_REG_CLIENT
-#define MAX_NUM_FCC_RULES 2
-/*
- * As per spec valid range is range –64 dBm to 63 dBm.
- * Powers in range of 64 - 191 will be invalid.
- */
-#define INVALID_TPE_POWER 100
-/* 802.11ax-2021 Table 9-276 Meaning of Local Maximum Transmit Power Count
- * subfield if the Maximum Transmit Power Interpretation subfield is 0 or 2
- */
-#define MAX_TX_PWR_COUNT_FOR_160MHZ 3
-/* 802.11ax-2021 Table 9-277 Meaning of Maximum Transmit Power Count subfield
- * if Maximum Transmit Power Interpretation subfield is 1 or 3
- */
-#define MAX_TX_PWR_COUNT_FOR_160MHZ_PSD 4
-#define MAX_NUM_TX_POWER_FOR_320MHZ 5
-#define PUNCTURED_CHAN_POWER 128
-#endif
-
-/* no subchannels punctured */
-#define NO_SCHANS_PUNC 0x0000
-
-#define REG_MIN_POWER -128
-
 /**
  * enum dfs_reg - DFS region
  * @DFS_UNINIT_REGION: un-initialized region
@@ -124,7 +101,7 @@
  * @DFS_MKK_REGION: MKK region
  * @DFS_CN_REGION: China region
  * @DFS_KR_REGION: Korea region
- * @DFS_MKKN_REGION: MKKN region
+ * @DFS_MKK_REGION: MKKN region
  * that supports updated W53 RADAR pattern
  * detection.
  * @DFS_UNDEF_REGION: Undefined region
@@ -141,13 +118,12 @@ enum dfs_reg {
 	DFS_UNDEF_REGION = 0xFFFF,
 };
 
-/**
- * enum op_class_table_num
- * @OP_CLASS_US: Class corresponds to US
- * @OP_CLASS_EU: Class corresponds to EU
- * @OP_CLASS_JAPAN: Class corresponds to JAPAN
- * @OP_CLASS_GLOBAL: Class corresponds to GLOBAL
- * @OP_CLASS_CHINA: Class corresponds to CHINA
+/** enum op_class_table_num
+ * OP_CLASS_US- Class corresponds to US
+ * OP_CLASS_EU- Class corresponds to EU
+ * OP_CLASS_JAPAN- Class corresponds to JAPAN
+ * OP_CLASS_GLOBAL- Class corresponds to GLOBAL
+ * OP_CLASS_CHINA- Class corresponds to CHINA
  */
 enum op_class_table_num {
 	OP_CLASS_US = 1,
@@ -157,9 +133,7 @@ enum op_class_table_num {
 	OP_CLASS_CHINA
 };
 
-/*
- * NB: not using kernel-doc comment marker since kernel-doc doesn't
- *     properly handle the conditional compilation
+/**
  * enum channel_enum - channel enumeration
  * @CHAN_ENUM_2412: channel with freq 2412
  * @CHAN_ENUM_2417: channel with freq 2417
@@ -600,17 +574,15 @@ enum reg_6g_ap_type {
  * @REG_SUBORDINATE_CLIENT: Subordinate client
  * @REG_MAX_CLIENT_TYPE: Maximum value possible for max tx-power category
  * (2 bits) sub-field in the TPE (Transmit Power Envelope) IE
- * @REG_INVALID_CLIENT_TYPE: Invalid client type
  */
 enum reg_6g_client_type {
 	REG_DEFAULT_CLIENT = 0,
 	REG_SUBORDINATE_CLIENT = 1,
 	REG_MAX_CLIENT_TYPE = 2,
-	REG_INVALID_CLIENT_TYPE = REG_MAX_CLIENT_TYPE,
 };
 
 /**
- * enum v_REGDOMAIN_t: reg domain
+ * enum reg_domain: reg domain
  * @REGDOMAIN_FCC: FCC domain
  * @REGDOMAIN_ETSI: ETSI domain
  * @REGDOMAIN_JAPAN: JAPAN domain
@@ -648,8 +620,8 @@ enum ctl_value {
 /**
  * struct freq_range: The range/band of frequencies, indicated by left and right
  * edge frequencies.
- * @left: Left edge frequency(inclusive)
- * @right: Right edge frequency(inclusive)
+ * @left: Left edge freqency(inclusive)
+ * @right: Right edge freqency(inclusive)
  */
 struct freq_range {
 	qdf_freq_t left;
@@ -668,9 +640,6 @@ struct freq_range {
  * @is_create_punc_bitmap: Whether puncturing bitmap is to be created or not
  *                         Parameter 'reg_punc_bitmap' is valid only if
  *                         is_create_punc_bitmap is true
- * @input_punc_bitmap: Input puncture bitmap. The channels which are indicated
- *                     as punctured by this bitmap are not validated by the
- *                     regulatory.
  */
 struct ch_params {
 	enum phy_ch_width ch_width;
@@ -682,12 +651,8 @@ struct ch_params {
 #ifdef WLAN_FEATURE_11BE
 	uint16_t reg_punc_bitmap;
 	bool is_create_punc_bitmap;
-	uint16_t input_punc_bitmap;
 #endif
 };
-
-#ifdef WLAN_FEATURE_11BE
-#define MAX_NUM_CHAN_PARAM 2
 
 /**
  * struct reg_channel_list
@@ -698,6 +663,8 @@ struct ch_params {
  * allocated in the future by the caller if num_ch_params is greater than 2.
  *
  */
+#ifdef WLAN_FEATURE_11BE
+#define MAX_NUM_CHAN_PARAM 2
 struct reg_channel_list {
 	uint8_t num_ch_params;
 	struct ch_params chan_param[MAX_NUM_CHAN_PARAM];
@@ -723,7 +690,6 @@ struct channel_power {
  * @BW40_HIGH_PRIMARY: higher channel in 40 mhz
  * @BW80: 80 mhz channel
  * @BWALL: unknown bandwidth
- * @BW_INVALID: invalid bandwidth
  */
 enum offset_t {
 	BW20 = 0,
@@ -751,7 +717,7 @@ enum behav_limit {
 };
 
 /**
- * struct c_freq_lst: The list data structure for the center frequencies
+ * struct c_freq_lst: The list data strucuture for the center frequencies
  * @num_cfis: Number of center frequencies
  * @p_cfis_arr: Start address of the array of center frequency indices. Center
  *              for 40/80/160/320MHz band channel opclasses. For 20MHz the list
@@ -783,21 +749,6 @@ struct reg_dmn_op_class_map_t {
 };
 
 /**
- * enum opclass_config: Opclass configuration
- * @OPCLASSES_SUPPORTED_BY_CUR_HWMODE: Retrieve opclasses that is supported
- * by the current hw mode.
- * @OPCLASSES_NOT_SUPPORTED_BY_CUR_HWMODE: Retrieve opclasses that are not
- * supported by the current hw mode.
- * @OPCLASSES_SUPPORTED_BY_DOMAIN: Populate the opclass supported by the radio
- * without considering the capability of current hwmode.
- */
-enum opclass_config {
-	OPCLASSES_SUPPORTED_BY_CUR_HWMODE = 1,
-	OPCLASSES_NOT_SUPPORTED_BY_CUR_HWMODE = 2,
-	OPCLASSES_SUPPORTED_BY_DOMAIN = 3
-};
-
-/**
  * struct regdmn_ap_cap_opclass_t: AP Cap operation class table
  * @op_class: operating class number
  * @ch_width: channel width in MHz
@@ -811,7 +762,7 @@ enum opclass_config {
  */
 struct regdmn_ap_cap_opclass_t {
 	uint8_t op_class;
-	uint16_t ch_width;
+	uint8_t ch_width;
 	qdf_freq_t start_freq;
 	uint16_t behav_limit;
 	uint8_t max_tx_pwr_dbm;
@@ -870,7 +821,6 @@ struct reg_11d_new_country {
 
 /**
  * enum country_src: country source
- * @SOURCE_UNKNOWN: source unknown
  * @SOURCE_QUERY: source query
  * @SOURCE_CORE: source regulatory core
  * @SOURCE_DRIVER: source driver
@@ -906,9 +856,9 @@ enum country_src {
  *      and therefore can't be created in the normal ways, use the
  *      %NL80211_CMD_START_P2P_DEVICE and %NL80211_CMD_STOP_P2P_DEVICE
  *      commands to create and destroy one
- * @IFTYPE_OCB: Outside Context of a BSS
+ * @IF_TYPE_OCB: Outside Context of a BSS
  *      This mode corresponds to the MIB variable dot11OCBActivated=true
- * @IFTYPE_NAN: NAN mode
+ * @IF_TYPE_NAN: NAN mode
  * @IFTYPE_MAX: highest interface type number currently defined
  * @NUM_IFTYPES: number of defined interface types
  *
@@ -937,9 +887,9 @@ enum iftype {
 };
 
 /**
- * enum usable_channels_filter - Filters to get usable channels
- * @FILTER_CELLULAR_COEX: Avoid lte coex channels
- * @FILTER_WLAN_CONCURRENCY: Avoid con channels
+ * usable_channels_filter - Filters to get usable channels
+ * FILTER_CELLULAR_COEX: Avoid lte coex channels
+ * FILTER_WLAN_CONCURRENCY: Avoid con channels
  **/
 enum usable_channels_filter {
 	FILTER_CELLULAR_COEX = 0,
@@ -947,13 +897,13 @@ enum usable_channels_filter {
 };
 
 /**
- * struct get_usable_chan_res_params - Usable channels resp params
- * @freq : center freq
- * @seg0_freq : seg0 freq
- * @seg1_freq: seg1 freq
- * @bw : bandwidth
- * @state: channel state
- * @iface_mode_mask: interface mode mask
+ * get_usable_chan_res_params - Usable channels resp params
+ * freq : center freq
+ * seg0_freq : seg0 freq
+ * seg1_freq: seg1 freq
+ * bw : bandwidth
+ * state: channel state
+ * iface_mode_mask: interface mode mask
  **/
 struct get_usable_chan_res_params {
 	qdf_freq_t freq;
@@ -965,10 +915,10 @@ struct get_usable_chan_res_params {
 };
 
 /**
- * struct get_usable_chan_req_params - Usable channels req params
- * @band_mask: band mask
- * @iface_mode_mask: interface mode mask
- * @filter_mask: filter mask
+ * get_usable_chan_req_params - Usable channels req params
+ * band_mask : band mask
+ * iface_mode_mask: interface mode mask
+ * filter_mask: filter mask
  **/
 struct get_usable_chan_req_params {
 	uint32_t band_mask;
@@ -986,7 +936,6 @@ struct get_usable_chan_req_params {
  * @tx_power: TX powers
  * @min_bw: min bandwidth
  * @max_bw: max bandwidth
- * @ant_gain: antenna gain
  * @nol_chan: whether channel is nol
  * @nol_history: Set NOL-History when STA vap detects RADAR.
  * @is_chan_hop_blocked: Whether channel is blocked for ACS hopping.
@@ -995,20 +944,13 @@ struct get_usable_chan_req_params {
  *                   intolerance.
  * @psd_flag: is PSD channel or not
  * @psd_eirp: PSD power level
- * @is_static_punctured: is static punctured
- * @opclass_chan_disable: Whether the channel is disabled/enabled by a user
- *                        command. The command provides an opclass and a
- *                        subset of the channels belonging to that opclass
- *                        as inputs and expects the driver to disable/enable
- *                        the channels in the subset.
- * @power_type: channel power type
  */
 struct regulatory_channel {
 	qdf_freq_t center_freq;
 	uint8_t chan_num;
 	enum channel_state state;
 	uint32_t chan_flags;
-	int32_t tx_power;
+	uint32_t tx_power;
 	uint16_t min_bw;
 	uint16_t max_bw;
 	uint8_t ant_gain;
@@ -1022,90 +964,6 @@ struct regulatory_channel {
 	bool psd_flag;
 	uint16_t psd_eirp;
 #endif
-#ifdef CONFIG_REG_CLIENT
-	uint8_t is_static_punctured;
-	enum reg_6g_ap_type power_type;
-#endif
-#ifndef CONFIG_REG_CLIENT
-	bool opclass_chan_disable;
-#endif
-};
-
-/**
- * struct ap_cli_pwr_mode_info: AP and client power mode information
- * @is_mode_ap: Is it AP or CLIENT
- * @cli_type:  Is the client a default or subordinate
- * @ap_pwr_mode: LPI, SP or VLP
- */
-struct ap_cli_pwr_mode_info {
-	bool is_mode_ap;
-	enum reg_6g_client_type cli_type;
-	enum reg_6g_ap_type ap_pwr_mode;
-};
-
-/**
- * enum supported_6g_pwr_types: 6G supported AP and Client power types
- * @REG_BEST_PWR_MODE: Best power mode
- * @REG_CURRENT_PWR_MODE: Current power mode
- * @REG_AP_LPI: LPI AP power mode
- * @REG_AP_SP: SP AP power mode
- * @REG_AP_VLP: VLP AP power mode
- * @REG_CLI_DEF_LPI: LPI default client mode
- * @REG_CLI_DEF_SP: SP default client mode
- * @REG_CLI_DEF_VLP: VLP default client mode
- * @REG_CLI_SUB_LPI: LPI subordinate client mode
- * @REG_CLI_SUB_SP: SP subordinate client mode
- * @REG_CLI_SUB_VLP: VLP subordinate client mode
- * @REG_INVALID_PWR_MODE: Invalid power mode
- */
-enum supported_6g_pwr_types {
-	REG_BEST_PWR_MODE    = -1,
-	REG_CURRENT_PWR_MODE = 0,
-	REG_AP_LPI           = 1,
-	REG_AP_SP            = 2,
-	REG_AP_VLP           = 3,
-	REG_CLI_DEF_LPI      = 4,
-	REG_CLI_DEF_SP       = 5,
-	REG_CLI_DEF_VLP      = 6,
-	REG_CLI_SUB_LPI      = 7,
-	REG_CLI_SUB_SP       = 8,
-	REG_CLI_SUB_VLP      = 9,
-	REG_INVALID_PWR_MODE = 10,
-};
-
-#define MAX_PWR_TYPES 10
-/**
- * struct psd_val: Regulatory power information
- * @psd_flag: Boolean to indicate if PSD is supported or not
- * @psd_eirp: PSD power
- * @tx_power: Maximum EIRP
- */
-struct psd_val {
-	bool psd_flag;
-	uint16_t psd_eirp;
-	uint32_t tx_power;
-};
-
-/**
- * struct super_chan_info: Information of a 6G channel for every power
- * mode
- * @power_types: Bitmap whose bit positions indicate the power modes supported
- * by a channel
- * @best_power_mode: Best power mode of a channel
- * @min_bw: Array of minimum bandwidths per power mode
- * @max_bw: Array of maximum bandwidths per power mode
- * @chan_flags_arr: Array of channel flags
- * @reg_chan_pwr: Array of powers
- * @state_arr: Array of states
- */
-struct super_chan_info {
-	uint16_t power_types;
-	enum supported_6g_pwr_types best_power_mode;
-	uint16_t min_bw[MAX_PWR_TYPES];
-	uint16_t max_bw[MAX_PWR_TYPES];
-	uint32_t chan_flags_arr[MAX_PWR_TYPES];
-	struct psd_val reg_chan_pwr[MAX_PWR_TYPES];
-	enum channel_state state_arr[MAX_PWR_TYPES];
 };
 
 /**
@@ -1118,7 +976,7 @@ struct super_chan_info {
  * @def_region: DFS region
  * @ctl_2g: 2G CTL value
  * @ctl_5g: 5G CTL value
- * @regpair: pointer to regulatory pair
+ * @reg_pair: pointer to regulatory pair
  * @cc_src: country code src
  * @reg_flags: kernel regulatory flags
  */
@@ -1215,18 +1073,6 @@ struct cur_reg_rule {
 	uint16_t psd_eirp;
 };
 
-#ifdef CONFIG_REG_CLIENT
-/**
- * struct cur_fcc_rule
- * @center_freq: center frequency
- * @tx_power: transmission power
- */
-struct cur_fcc_rule {
-	uint16_t center_freq;
-	uint8_t tx_power;
-};
-#endif
-
 /**
  * struct cur_regulatory_info
  * @psoc: psoc ptr
@@ -1237,7 +1083,7 @@ struct cur_fcc_rule {
  * @ctry_code: country code
  * @alpha2: country alpha2
  * @offload_enabled: offload enabled
- * @dfs_region: dfs region
+ * @dfs_reg: dfs region
  * @phybitmap: phy bit map
  * @min_bw_2g: minimum 2G bw
  * @max_bw_2g: maximum 2G bw
@@ -1245,8 +1091,6 @@ struct cur_fcc_rule {
  * @max_bw_5g: maximum 5G bw
  * @num_2g_reg_rules: number 2G reg rules
  * @num_5g_reg_rules: number 5G  and 6G reg rules
- * @reg_6g_thresh_priority_freq: All frequencies greater or equal will be given
- * priority during channel selection by upper layer
  * @reg_rules_2g_ptr: ptr to 2G reg rules
  * @reg_rules_5g_ptr: ptr to 5G reg rules
  * @client_type: type of client
@@ -1263,8 +1107,6 @@ struct cur_fcc_rule {
  * @num_6g_reg_rules_client: list of number of 6G reg rules for client
  * @reg_rules_6g_ap_ptr: ptr to 6G AP reg rules
  * @reg_rules_6g_client_ptr: list of ptr to 6G client reg rules
- * @fcc_rules_ptr: ptr to fcc rules
- * @num_fcc_rules: Number of fcc rules sent by firmware
  */
 struct cur_regulatory_info {
 	struct wlan_objmgr_psoc *psoc;
@@ -1283,7 +1125,6 @@ struct cur_regulatory_info {
 	uint32_t max_bw_5g;
 	uint32_t num_2g_reg_rules;
 	uint32_t num_5g_reg_rules;
-	qdf_freq_t reg_6g_thresh_priority_freq;
 	struct cur_reg_rule *reg_rules_2g_ptr;
 	struct cur_reg_rule *reg_rules_5g_ptr;
 	enum reg_6g_client_type client_type;
@@ -1300,21 +1141,14 @@ struct cur_regulatory_info {
 	uint32_t num_6g_reg_rules_client[REG_CURRENT_MAX_AP_TYPE][REG_MAX_CLIENT_TYPE];
 	struct cur_reg_rule *reg_rules_6g_ap_ptr[REG_CURRENT_MAX_AP_TYPE];
 	struct cur_reg_rule *reg_rules_6g_client_ptr[REG_CURRENT_MAX_AP_TYPE][REG_MAX_CLIENT_TYPE];
-#ifdef CONFIG_REG_CLIENT
-	struct cur_fcc_rule *fcc_rules_ptr;
-	uint32_t num_fcc_rules;
-#endif
 };
 
 #if defined(CONFIG_AFC_SUPPORT) && defined(CONFIG_BAND_6GHZ)
 
 /**
- * enum reg_afc_event_type - indicates the type of AFC event from FW to host.
- * @REG_AFC_EVENT_POWER_INFO:
+ * reg_afc_event_type indicates the type of AFC event sent from FW to host.
  * 1. For sending Power Info REG_AFC_EVENT_POWER_INFO event is used.
- * @REG_AFC_EVENT_TIMER_EXPIRY:
  * 2. For sending AFC expiry use REG_AFC_EVENT_TIMER_EXPIRY
- *
  * This type can be expanded in future as per requirements.
  */
 enum reg_afc_event_type {
@@ -1323,39 +1157,29 @@ enum reg_afc_event_type {
 };
 
 /**
- * enum reg_afc_expiry_event_subtype - indicates the AFC expiry subtype.
- * @REG_AFC_EXPIRY_EVENT_START:
+ * reg_afc_expiry_event_subtype indicates the subtype.
  * 1. At boot up AFC expiry will contain AFC start.
- * @REG_AFC_EXPIRY_EVENT_RENEW:
  * 2. If AFC timer expires AFC_RENEW status code will be sent to host
  *    with expiry event.
- * @REG_AFC_EXPIRY_EVENT_SWITCH_TO_LPI:
  * 3. If AFC server is not responding to FW in specified time, FW will
  *    indicate host to switch to LPI.
- * @REG_AFC_EXPIRY_EVENT_STOP_TX:
  */
 enum reg_afc_expiry_event_subtype {
 	REG_AFC_EXPIRY_EVENT_START = 1,
 	REG_AFC_EXPIRY_EVENT_RENEW = 2,
 	REG_AFC_EXPIRY_EVENT_SWITCH_TO_LPI = 3,
-	REG_AFC_EXPIRY_EVENT_STOP_TX = 4,
 };
 
 /**
- * enum reg_fw_afc_power_event_status_code
- * @REG_FW_AFC_POWER_EVENT_SUCCESS:
+ * The following fw_status_code is mutually exclusive
+ * and is used in power event.
  * 0. AFC power event is success.
- * @REG_FW_AFC_POWER_EVENT_RESP_NOT_RECEIVED:
  * 1. If Host does not indicate AFC indication cmd within certain time
  *    of AFC expiry, REG_FW_AFC_POWER_EVENT_RESP_NOT_RECEIVED will be used.
- * @REG_FW_AFC_POWER_EVENT_RESP_PARSING_FAILURE:
  * 2. If FW is not able to parse afc_info, parsing_failure will be
  *    indicated using REG_FW_AFC_POWER_EVENT_RESP_NOT_RECEIVED.
- * @REG_FW_AFC_POWER_EVENT_FAILURE:
  * 3. If due to some local reason AFC event is failed, AFC event failure
  *    is indicated using REG_FW_AFC_POWER_EVENT_FAILURE.
- *
- * Firmware AFC power event status codes
  */
 enum reg_fw_afc_power_event_status_code {
 	REG_FW_AFC_POWER_EVENT_SUCCESS = 0,
@@ -1365,16 +1189,6 @@ enum reg_fw_afc_power_event_status_code {
 };
 
 /**
- * enum reg_afc_serv_resp_code - AFC server response codes
- * @REG_AFC_SERV_RESP_GENERAL_FAILURE:
- * @REG_AFC_SERV_RESP_SUCCESS:
- * @REG_AFC_SERV_RESP_VERSION_NOT_SUPPORTED:
- * @REG_AFC_SERV_RESP_DEVICE_UNALLOWED:
- * @REG_AFC_SERV_RESP_MISSING_PARAM:
- * @REG_AFC_SERV_RESP_INVALID_VALUE:
- * @REG_AFC_SERV_RESP_UNEXPECTED_PARAM:
- * @REG_AFC_SERV_RESP_UNSUPPORTED_SPECTRUM:
- *
  * The following reg_afc_server_resp_code is mutually exclusive.
  * This response code will be indicated to AFC server.
  * These codes are defined in WIFI spec doc for AFC as follows
@@ -1414,7 +1228,7 @@ struct afc_freq_obj {
  */
 struct chan_eirp_obj {
 	uint8_t cfi;
-	int16_t eirp_power;
+	uint16_t eirp_power;
 };
 
 /**
@@ -1453,7 +1267,7 @@ struct reg_afc_expiry_event {
  * @afc_chan_info: Pointer to AFC channel object
  */
 struct reg_fw_afc_power_event {
-	uint32_t resp_id;
+	uint8_t resp_id;
 	enum reg_fw_afc_power_event_status_code fw_status_code;
 	enum reg_afc_serv_resp_code serv_resp_code;
 	uint32_t afc_wfa_version;
@@ -1490,9 +1304,7 @@ struct afc_regulatory_info {
  * @dfs_region: dfs region
  * @num_of_reg_rules: number of reg rules
  * @reg_rules: regulatory rules array
- * @num_of_6g_ap_reg_rules: number of 6g AP reg rules
- * @reg_rules_6g_ap: reg rules for all 6g AP
- * @num_of_6g_client_reg_rules: number of 6g client reg rules
+ * @num_of_6g_client_reg_rules: number of 6g reg rules
  * @reg_rules_6g_client: reg rules for all 6g clients
  */
 struct reg_rule_info {
@@ -1509,7 +1321,7 @@ struct reg_rule_info {
 };
 
 /**
- * enum reg_wifi_band
+ * enum reg_reg_wifi_band
  * @REG_BAND_2G: 2G band
  * @REG_BAND_5G: 5G band
  * @REG_BAND_6G: 6G band
@@ -1575,8 +1387,8 @@ enum restart_beaconing_on_ch_avoid_rule {
  * @scan_11d_interval: 11d scan interval in ms
  * @userspace_ctry_priority: user priority
  * @band_capability: band capability
- * @dfs_enabled: dfs enabled
- * @indoor_chan_enabled: indoor channel support
+ * @dfs_disable: dfs disabled
+ * @indoor_channel_support: indoor channel support
  * @force_ssc_disable_indoor_channel: Disable indoor channel on sap start
  * @restart_beaconing: control the beaconing entity to move
  * away from active LTE channels
@@ -1589,12 +1401,7 @@ enum restart_beaconing_on_ch_avoid_rule {
  * userspace
  * @coex_unsafe_chan_reg_disable: To disable reg channels for received coex
  * unsafe channels list
- * @enable_6ghz_sp_pwrmode_supp: Enable target 6 GHz Standard Power mode support
- * @afc_disable_timer_check: Disable target AFC timer check
- * @afc_disable_request_id_check: Disable target AFC request id check
- * @is_afc_reg_noaction: Whether no action to AFC power event
  * @sta_sap_scc_on_indoor_channel: Value of sap+sta scc on indoor support
- * @p2p_indoor_ch_support: Allow P2P GO in indoor channels
  */
 struct reg_config_vars {
 	uint32_t enable_11d_support;
@@ -1613,14 +1420,7 @@ struct reg_config_vars {
 	bool coex_unsafe_chan_nb_user_prefer;
 	bool coex_unsafe_chan_reg_disable;
 #endif
-#if defined(CONFIG_AFC_SUPPORT) && defined(CONFIG_BAND_6GHZ)
-	bool enable_6ghz_sp_pwrmode_supp;
-	bool afc_disable_timer_check;
-	bool afc_disable_request_id_check;
-	bool is_afc_reg_noaction;
-#endif
 	bool sta_sap_scc_on_indoor_channel;
-	bool p2p_indoor_ch_support;
 };
 
 /**
@@ -1661,13 +1461,9 @@ enum direction {
  * @reg_6g_superid: 6G super domain ID
  * @ctry_code: country code
  * @reg_rules: regulatory rules
- * @ap_pwr_type: type of AP
  * @client_type: type of client
  * @rnr_tpe_usable: if RNR TPE octet is usable for country
  * @unspecified_ap_usable: if not set, AP usable for country
- * @reg_6g_thresh_priority_freq: All frequencies greater or equal will be given
- * priority during channel selection by upper layer
- * @max_bw_5g: Maximum 5g Bandwidth
  */
 struct mas_chan_params {
 	enum dfs_reg dfs_region;
@@ -1695,14 +1491,12 @@ struct mas_chan_params {
 	enum reg_6g_client_type client_type;
 	bool rnr_tpe_usable;
 	bool unspecified_ap_usable;
-	qdf_freq_t reg_6g_thresh_priority_freq;
 #endif
-	uint16_t max_bw_5g;
 };
 
 /**
  * enum cc_regdmn_flag: Regdomain flags
- * @INVALID_CC:    Invalid flag
+ * @INVALID:       Invalid flag
  * @CC_IS_SET:     Country code is set
  * @REGDMN_IS_SET: Regdomain ID is set
  * @ALPHA_IS_SET:  Country ISO is set
@@ -1716,13 +1510,11 @@ enum cc_regdmn_flag {
 
 /**
  * struct cc_regdmn_s: User country code or regdomain
- * @cc: Union of country code/regulatory domain
- * @cc.country_code: Country code
- * @cc.regdmn: Regulatory domain
- * @cc.regdmn.reg_2g_5g_pair_id:  Regdomain pair ID (2Ghz + 5Ghz domain pair)
- * @cc.regdmn.sixg_superdmn_id: 6Ghz super domain id
- * @cc.alpha: Country ISO
- * @flags: Regdomain flags (see enum cc_regdmn_flag)
+ * @country_code:     Country code
+ * @reg_2g_5g_pair_id:  Regdomain pair ID (2Ghz + 5Ghz domain pair)
+ * @sixg_superdmn_id: 6Ghz super domain id
+ * @alpha:            Country ISO
+ * @flags:            Regdomain flags
  */
 struct cc_regdmn_s {
 	union {
@@ -1759,7 +1551,6 @@ struct cur_regdmn_info {
  * @start_freq: start freq
  * @end_freq: end freq
  * @txpower: txpower
- * @is_valid_txpower: Is @txpower valid
  */
 struct ch_avoid_freq_type {
 	qdf_freq_t start_freq;
@@ -1784,8 +1575,6 @@ struct ch_avoid_ind_type {
  * struct unsafe_ch_list
  * @chan_cnt: no.of channels
  * @chan_freq_list: channel frequency list
- * @txpower: Tx power per channel
- * @is_valid_txpower: Is @txpower valid per channel
  */
 struct unsafe_ch_list {
 	uint16_t chan_cnt;
@@ -1826,20 +1615,8 @@ struct reg_sched_payload {
 #define TWOG_CHAN_6_IN_MHZ         2437
 #define TWOG_CHAN_9_IN_MHZ         2452
 #define TWOG_CHAN_13_IN_MHZ        2472
-#define FIVEG_CHAN_36_IN_MHZ       5180
-#define FIVEG_CHAN_177_IN_MHZ      5885
-#define SIXG_CHAN_2_IN_MHZ         5935
-#define SIXG_CHAN_1_IN_MHZ         5955
-#define SIXG_CHAN_233_IN_MHZ       7115
 
-#define HT40_SEC_OFFSET              20
-
-#define IEEE_2GHZ_CH1                 1
-#define IEEE_2GHZ_CH14               14
-#define IEEE_5GHZ_CH36               36
-#define IEEE_6GHZ_CH1                 1
-#define IEEE_6GHZ_CH2                 2
-#define IEEE_CH_SEP                   5
+#define HT40_SEC_OFFSET            20
 
 /**
  * struct reg_ctl_params - reg ctl and regd info
@@ -1890,7 +1667,7 @@ enum reg_phymode {
  */
 struct chan_power_info {
 	qdf_freq_t chan_cfreq;
-	int8_t tx_power;
+	uint8_t tx_power;
 };
 
 /**
@@ -1908,7 +1685,7 @@ struct chan_power_info {
  */
 struct reg_tpc_power_info {
 	bool is_psd_power;
-	int8_t eirp_power;
+	uint8_t eirp_power;
 	uint8_t power_type_6g;
 	uint8_t num_pwr_levels;
 	uint8_t reg_max[MAX_NUM_PWR_LEVEL];
@@ -1984,9 +1761,8 @@ struct chan_5g_center_freq {
  * @HOST_REGDMN_MODE_11BEA_EHT80: 11be 5GHz, EHT80 channels
  * @HOST_REGDMN_MODE_11BEA_EHT160: 11be 5GHz, EHT160 channels
  * @HOST_REGDMN_MODE_11BEA_EHT320: 11be 5GHz, EHT320 channels
- * @HOST_REGDMN_MODE_ALL: All modes selected
  */
-enum HOST_REGDMN_MODE {
+enum {
 	HOST_REGDMN_MODE_11A = 0x00000001,
 	HOST_REGDMN_MODE_TURBO = 0x00000002,
 	HOST_REGDMN_MODE_11B = 0x00000004,
@@ -2298,24 +2074,17 @@ enum HOST_REGDMN_MODE {
 #endif
 
 #ifdef CONFIG_AFC_SUPPORT
-/**
- * enum reg_afc_cmd_type - Type of AFC command sent to FW
- * @REG_AFC_CMD_SERV_RESP_READY: Server response is ready
- * @REG_AFC_CMD_RESET_AFC: Ask the target to send an AFC expiry event
- * @REG_AFC_CMD_CLEAR_AFC_PAYLOAD: Ask the target to clear AFC Payload.
- * The target in response sends REG_AFC_EXPIRY_EVENT_STOP_TX to host.
+/* enum reg_afc_cmd_type - Type of AFC command sent to FW
+ * @REG_AFC_CMD_SERV_RESP_READY : Server response is ready
  */
 enum reg_afc_cmd_type {
 	REG_AFC_CMD_SERV_RESP_READY = 1,
-	REG_AFC_CMD_RESET_AFC = 2,
-	REG_AFC_CMD_CLEAR_AFC_PAYLOAD = 3,
 };
 
-/**
- * enum reg_afc_serv_resp_format - Indicate the format in which afc_serv_format
- *                                 is written in FW memory
- * @REG_AFC_SERV_RESP_FORMAT_JSON: Server response in JSON format
- * @REG_AFC_SERV_RESP_FORMAT_BINARY: Server response in BINARY format
+/* enum reg_afc_serv_resp_format - Indicate the format in which afc_serv_format
+ * is written in FW memory
+ * @REG_AFC_SERV_RESP_FORMAT_JSON - Server response in JSON format
+ * @REG_AFC_SERV_RESP_FORMAT_BINARY - Server response in BINARY format
  */
 enum reg_afc_serv_resp_format {
 	REG_AFC_SERV_RESP_FORMAT_JSON = 0,
@@ -2333,43 +2102,17 @@ struct reg_afc_resp_rx_ind_info {
 };
 
 /**
- * typedef afc_req_rx_evt_handler() - Function prototype of AFC request
- *                                    received event handler
+ * afc_req_rx_evt_handler() - Function prototype of AFC request received event
+ * handler
  * @pdev: Pointer to pdev
- * @afc_req: Pointer to AFC request
+ * @afc_par_req: Pointer to AFC partial request
  * @arg: Pointer to void (opaque) argument object
  *
  * Return: void
  */
 typedef void (*afc_req_rx_evt_handler)(struct wlan_objmgr_pdev *pdev,
-				       struct wlan_afc_host_request *afc_req,
+				       struct wlan_afc_host_partial_request *afc_par_req,
 				       void *arg);
-
-/**
- * typedef afc_power_tx_evt_handler() - Function prototype of AFC power event
- *                                      sent handler
- * @pdev: Pointer to pdev
- * @power_info: Pointer to AFC power event data
- * @arg: Pointer to void (opaque) argument object
- *
- * Return: void
- */
-typedef void
-(*afc_power_tx_evt_handler)(struct wlan_objmgr_pdev *pdev,
-			    struct reg_fw_afc_power_event *power_info,
-			    void *arg);
-
-/**
- * typedef afc_payload_reset_tx_evt_handler() - Function prototype of AFC
- * payload reset event sent handler
- * @pdev: Pointer to pdev
- * @arg: Pointer to void (opaque) argument object
- *
- * Return: void
- */
-typedef void
-(*afc_payload_reset_tx_evt_handler)(struct wlan_objmgr_pdev *pdev,
-				    void *arg);
 #endif
 
 /**
@@ -2382,14 +2125,4 @@ static inline bool reg_is_chan_enum_invalid(enum channel_enum chan_enum)
 {
 	return chan_enum >= INVALID_CHANNEL;
 }
-
-/**
- * struct r2p_table_update_status_obj
- * @pdev_id: pdev id from target
- * @status: rate2power update status
- */
-struct r2p_table_update_status_obj {
-	uint32_t pdev_id;
-	uint32_t status;
-};
 #endif

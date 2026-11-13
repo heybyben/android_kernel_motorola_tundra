@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2015, 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -24,12 +24,6 @@
 #include <wlan_cm_api.h>
 #include "connection_mgr/core/src/wlan_cm_main_api.h"
 #include "connection_mgr/core/src/wlan_cm_roam.h"
-#include <wlan_vdev_mgr_utils_api.h>
-#ifdef WLAN_FEATURE_11BE_MLO
-#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
-#include "wlan_mlo_mgr_roam.h"
-#endif
-#endif
 
 QDF_STATUS wlan_cm_start_connect(struct wlan_objmgr_vdev *vdev,
 				 struct wlan_cm_connect_req *req)
@@ -89,17 +83,6 @@ QDF_STATUS wlan_cm_bss_peer_create_rsp(struct wlan_objmgr_vdev *vdev,
 		return cm_bss_peer_create_rsp(vdev, status, peer_mac);
 }
 
-void wlan_cm_update_scan_mlme_info(struct wlan_objmgr_vdev *vdev,
-				   struct wlan_cm_connect_resp *resp)
-{
-	struct cnx_mgr *cm_ctx = cm_get_cm_ctx(vdev);
-
-	if (!cm_ctx)
-		return;
-
-	return cm_update_scan_mlme_info(cm_ctx, resp);
-}
-
 QDF_STATUS wlan_cm_connect_rsp(struct wlan_objmgr_vdev *vdev,
 			       struct wlan_cm_connect_resp *resp)
 {
@@ -142,30 +125,6 @@ QDF_STATUS wlan_cm_reassoc_rsp(struct wlan_objmgr_vdev *vdev,
 }
 #endif
 
-void wlan_cm_free_connect_req(struct wlan_cm_connect_req *connect_req)
-{
-	if (!connect_req)
-		return;
-
-	cm_free_connect_req(connect_req);
-}
-
-void wlan_cm_free_connect_resp(struct wlan_cm_connect_resp *connect_rsp)
-{
-	if (!connect_rsp)
-		return;
-
-	cm_free_connect_rsp(connect_rsp);
-}
-
-void wlan_cm_free_connect_req_param(struct wlan_cm_connect_req *req)
-{
-	if (!req)
-		return;
-
-	cm_free_connect_req_param(req);
-}
-
 void wlan_cm_set_max_connect_attempts(struct wlan_objmgr_vdev *vdev,
 				      uint8_t max_connect_attempts)
 {
@@ -201,11 +160,6 @@ bool wlan_cm_is_vdev_disconnecting(struct wlan_objmgr_vdev *vdev)
 bool wlan_cm_is_vdev_disconnected(struct wlan_objmgr_vdev *vdev)
 {
 	return cm_is_vdev_disconnected(vdev);
-}
-
-bool wlan_cm_is_vdev_idle_due_to_link_switch(struct wlan_objmgr_vdev *vdev)
-{
-	return cm_is_vdev_idle_due_to_link_switch(vdev);
 }
 
 bool wlan_cm_is_vdev_roaming(struct wlan_objmgr_vdev *vdev)
@@ -249,37 +203,9 @@ bool wlan_cm_get_active_connect_req(struct wlan_objmgr_vdev *vdev,
 	return cm_get_active_connect_req(vdev, req);
 }
 
-QDF_STATUS
-wlan_cm_get_active_connect_req_param(struct wlan_objmgr_vdev *vdev,
-				     struct wlan_cm_connect_req *req)
-{
-	return cm_get_active_connect_req_param(vdev, req);
-}
-
 cm_ext_t *wlan_cm_get_ext_hdl(struct wlan_objmgr_vdev *vdev)
 {
 	return cm_get_ext_hdl(vdev);
-}
-
-bool wlan_cm_is_first_candidate_connect_attempt(struct wlan_objmgr_vdev *vdev)
-{
-	return cm_is_first_candidate_connect_attempt(vdev);
-}
-
-bool wlan_cm_is_link_switch_disconnect_resp(struct wlan_cm_discon_rsp *resp)
-{
-	return cm_is_link_switch_disconnect_resp(resp);
-}
-
-bool wlan_cm_is_link_switch_connect_resp(struct wlan_cm_connect_resp *resp)
-{
-	return cm_is_link_switch_connect_resp(resp);
-}
-
-void wlan_cm_trigger_panic_on_cmd_timeout(struct wlan_objmgr_vdev *vdev,
-					  enum qdf_hang_reason reason)
-{
-	cm_trigger_panic_on_cmd_timeout(vdev, reason);
 }
 
 #ifdef WLAN_FEATURE_HOST_ROAM
@@ -383,14 +309,6 @@ void wlan_cm_hw_mode_change_resp(struct wlan_objmgr_pdev *pdev, uint8_t vdev_id,
 }
 #endif /* ifdef POLICY_MGR_ENABLE */
 
-#ifdef WLAN_FEATURE_LL_LT_SAP
-void wlan_cm_bearer_switch_resp(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id,
-				wlan_cm_id cm_id, QDF_STATUS status)
-{
-	cm_bearer_switch_resp(psoc, vdev_id, cm_id, status);
-}
-#endif
-
 #ifdef SM_ENG_HIST_ENABLE
 void wlan_cm_sm_history_print(struct wlan_objmgr_vdev *vdev)
 {
@@ -427,205 +345,38 @@ void wlan_cm_set_candidate_custom_sort_cb(
 
 #endif
 
-QDF_STATUS wlan_cm_get_rnr(struct wlan_objmgr_vdev *vdev, wlan_cm_id cm_id,
-			   struct reduced_neighbor_report *rnr)
+struct reduced_neighbor_report *wlan_cm_get_rnr(struct wlan_objmgr_vdev *vdev,
+						wlan_cm_id cm_id)
 {
 	enum QDF_OPMODE op_mode = wlan_vdev_mlme_get_opmode(vdev);
+	struct cm_req *cm_req;
+	struct cnx_mgr *cm_ctx;
 
 	if (op_mode != QDF_STA_MODE && op_mode != QDF_P2P_CLIENT_MODE) {
 		mlme_err("vdev %d Invalid mode %d",
 			 wlan_vdev_get_id(vdev), op_mode);
-		return QDF_STATUS_E_NOSUPPORT;
+		return NULL;
 	}
 
-	return cm_get_rnr(vdev, cm_id, rnr);
+	cm_ctx = cm_get_cm_ctx(vdev);
+	if (!cm_ctx)
+		return NULL;
+	cm_req = cm_get_req_by_cm_id(cm_ctx, cm_id);
+	if (!cm_req)
+		return NULL;
+
+	if (cm_req->connect_req.cur_candidate &&
+	    cm_req->connect_req.cur_candidate->entry)
+		return &cm_req->connect_req.cur_candidate->entry->rnr;
+
+	return NULL;
 }
-
-struct scan_cache_entry *
-wlan_cm_get_curr_candidate_entry(struct wlan_objmgr_vdev *vdev,
-				 wlan_cm_id cm_id)
-{
-	return cm_get_curr_candidate_entry(vdev, cm_id);
-}
-
-void
-wlan_cm_connect_resp_fill_mld_addr_from_cm_id(struct wlan_objmgr_vdev *vdev,
-					     wlan_cm_id cm_id,
-					     struct wlan_cm_connect_resp *rsp)
-{
-	return cm_connect_resp_fill_mld_addr_from_cm_id(vdev, cm_id, rsp);
-}
-
-#ifdef WLAN_FEATURE_11BE_MLO
-void
-wlan_cm_connect_resp_fill_mld_addr_from_vdev_id(struct wlan_objmgr_psoc *psoc,
-						uint8_t vdev_id,
-						struct scan_cache_entry *entry,
-						struct wlan_cm_connect_resp *rsp)
-{
-	struct wlan_objmgr_vdev *vdev;
-
-	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, vdev_id,
-						    WLAN_MLME_CM_ID);
-	if (!vdev)
-		return;
-
-	cm_connect_resp_fill_mld_addr_from_candidate(vdev, entry, rsp);
-	wlan_objmgr_vdev_release_ref(vdev, WLAN_MLME_CM_ID);
-}
-#endif
 
 QDF_STATUS
 wlan_cm_disc_cont_after_rso_stop(struct wlan_objmgr_vdev *vdev,
+				 bool is_ho_fail,
 				 struct wlan_cm_vdev_discon_req *req)
 {
-	return cm_handle_rso_stop_rsp(vdev, req);
-}
-
-#ifdef WLAN_FEATURE_11BE
-QDF_STATUS wlan_cm_sta_set_chan_param(struct wlan_objmgr_vdev *vdev,
-				      qdf_freq_t ch_freq,
-				      enum phy_ch_width ori_bw,
-				      uint16_t ori_punc,
-				      uint8_t ccfs0, uint8_t ccfs1,
-				      struct ch_params *chan_param)
-{
-	uint16_t primary_puncture_bitmap = 0;
-	struct wlan_objmgr_pdev *pdev;
-	struct reg_channel_list chan_list;
-	qdf_freq_t sec_ch_2g_freq = 0;
-	qdf_freq_t center_freq_320 = 0;
-	qdf_freq_t center_freq_40 = 0;
-	uint8_t band_mask;
-	uint16_t new_punc = 0;
-
-	if (!vdev || !chan_param) {
-		mlme_err("invalid input parameters");
-		return QDF_STATUS_E_INVAL;
-	}
-	pdev = wlan_vdev_get_pdev(vdev);
-	if (!pdev) {
-		mlme_err("invalid pdev");
-		return QDF_STATUS_E_INVAL;
-	}
-	if (ori_bw == CH_WIDTH_320MHZ) {
-		if (WLAN_REG_IS_6GHZ_CHAN_FREQ(ch_freq))
-			band_mask = BIT(REG_BAND_6G);
-		else
-			band_mask = BIT(REG_BAND_5G);
-		center_freq_320 = wlan_reg_chan_band_to_freq(pdev, ccfs1,
-							     band_mask);
-	} else if (ori_bw == CH_WIDTH_40MHZ) {
-		if (WLAN_REG_IS_24GHZ_CH_FREQ(ch_freq)) {
-			band_mask = BIT(REG_BAND_2G);
-			center_freq_40 = wlan_reg_chan_band_to_freq(pdev,
-								    ccfs0,
-								    band_mask);
-			if (center_freq_40 == ch_freq + BW_10_MHZ)
-				sec_ch_2g_freq = ch_freq + BW_20_MHZ;
-			if (center_freq_40 == ch_freq - BW_10_MHZ)
-				sec_ch_2g_freq = ch_freq - BW_20_MHZ;
-		}
-	}
-	wlan_reg_extract_puncture_by_bw(ori_bw, ori_punc,
-					ch_freq,
-					center_freq_320,
-					CH_WIDTH_20MHZ,
-					&primary_puncture_bitmap);
-	if (primary_puncture_bitmap) {
-		mlme_err("sta vdev %d freq %d RX bw %d puncture 0x%x primary chan is punctured",
-			 wlan_vdev_get_id(vdev), ch_freq,
-			 ori_bw, ori_punc);
-		return QDF_STATUS_E_FAULT;
-	}
-	if (chan_param->ch_width != CH_WIDTH_320MHZ)
-		center_freq_320 = 0;
-	qdf_mem_zero(&chan_list, sizeof(chan_list));
-	wlan_reg_fill_channel_list_for_pwrmode(pdev, ch_freq,
-					       sec_ch_2g_freq,
-					       chan_param->ch_width,
-					       center_freq_320, &chan_list,
-					       REG_CURRENT_PWR_MODE, true);
-	*chan_param = chan_list.chan_param[0];
-	if (chan_param->ch_width == ori_bw)
-		new_punc = ori_punc;
-	else
-		wlan_reg_extract_puncture_by_bw(ori_bw, ori_punc,
-						ch_freq,
-						chan_param->mhz_freq_seg1,
-						chan_param->ch_width,
-						&new_punc);
-
-	chan_param->reg_punc_bitmap = new_punc;
-
-	return QDF_STATUS_SUCCESS;
-}
-
-QDF_STATUS wlan_cm_sta_update_bw_puncture(struct wlan_objmgr_vdev *vdev,
-					  uint8_t *peer_mac,
-					  uint16_t ori_punc,
-					  enum phy_ch_width ori_bw,
-					  uint8_t ccfs0, uint8_t ccfs1,
-					  enum phy_ch_width new_bw)
-{
-	struct wlan_channel *des_chan;
-	struct ch_params ch_param;
-	uint32_t bw_puncture = 0;
-	QDF_STATUS status = QDF_STATUS_E_INVAL;
-
-	if (!vdev || !peer_mac) {
-		mlme_err("invalid input parameters");
-		return status;
-	}
-	des_chan = wlan_vdev_mlme_get_des_chan(vdev);
-	if (!des_chan) {
-		mlme_err("invalid des chan");
-		return status;
-	}
-	qdf_mem_zero(&ch_param, sizeof(ch_param));
-	ch_param.ch_width = new_bw;
-	status = wlan_cm_sta_set_chan_param(vdev, des_chan->ch_freq,
-					    ori_bw, ori_punc, ccfs0,
-					    ccfs1, &ch_param);
-	if (QDF_IS_STATUS_ERROR(status))
-		return status;
-
-	if (des_chan->puncture_bitmap == ch_param.reg_punc_bitmap &&
-	    des_chan->ch_width == ch_param.ch_width)
-		return status;
-
-	des_chan->ch_freq_seg1 = ch_param.center_freq_seg0;
-	des_chan->ch_freq_seg2 = ch_param.center_freq_seg1;
-	des_chan->ch_cfreq1 = ch_param.mhz_freq_seg0;
-	des_chan->ch_cfreq2 = ch_param.mhz_freq_seg1;
-	des_chan->puncture_bitmap = ch_param.reg_punc_bitmap;
-	des_chan->ch_width = ch_param.ch_width;
-	mlme_debug("sta vdev %d freq %d bw %d puncture 0x%x ch_cfreq1 %d ch_cfreq2 %d",
-		   wlan_vdev_get_id(vdev), des_chan->ch_freq,
-		   des_chan->ch_width, des_chan->puncture_bitmap,
-		   des_chan->ch_cfreq1, des_chan->ch_cfreq2);
-	QDF_SET_BITS(bw_puncture, 0, 8, des_chan->ch_width);
-	QDF_SET_BITS(bw_puncture, 8, 16, des_chan->puncture_bitmap);
-	return wlan_util_vdev_peer_set_param_send(vdev, peer_mac,
-						  WLAN_MLME_PEER_BW_PUNCTURE,
-						  bw_puncture);
-}
-#endif /* WLAN_FEATURE_11BE */
-
-#ifdef WLAN_FEATURE_11BE_MLO
-#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
-bool
-wlan_cm_check_mlo_roam_auth_status(struct wlan_objmgr_vdev *vdev)
-{
-	return mlo_roam_is_auth_status_connected(wlan_vdev_get_psoc(vdev),
-					  wlan_vdev_get_id(vdev));
-}
-#endif
-#endif
-enum MLO_TYPE
-wlan_cm_bss_mlo_type(struct wlan_objmgr_psoc *psoc,
-		     struct scan_cache_entry *entry,
-		     qdf_list_t *scan_list)
-{
-	return cm_bss_mlo_type(psoc, entry, scan_list);
+	return cm_disconnect_continue_after_rso_stop(vdev, is_ho_fail,
+						     req);
 }

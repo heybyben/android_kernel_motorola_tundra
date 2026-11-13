@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -16,7 +15,7 @@
  */
 
 /*
- * DOC: Implements scan functionality for CM UTF
+ * DOC: Implements scan functinality for CM UTF
  */
 
 #ifdef FEATURE_CM_UTF_ENABLE

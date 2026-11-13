@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -65,22 +65,17 @@ enum peer_status {
  * struct hdd_conn_flag - connection flags
  * @ht_present: ht element present or not
  * @vht_present: vht element present or not
- * @eht_present: eht element present or not
  * @hs20_present: hs20 element present or not
  * @ht_op_present: ht operation present or not
  * @vht_op_present: vht operation present or not
- * @he_present: he operation present or not
- * @eht_op_present: eht operation present or not
  */
 struct hdd_conn_flag {
 	uint8_t ht_present:1;
 	uint8_t vht_present:1;
-	uint8_t eht_present:1;
 	uint8_t hs20_present:1;
 	uint8_t ht_op_present:1;
 	uint8_t vht_op_present:1;
-	uint8_t he_present:1;
-	uint8_t eht_op_present:1;
+	uint8_t reserved:3;
 };
 
 /*defines for tx_BF_cap_info */
@@ -122,7 +117,7 @@ struct hdd_conn_flag {
  * struct hdd_connection_info - structure to store connection information
  * @conn_state: connection state of the NIC
  * @bssid: BSSID
- * @ssid: SSID Info
+ * @SSID: SSID Info
  * @peer_macaddr:Peer Mac Address of the IBSS Stations
  * @auth_type: Auth Type
  * @uc_encrypt_type: Unicast Encryption Type
@@ -139,12 +134,8 @@ struct hdd_conn_flag {
  * @noise: holds noise information
  * @ht_caps: holds ht capabilities info
  * @vht_caps: holds vht capabilities info
- * @conn_flag: flag conn info params is present or not
  * @hs20vendor_ie: holds passpoint/hs20 info
- * @ht_operation: HT operation info
- * @vht_operation: VHT operation info
- * @he_operation: HE operation info
- * @he_oper_len: length of @he_operation
+ * @conn_flag: flag conn info params is present or not
  * @roam_count: roaming counter
  * @signal: holds rssi info
  * @assoc_status_code: holds assoc fail reason
@@ -157,9 +148,6 @@ struct hdd_conn_flag {
  * @max_tx_bitrate: Max tx bitrate supported by the AP
  * to which currently sta is connected.
  * @prev_ap_bcn_ie: ap beacon IE information to which sta is currently connected
- * @ieee_link_id: AP Link Id valid for MLO connection
- * @eht_operation: EHT operation info
- * @eht_oper_len: length of @eht_operation
  */
 struct hdd_connection_info {
 	eConnectionState conn_state;
@@ -200,21 +188,12 @@ struct hdd_connection_info {
 	enum phy_ch_width ch_width;
 	struct rate_info max_tx_bitrate;
 	struct element_info prev_ap_bcn_ie;
-#ifdef WLAN_FEATURE_11BE_MLO
-	int32_t ieee_link_id;
-#endif
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0)) && \
-	defined(WLAN_FEATURE_11BE)
-	struct ieee80211_eht_operation eht_operation;
-	uint32_t eht_oper_len;
-#endif
 };
 
 /* Forward declarations */
 struct hdd_adapter;
 struct hdd_station_ctx;
 struct hdd_context;
-struct wlan_hdd_link_info;
 
 /*
  * hdd_is_fils_connection: API to determine if connection is FILS
@@ -228,7 +207,7 @@ bool hdd_is_fils_connection(struct hdd_context *hdd_ctx,
 
 /**
  * hdd_conn_set_authenticated() - set authentication state
- * @link_info: Link info pointer in HDD adapter
+ * @adapter: pointer to the adapter
  * @auth_state: authentication state
  *
  * This function updates the global HDD station context
@@ -237,8 +216,8 @@ bool hdd_is_fils_connection(struct hdd_context *hdd_ctx,
  *
  * Return: none
  */
-void hdd_conn_set_authenticated(struct wlan_hdd_link_info *link_info,
-				uint8_t auth_state);
+void
+hdd_conn_set_authenticated(struct hdd_adapter *adapter, uint8_t auth_state);
 
 /**
  * hdd_conn_set_connection_state() - set connection state
@@ -254,23 +233,22 @@ void hdd_conn_set_connection_state(struct hdd_adapter *adapter,
 
 /**
  * hdd_conn_get_connected_band() - get current connection radio band
- * @link_info: pointer to the link_info structure
+ * @adapter: HDD adapter
  *
  * Return: BAND_2G or BAND_5G based on current AP connection
  *      BAND_ALL if not connected
  */
-enum band_info
-hdd_conn_get_connected_band(struct wlan_hdd_link_info *link_info);
+enum band_info hdd_conn_get_connected_band(struct hdd_adapter *adapter);
 
 /**
  * hdd_get_sta_connection_in_progress() - get STA for which connection
  *                                        is in progress
  * @hdd_ctx: hdd context
  *
- * Return: Link info pointer in adapter for which connection is in progress
+ * Return: hdd adpater for which connection is in progress
  */
-struct wlan_hdd_link_info *
-hdd_get_sta_connection_in_progress(struct hdd_context *hdd_ctx);
+struct hdd_adapter *hdd_get_sta_connection_in_progress(
+			struct hdd_context *hdd_ctx);
 
 /**
  * hdd_abort_ongoing_sta_connection() - Disconnect the sta for which the
@@ -283,16 +261,6 @@ hdd_get_sta_connection_in_progress(struct hdd_context *hdd_ctx);
 void hdd_abort_ongoing_sta_connection(struct hdd_context *hdd_ctx);
 
 /**
- * hdd_abort_ongoing_sta_sae_connection() - Disconnect the sta for which the
- * sae connection is in progress.
- *
- * @hdd_ctx: hdd context
- *
- * Return: none
- */
-void hdd_abort_ongoing_sta_sae_connection(struct hdd_context *hdd_ctx);
-
-/**
  * hdd_is_any_sta_connected() - check if any sta in connected state
  * @hdd_ctx: hdd context
  *
@@ -301,20 +269,10 @@ void hdd_abort_ongoing_sta_sae_connection(struct hdd_context *hdd_ctx);
 bool hdd_is_any_sta_connected(struct hdd_context *hdd_ctx);
 
 /**
- * hdd_get_first_connected_sta_vdev_id() - check if any sta in connected state
- * and exteact the vdev id of connected STA.
- * @hdd_ctx: hdd context
- * @vdev_id: pointer to vdev id
- *
- * Return: QDF_STATUS enumeration
- */
-QDF_STATUS hdd_get_first_connected_sta_vdev_id(struct hdd_context *hdd_ctx,
-					       uint32_t *vdev_id);
-
-/**
  * hdd_sme_roam_callback() - hdd sme roam callback
- * @context: pointer to link info context in HDD adapter
+ * @context: pointer to adapter context
  * @roam_info: pointer to roam info
+ * @roam_id: roam id
  * @roam_status: roam status
  * @roam_result: roam result
  *
@@ -322,6 +280,7 @@ QDF_STATUS hdd_get_first_connected_sta_vdev_id(struct hdd_context *hdd_ctx,
  */
 QDF_STATUS hdd_sme_roam_callback(void *context,
 				 struct csr_roam_info *roam_info,
+				 uint32_t roam_id,
 				 eRoamCmdStatus roam_status,
 				 eCsrRoamResult roam_result);
 
@@ -363,16 +322,15 @@ hdd_indicate_ese_bcn_report_no_results(const struct hdd_adapter *adapter,
 
 /**
  * hdd_change_peer_state() - change peer state
- * @link_info: Link info pointer of VDEV in adapter
+ * @adapter: HDD adapter
  * @peer_mac_addr: Peer MAC address
  * @sta_state: peer state
  *
  * Return: QDF status
  */
-QDF_STATUS hdd_change_peer_state(struct wlan_hdd_link_info *link_info,
+QDF_STATUS hdd_change_peer_state(struct hdd_adapter *adapter,
 				 uint8_t *peer_mac_addr,
 				 enum ol_txrx_peer_state sta_state);
-
 /**
  * hdd_update_dp_vdev_flags() - update datapath vdev flags
  * @cbk_data: callback data
@@ -389,13 +347,13 @@ QDF_STATUS hdd_update_dp_vdev_flags(void *cbk_data,
 
 /**
  * hdd_roam_register_sta() - register station
- * @link_info: Link info pointer in HDD adapter
+ * @adapter: pointer to adapter
  * @bssid: bssid of the connection
  * @is_auth_required: is upper layer authenticatoin required
  *
  * Return: QDF_STATUS enumeration
  */
-QDF_STATUS hdd_roam_register_sta(struct wlan_hdd_link_info *link_info,
+QDF_STATUS hdd_roam_register_sta(struct hdd_adapter *adapter,
 				 struct qdf_mac_addr *bssid,
 				 bool is_auth_required);
 
@@ -406,7 +364,7 @@ QDF_STATUS hdd_roam_register_sta(struct wlan_hdd_link_info *link_info,
  *
  * This information is passed to iwconfig later. The peer that joined
  * last is passed as information to iwconfig.
- *
+
  * Return: true if success, false otherwise
  */
 bool hdd_save_peer(struct hdd_station_ctx *sta_ctx,
@@ -455,25 +413,25 @@ void hdd_copy_vht_caps(struct ieee80211_vht_cap *hdd_vht_cap,
 
 /**
  * hdd_roam_profile_init() - initialize adapter roam profile
- * @link_info: Link info pointer in HDD adapter
+ * @adapter: The HDD adapter being initialized
  *
  * This function initializes the roam profile that is embedded within
  * the adapter.
  *
  * Return: void
  */
-void hdd_roam_profile_init(struct wlan_hdd_link_info *link_info);
+void hdd_roam_profile_init(struct hdd_adapter *adapter);
 
 /**
  * hdd_any_valid_peer_present() - Check if any valid peer is present
- * @link_info: Pointer of link_info in adapter struct
+ * @adapter: The HDD adapter
  *
  * Check if there is any peer present with non-zero mac address other than
  * broadcast address.
  *
  * Return: True if there is any valid peer present
  */
-bool hdd_any_valid_peer_present(struct wlan_hdd_link_info *link_info);
+bool hdd_any_valid_peer_present(struct hdd_adapter *adapter);
 
 /**
  * hdd_cm_register_cb() - Sets legacy callbacks to osif
@@ -486,7 +444,7 @@ bool hdd_any_valid_peer_present(struct wlan_hdd_link_info *link_info);
 QDF_STATUS hdd_cm_register_cb(void);
 
 /**
- * hdd_cm_unregister_cb - Resets legacy callbacks to osif
+ * void hdd_cm_unregister_cb(void)() - Resets legacy callbacks to osif
  *
  * API to reset legacy callbacks to osif
  * Context: Any context.
@@ -541,30 +499,6 @@ void hdd_copy_ht_operation(struct hdd_station_ctx *hdd_sta_ctx,
 void hdd_copy_vht_operation(struct hdd_station_ctx *hdd_sta_ctx,
 			    tDot11fIEVHTOperation *vht_ops);
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)) && \
-	defined(WLAN_FEATURE_11BE)
-/**
- * hdd_copy_eht_operation()- copy EHT operations element to
- * hdd station context.
- * @hdd_sta_ctx: pointer to hdd station context
- * @eht_ops: pointer to eht operation
- *
- * Return: None
- */
-void hdd_copy_eht_operation(struct hdd_station_ctx *hdd_sta_ctx,
-			    tDot11fIEeht_op *eht_ops);
-
-#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0)) && \
-	defined(WLAN_FEATURE_11BE)
-void hdd_copy_eht_operation(struct hdd_station_ctx *hdd_sta_ctx,
-			    tDot11fIEeht_op *eht_ops);
-#else
-static inline void hdd_copy_eht_operation(struct hdd_station_ctx *hdd_sta_ctx,
-					  tDot11fIEeht_op *eht_ops)
-{
-}
-#endif
-
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 0)) && \
      defined(WLAN_FEATURE_11AX)
 /**
@@ -608,37 +542,6 @@ wlan_hdd_ft_set_key_delay(struct wlan_objmgr_vdev *vdev)
 }
 #endif
 
-#ifdef FEATURE_WLAN_WAPI
-/**
- * hdd_translate_wapi_to_csr_auth_type() - Translate WAPI to CSR auth type
- * @auth_suite: auth suite
- *
- * Return: enum csr_akm_type enumeration
- */
-enum csr_akm_type hdd_translate_wapi_to_csr_auth_type(uint8_t auth_suite[4]);
-
-/**
- * hdd_translate_wapi_to_csr_encryption_type() -
- *	Translate WAPI to CSR encryption type
- * @cipher_suite: cipher suite
- *
- * Return: eCsrEncryptionType enumeration
- */
-eCsrEncryptionType
-hdd_translate_wapi_to_csr_encryption_type(uint8_t cipher_suite[4]);
-#else
-enum csr_akm_type hdd_translate_wapi_to_csr_auth_type(uint8_t auth_suite[4])
-{
-	return eCSR_AUTH_TYPE_UNKNOWN;
-}
-
-eCsrEncryptionType
-hdd_translate_wapi_to_csr_encryption_type(uint8_t cipher_suite[4])
-{
-	return eCSR_AUTH_TYPE_UNKNOWN;
-}
-#endif
-
 /**
  * hdd_convert_ch_width_to_cdp_peer_bw() - Convert ch_width to DP format
  * @ch_width: ch_width
@@ -647,5 +550,4 @@ hdd_translate_wapi_to_csr_encryption_type(uint8_t cipher_suite[4])
  */
 enum cdp_peer_bw
 hdd_convert_ch_width_to_cdp_peer_bw(enum phy_ch_width ch_width);
-
 #endif

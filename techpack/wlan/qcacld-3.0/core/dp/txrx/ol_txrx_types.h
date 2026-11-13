@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -18,8 +17,8 @@
  */
 
 /**
- * DOC: ol_txrx_types.h
- * Define the major data types used internally by the host datapath SW.
+ * @file ol_txrx_types.h
+ * @brief Define the major data types used internally by the host datapath SW.
  */
 #ifndef _OL_TXRX_TYPES__H_
 #define _OL_TXRX_TYPES__H_
@@ -33,6 +32,7 @@
 #include <wdi_event_api.h>      /* wdi_event_subscribe */
 #include <qdf_timer.h>		/* qdf_timer_t */
 #include <qdf_lock.h>           /* qdf_spinlock */
+#include <pktlog.h>             /* ol_pktlog_dev_handle */
 #include <ol_txrx_stats.h>
 #include "ol_txrx_htt_api.h"
 #include "ol_htt_tx_api.h"
@@ -551,7 +551,7 @@ struct ol_txrx_peer_id_map {
 	qdf_atomic_t peer_id_unmap_cnt;
 };
 
-/*
+/**
  * ol_txrx_stats_req_internal - specifications of the requested
  * statistics internally
  */
@@ -575,7 +575,7 @@ struct ol_txrx_fw_stats_desc_elem_t {
 /**
  * struct ol_txrx_soc_t - soc reference structure
  * @cdp_soc: common base structure
- * @psoc: opaque handle for UMAC psoc object
+ * @cdp_ctrl_objmgr_psoc: opaque handle for UMAC psoc object
  * @pdev_list: list of all the pdev on a soc
  *
  * This is the reference to the soc and all the data
@@ -1032,8 +1032,6 @@ struct ol_txrx_pdev_t {
 		int throttle_time_ms[THROTTLE_LEVEL_MAX][THROTTLE_PHASE_MAX];
 		/* mark true if traffic is paused due to thermal throttling */
 		bool is_paused;
-		/* Save outstanding packet number */
-		uint16_t prev_outstanding_num;
 	} tx_throttle;
 
 #if defined(FEATURE_TSO)
@@ -1187,7 +1185,6 @@ struct tcp_del_ack_hash_node {
 };
 
 struct ol_txrx_vdev_t {
-	struct cdp_vdev cdp_vdev;
 	struct ol_txrx_pdev_t *pdev; /* pdev - the physical device that is
 				      * the parent of this virtual device
 				      */
@@ -1219,9 +1216,6 @@ struct ol_txrx_vdev_t {
 	/* completion function used by this vdev*/
 	ol_txrx_completion_fp tx_comp;
 
-	/* delete notifier to DP component */
-	ol_txrx_vdev_del_notify_cb vdev_del_notify;
-
 	struct {
 		/*
 		 * If the vdev object couldn't be deleted immediately because
@@ -1249,7 +1243,6 @@ struct ol_txrx_vdev_t {
 
 	enum wlan_op_mode opmode;
 	enum wlan_op_subtype subtype;
-	enum QDF_OPMODE qdf_opmode;
 
 #ifdef QCA_IBSS_SUPPORT
 	/* ibss mode related */
@@ -1299,7 +1292,7 @@ struct ol_txrx_vdev_t {
 		/** @node: tcp ack frame will be stored in this hash table */
 		struct tcp_del_ack_hash_node node[OL_TX_HL_DEL_ACK_HASH_SIZE];
 		/** @timer: timeout if no more tcp ack feeding */
-		qdf_hrtimer_data_t timer;
+		__qdf_hrtimer_data_t timer;
 		/** @is_timer_running: is timer running? */
 		qdf_atomic_t is_timer_running;
 		/** @tcp_node_in_use_count: number of nodes in use */

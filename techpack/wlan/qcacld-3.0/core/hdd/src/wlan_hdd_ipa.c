@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -26,7 +26,7 @@
 /* Include Files */
 #include <wlan_hdd_includes.h>
 #include <wlan_hdd_ipa.h>
-#include "wlan_policy_mgr_ucfg.h"
+#include "wlan_policy_mgr_api.h"
 #include "wlan_ipa_ucfg_api.h"
 #include <wlan_hdd_softap_tx_rx.h>
 #include <linux/inetdevice.h>
@@ -36,24 +36,296 @@
 	IS_ENABLED(CONFIG_SCHED_WALT)
 #include <linux/sched/walt.h>
 #endif
-#include "wlan_hdd_object_manager.h"
-#include "wlan_dp_ucfg_api.h"
 
-#ifdef IPA_OFFLOAD
+void hdd_ipa_set_tx_flow_info(void)
+{
+	struct hdd_adapter *adapter, *next_adapter = NULL;
+	struct hdd_station_ctx *sta_ctx;
+	struct hdd_ap_ctx *hdd_ap_ctx;
+	struct hdd_hostapd_state *hostapd_state;
+	struct qdf_mac_addr staBssid = QDF_MAC_ADDR_ZERO_INIT;
+	struct qdf_mac_addr p2pBssid = QDF_MAC_ADDR_ZERO_INIT;
+	struct qdf_mac_addr apBssid = QDF_MAC_ADDR_ZERO_INIT;
+	uint8_t staChannel = 0, p2pChannel = 0, apChannel = 0;
+	const char *p2pMode = "DEV";
+	struct hdd_context *hdd_ctx;
+	struct cds_context *cds_ctx;
+#ifdef QCA_LL_LEGACY_TX_FLOW_CONTROL
+	uint8_t targetChannel = 0;
+	uint8_t preAdapterChannel = 0;
+	uint8_t channel24;
+	uint8_t channel5;
+	struct hdd_adapter *preAdapterContext = NULL;
+	struct hdd_adapter *adapter2_4 = NULL;
+	struct hdd_adapter *adapter5 = NULL;
+	void *soc = cds_get_context(QDF_MODULE_ID_SOC);
+#endif /* QCA_LL_LEGACY_TX_FLOW_CONTROL */
+	struct wlan_objmgr_psoc *psoc;
+	wlan_net_dev_ref_dbgid dbgid = NET_DEV_HOLD_IPA_SET_TX_FLOW_INFO;
 
-/**
- * struct hdd_ipa_connection_info - connectio info for IPA component
- * @vdev_id: vdev id
- * @ch_freq: channel frequency
- * @ch_width: channel width
- * @wlan_80211_mode: enum qca_wlan_802_11_mode
- */
-struct hdd_ipa_connection_info {
-	uint8_t vdev_id;
-	qdf_freq_t ch_freq;
-	enum phy_ch_width ch_width;
-	enum qca_wlan_802_11_mode wlan_80211_mode;
-};
+	hdd_ctx = cds_get_context(QDF_MODULE_ID_HDD);
+	if (!hdd_ctx)
+		return;
+
+	cds_ctx = cds_get_context(QDF_MODULE_ID_QDF);
+	if (!cds_ctx)
+		return;
+
+	psoc = hdd_ctx->psoc;
+
+	hdd_for_each_adapter_dev_held_safe(hdd_ctx, adapter, next_adapter,
+					   dbgid) {
+		switch (adapter->device_mode) {
+		case QDF_STA_MODE:
+			sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter);
+			if (hdd_cm_is_vdev_associated(adapter)) {
+				staChannel = wlan_reg_freq_to_chan(
+						hdd_ctx->pdev,
+						sta_ctx->conn_info.chan_freq);
+				qdf_copy_macaddr(&staBssid,
+						 &sta_ctx->conn_info.bssid);
+#ifdef QCA_LL_LEGACY_TX_FLOW_CONTROL
+				targetChannel = staChannel;
+#endif /* QCA_LL_LEGACY_TX_FLOW_CONTROL */
+			}
+			break;
+		case QDF_P2P_CLIENT_MODE:
+			sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter);
+			if (hdd_cm_is_vdev_associated(adapter)) {
+				p2pChannel = wlan_reg_freq_to_chan(
+					hdd_ctx->pdev,
+					sta_ctx->conn_info.chan_freq);
+				qdf_copy_macaddr(&p2pBssid,
+						&sta_ctx->conn_info.bssid);
+				p2pMode = "CLI";
+#ifdef QCA_LL_LEGACY_TX_FLOW_CONTROL
+				targetChannel = p2pChannel;
+#endif /* QCA_LL_LEGACY_TX_FLOW_CONTROL */
+			}
+			break;
+		case QDF_P2P_GO_MODE:
+			hdd_ap_ctx = WLAN_HDD_GET_AP_CTX_PTR(adapter);
+			hostapd_state = WLAN_HDD_GET_HOSTAP_STATE_PTR(adapter);
+			if (hostapd_state->bss_state == BSS_START
+			    && hostapd_state->qdf_status ==
+			    QDF_STATUS_SUCCESS) {
+				p2pChannel = wlan_reg_freq_to_chan(
+					hdd_ctx->pdev,
+					hdd_ap_ctx->operating_chan_freq);
+				qdf_copy_macaddr(&p2pBssid,
+						 &adapter->mac_addr);
+#ifdef QCA_LL_LEGACY_TX_FLOW_CONTROL
+				targetChannel = p2pChannel;
+#endif /* QCA_LL_LEGACY_TX_FLOW_CONTROL */
+			}
+			p2pMode = "GO";
+			break;
+		case QDF_SAP_MODE:
+			hdd_ap_ctx = WLAN_HDD_GET_AP_CTX_PTR(adapter);
+			hostapd_state = WLAN_HDD_GET_HOSTAP_STATE_PTR(adapter);
+			if (hostapd_state->bss_state == BSS_START
+			    && hostapd_state->qdf_status ==
+			    QDF_STATUS_SUCCESS) {
+				apChannel = wlan_reg_freq_to_chan(
+					hdd_ctx->pdev,
+					hdd_ap_ctx->operating_chan_freq);
+				qdf_copy_macaddr(&apBssid,
+						&adapter->mac_addr);
+#ifdef QCA_LL_LEGACY_TX_FLOW_CONTROL
+				targetChannel = apChannel;
+#endif /* QCA_LL_LEGACY_TX_FLOW_CONTROL */
+			}
+			break;
+		default:
+			break;
+		}
+#ifdef QCA_LL_LEGACY_TX_FLOW_CONTROL
+		if (targetChannel) {
+			/*
+			 * This is first adapter detected as active
+			 * set as default for none concurrency case
+			 */
+			if (!preAdapterChannel) {
+				/* If IPA UC data path is enabled,
+				 * target should reserve extra tx descriptors
+				 * for IPA data path.
+				 * Then host data path should allow less TX
+				 * packet pumping in case IPA
+				 * data path enabled
+				 */
+				if (ucfg_ipa_uc_is_enabled() &&
+				    (QDF_SAP_MODE == adapter->device_mode)) {
+					adapter->tx_flow_low_watermark =
+					hdd_ctx->config->tx_flow_low_watermark +
+					WLAN_TFC_IPAUC_TX_DESC_RESERVE;
+				} else {
+					adapter->tx_flow_low_watermark =
+						hdd_ctx->config->
+							tx_flow_low_watermark;
+				}
+				adapter->tx_flow_hi_watermark_offset =
+				   hdd_ctx->config->tx_flow_hi_watermark_offset;
+				cdp_fc_ll_set_tx_pause_q_depth(soc,
+						adapter->vdev_id,
+						hdd_ctx->config->
+						tx_flow_max_queue_depth);
+				hdd_info("MODE %d,CH %d,LWM %d,HWM %d,TXQDEP %d",
+				    adapter->device_mode,
+				    targetChannel,
+				    adapter->tx_flow_low_watermark,
+				    adapter->tx_flow_low_watermark +
+				    adapter->tx_flow_hi_watermark_offset,
+				    hdd_ctx->config->tx_flow_max_queue_depth);
+				preAdapterChannel = targetChannel;
+				preAdapterContext = adapter;
+			} else {
+				/*
+				 * SCC, disable TX flow control for both
+				 * SCC each adapter cannot reserve dedicated
+				 * channel resource, as a result, if any adapter
+				 * blocked OS Q by flow control,
+				 * blocked adapter will lost chance to recover
+				 */
+				if (preAdapterChannel == targetChannel) {
+					/* Current adapter */
+					adapter->tx_flow_low_watermark = 0;
+					adapter->
+					tx_flow_hi_watermark_offset = 0;
+					cdp_fc_ll_set_tx_pause_q_depth(soc,
+						adapter->vdev_id,
+						hdd_ctx->config->
+						tx_hbw_flow_max_queue_depth);
+					hdd_info("SCC: MODE %s(%d), CH %d, LWM %d, HWM %d, TXQDEP %d",
+					       qdf_opmode_str(
+							adapter->device_mode),
+					       adapter->device_mode,
+					       targetChannel,
+					       adapter->tx_flow_low_watermark,
+					       adapter->tx_flow_low_watermark +
+					       adapter->
+					       tx_flow_hi_watermark_offset,
+					       hdd_ctx->config->
+					       tx_hbw_flow_max_queue_depth);
+
+					if (!preAdapterContext) {
+						hdd_err("SCC: Previous adapter context NULL");
+						hdd_adapter_dev_put_debug(
+								adapter, dbgid);
+						continue;
+					}
+
+					/* Previous adapter */
+					preAdapterContext->
+					tx_flow_low_watermark = 0;
+					preAdapterContext->
+					tx_flow_hi_watermark_offset = 0;
+					cdp_fc_ll_set_tx_pause_q_depth(soc,
+						preAdapterContext->vdev_id,
+						hdd_ctx->config->
+						tx_hbw_flow_max_queue_depth);
+					hdd_info("SCC: MODE %s(%d), CH %d, LWM %d, HWM %d, TXQDEP %d",
+					       qdf_opmode_str(
+						preAdapterContext->device_mode),
+					       preAdapterContext->device_mode,
+					       targetChannel,
+					       preAdapterContext->
+					       tx_flow_low_watermark,
+					       preAdapterContext->
+					       tx_flow_low_watermark +
+					       preAdapterContext->
+					       tx_flow_hi_watermark_offset,
+					       hdd_ctx->config->
+					       tx_hbw_flow_max_queue_depth);
+				}
+				/*
+				 * MCC, each adapter will have dedicated
+				 * resource
+				 */
+				else {
+					/* current channel is 2.4 */
+					if (targetChannel <=
+				     WLAN_HDD_TX_FLOW_CONTROL_MAX_24BAND_CH) {
+						channel24 = targetChannel;
+						channel5 = preAdapterChannel;
+						adapter2_4 = adapter;
+						adapter5 = preAdapterContext;
+					} else {
+						/* Current channel is 5 */
+						channel24 = preAdapterChannel;
+						channel5 = targetChannel;
+						adapter2_4 = preAdapterContext;
+						adapter5 = adapter;
+					}
+
+					if (!adapter5) {
+						hdd_err("MCC: 5GHz adapter context NULL");
+						hdd_adapter_dev_put_debug(
+								adapter, dbgid);
+						continue;
+					}
+					adapter5->tx_flow_low_watermark =
+						hdd_ctx->config->
+						tx_hbw_flow_low_watermark;
+					adapter5->
+					tx_flow_hi_watermark_offset =
+						hdd_ctx->config->
+						tx_hbw_flow_hi_watermark_offset;
+					cdp_fc_ll_set_tx_pause_q_depth(soc,
+						adapter5->vdev_id,
+						hdd_ctx->config->
+						tx_hbw_flow_max_queue_depth);
+					hdd_info("MCC: MODE %s(%d), CH %d, LWM %d, HWM %d, TXQDEP %d",
+					    qdf_opmode_str(
+						    adapter5->device_mode),
+					    adapter5->device_mode,
+					    channel5,
+					    adapter5->tx_flow_low_watermark,
+					    adapter5->
+					    tx_flow_low_watermark +
+					    adapter5->
+					    tx_flow_hi_watermark_offset,
+					    hdd_ctx->config->
+					    tx_hbw_flow_max_queue_depth);
+
+					if (!adapter2_4) {
+						hdd_err("MCC: 2.4GHz adapter context NULL");
+						hdd_adapter_dev_put_debug(
+								adapter, dbgid);
+						continue;
+					}
+					adapter2_4->tx_flow_low_watermark =
+						hdd_ctx->config->
+						tx_lbw_flow_low_watermark;
+					adapter2_4->
+					tx_flow_hi_watermark_offset =
+						hdd_ctx->config->
+						tx_lbw_flow_hi_watermark_offset;
+					cdp_fc_ll_set_tx_pause_q_depth(soc,
+						adapter2_4->vdev_id,
+						hdd_ctx->config->
+						tx_lbw_flow_max_queue_depth);
+					hdd_info("MCC: MODE %s(%d), CH %d, LWM %d, HWM %d, TXQDEP %d",
+						qdf_opmode_str(
+						    adapter2_4->device_mode),
+						adapter2_4->device_mode,
+						channel24,
+						adapter2_4->
+						tx_flow_low_watermark,
+						adapter2_4->
+						tx_flow_low_watermark +
+						adapter2_4->
+						tx_flow_hi_watermark_offset,
+						hdd_ctx->config->
+						tx_lbw_flow_max_queue_depth);
+
+				}
+			}
+		}
+		targetChannel = 0;
+#endif /* QCA_LL_LEGACY_TX_FLOW_CONTROL */
+		hdd_adapter_dev_put_debug(adapter, dbgid);
+	}
+}
 
 #if (defined(QCA_CONFIG_SMP) && defined(PF_WAKE_UP_IDLE)) ||\
 	IS_ENABLED(CONFIG_SCHED_WALT)
@@ -71,7 +343,6 @@ static uint32_t hdd_ipa_get_wake_up_idle(void)
 
 /**
  * hdd_ipa_set_wake_up_idle() - Set PF_WAKE_UP_IDLE flag in the task structure
- * @wake_up_idle: Value to set PF_WAKE_UP_IDLE flag
  *
  * Set PF_WAKE_UP_IDLE flag in the task structure
  * This task and any task woken by this will be waken to idle CPU
@@ -181,14 +452,10 @@ static int hdd_ipa_aggregated_rx_ind(qdf_nbuf_t skb)
 void hdd_ipa_send_nbuf_to_network(qdf_nbuf_t nbuf, qdf_netdev_t dev)
 {
 	struct hdd_adapter *adapter = (struct hdd_adapter *) netdev_priv(dev);
-	struct wlan_objmgr_vdev *vdev;
 	int result;
-	bool delivered = false;
-	uint32_t enabled, len = 0;
+	unsigned int cpu_index;
+	uint32_t enabled;
 	struct hdd_tx_rx_stats *stats;
-	struct hdd_station_ctx *sta_ctx;
-	bool is_eapol;
-	u8 *ta_addr = NULL;
 
 	if (hdd_validate_adapter(adapter)) {
 		kfree_skb(nbuf);
@@ -200,28 +467,20 @@ void hdd_ipa_send_nbuf_to_network(qdf_nbuf_t nbuf, qdf_netdev_t dev)
 		return;
 	}
 
-	stats = &adapter->deflink->hdd_stats.tx_rx_stats;
+	stats = &adapter->hdd_stats.tx_rx_stats;
 	hdd_ipa_update_rx_mcbc_stats(adapter, nbuf);
 
 	if ((adapter->device_mode == QDF_SAP_MODE) &&
 	    (qdf_nbuf_is_ipv4_dhcp_pkt(nbuf) == true)) {
 		/* Send DHCP Indication to FW */
-		vdev = hdd_objmgr_get_vdev_by_user(adapter->deflink,
-						   WLAN_DP_ID);
-		if (vdev) {
-			ucfg_dp_softap_inspect_dhcp_packet(vdev, nbuf, QDF_RX);
-			hdd_objmgr_put_vdev_by_user(vdev, WLAN_DP_ID);
-		}
+		hdd_softap_inspect_dhcp_packet(adapter, nbuf, QDF_RX);
 	}
-
-	is_eapol = qdf_nbuf_is_ipv4_eapol_pkt(nbuf);
 
 	qdf_dp_trace_set_track(nbuf, QDF_RX);
 
-	ucfg_dp_event_eapol_log(nbuf, QDF_RX);
-	qdf_dp_trace_log_pkt(adapter->deflink->vdev_id,
-			     nbuf, QDF_RX, QDF_TRACE_DEFAULT_PDEV_ID,
-			     adapter->device_mode);
+	hdd_event_eapol_log(nbuf, QDF_RX);
+	qdf_dp_trace_log_pkt(adapter->vdev_id,
+			     nbuf, QDF_RX, QDF_TRACE_DEFAULT_PDEV_ID);
 	DPTRACE(qdf_dp_trace(nbuf,
 			     QDF_DP_TRACE_RX_HDD_PACKET_PTR_RECORD,
 			     QDF_TRACE_DEFAULT_PDEV_ID,
@@ -242,49 +501,25 @@ void hdd_ipa_send_nbuf_to_network(qdf_nbuf_t nbuf, qdf_netdev_t dev)
 	nbuf->dev = adapter->dev;
 	nbuf->protocol = eth_type_trans(nbuf, nbuf->dev);
 	nbuf->ip_summed = CHECKSUM_NONE;
-	len = nbuf->len;
+
+	cpu_index = wlan_hdd_get_cpu();
+
+	++stats->per_cpu[cpu_index].rx_packets;
 
 	/*
 	 * Update STA RX exception packet stats.
 	 * For SAP as part of IPA HW stats are updated.
 	 */
 
-	if (is_eapol && SEND_EAPOL_OVER_NL) {
-		if (adapter->device_mode == QDF_SAP_MODE) {
-			ta_addr = adapter->mac_addr.bytes;
-		} else if (adapter->device_mode == QDF_STA_MODE) {
-			sta_ctx =
-				WLAN_HDD_GET_STATION_CTX_PTR(adapter->deflink);
-			ta_addr = (u8 *)&sta_ctx->conn_info.peer_macaddr;
-		}
+	++adapter->stats.rx_packets;
+	adapter->stats.rx_bytes += nbuf->len;
 
-		if (ta_addr) {
-			if (wlan_hdd_cfg80211_rx_control_port(adapter->dev,
-							      ta_addr, nbuf,
-							      false))
-				result = NET_RX_SUCCESS;
-			else
-				result = NET_RX_DROP;
-		} else {
-			result = NET_RX_DROP;
-		}
-
-		dev_kfree_skb(nbuf);
-	} else {
-		result = hdd_ipa_aggregated_rx_ind(nbuf);
-	}
-
+	result = hdd_ipa_aggregated_rx_ind(nbuf);
 	if (result == NET_RX_SUCCESS)
-		delivered = true;
-	/*
-	 * adapter->vdev is directly dereferenced because this is per packet
-	 * path, hdd_get_vdev_by_user() usage will be very costly as it involves
-	 * lock access.
-	 * Expectation here is vdev will be present during TX/RX processing
-	 * and also DP internally maintaining vdev ref count
-	 */
-	ucfg_dp_inc_rx_pkt_stats(adapter->deflink->vdev,
-				 len, delivered);
+		++stats->per_cpu[cpu_index].rx_delivered;
+	else
+		++stats->per_cpu[cpu_index].rx_refused;
+
 	/*
 	 * Restore PF_WAKE_UP_IDLE flag in the task structure
 	 */
@@ -302,158 +537,3 @@ void hdd_ipa_set_mcc_mode(bool mcc_mode)
 
 	ucfg_ipa_set_mcc_mode(hdd_ctx->pdev, mcc_mode);
 }
-
-#ifdef IPA_WDI3_TX_TWO_PIPES
-static void
-hdd_ipa_fill_sta_connection_info(struct wlan_hdd_link_info *link,
-				 struct hdd_ipa_connection_info *conn)
-{
-	struct hdd_station_ctx *ctx = WLAN_HDD_GET_STATION_CTX_PTR(link);
-
-	conn->ch_freq = ctx->conn_info.chan_freq;
-	conn->ch_width = ctx->conn_info.ch_width;
-	conn->wlan_80211_mode = hdd_convert_cfgdot11mode_to_80211mode(
-			ctx->conn_info.dot11mode);
-}
-
-static void
-hdd_ipa_fill_sap_connection_info(struct wlan_hdd_link_info *link,
-				 struct hdd_ipa_connection_info *conn)
-{
-	struct hdd_ap_ctx *ctx = WLAN_HDD_GET_AP_CTX_PTR(link);
-
-	conn->ch_freq = ctx->operating_chan_freq;
-	conn->ch_width = ctx->sap_config.ch_params.ch_width;
-	conn->wlan_80211_mode = hdd_convert_phymode_to_80211mode(
-			ctx->sap_config.SapHw_mode);
-}
-
-static void hdd_ipa_fill_connection_info(struct wlan_hdd_link_info *link,
-					 struct hdd_ipa_connection_info *conn)
-{
-	struct hdd_adapter *adapter = link->adapter;
-
-	conn->vdev_id = link->vdev_id;
-
-	if (adapter->device_mode == QDF_STA_MODE)
-		hdd_ipa_fill_sta_connection_info(link, conn);
-	else if (adapter->device_mode == QDF_SAP_MODE)
-		hdd_ipa_fill_sap_connection_info(link, conn);
-}
-
-static QDF_STATUS
-hdd_ipa_get_tx_pipe_multi_conn(struct hdd_context *hdd_ctx,
-			       struct hdd_ipa_connection_info *conn,
-			       bool *tx_pipe)
-{
-	uint32_t new_freq = conn->ch_freq;
-	QDF_STATUS status;
-	uint8_t vdev_id;
-	bool pipe;
-
-	if (ucfg_policy_mgr_get_vdev_same_freq_new_conn(hdd_ctx->psoc,
-							new_freq,
-							&vdev_id)) {
-		/* Inherit the pipe selection of the connection that has
-		 * same freq.
-		 */
-		return ucfg_ipa_get_alt_pipe(hdd_ctx->pdev, vdev_id, tx_pipe);
-	} else {
-		if (ucfg_policy_mgr_get_vdev_diff_freq_new_conn(hdd_ctx->psoc,
-								new_freq,
-								&vdev_id)) {
-			status = ucfg_ipa_get_alt_pipe(hdd_ctx->pdev, vdev_id,
-						       &pipe);
-			if (QDF_IS_STATUS_ERROR(status))
-				return QDF_STATUS_E_INVAL;
-
-			/* Inverse the pipe selection of the connection that
-			 * has different channel frequency.
-			 */
-			*tx_pipe = !pipe;
-			return QDF_STATUS_SUCCESS;
-		} else {
-			return QDF_STATUS_E_INVAL;
-		}
-	}
-}
-
-QDF_STATUS hdd_ipa_get_tx_pipe(struct hdd_context *hdd_ctx,
-			       struct wlan_hdd_link_info *link,
-			       bool *tx_pipe)
-{
-	struct hdd_ipa_connection_info conn;
-	uint32_t count;
-
-	if (qdf_unlikely(!hdd_ctx || !link || !tx_pipe)) {
-		hdd_debug("Invalid parameters");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	/* If SBS not capable, use legacy DBS selection */
-	if (!ucfg_policy_mgr_is_hw_sbs_capable(hdd_ctx->psoc)) {
-		hdd_debug("firmware is not sbs capable");
-		*tx_pipe = WLAN_REG_IS_24GHZ_CH_FREQ(conn.ch_freq);
-		return QDF_STATUS_SUCCESS;
-	}
-
-	hdd_ipa_fill_connection_info(link, &conn);
-
-	/* Always select the primary pipe for connection that is EHT160 or
-	 * EHT320 due to higher tput requiements.
-	 */
-	if (conn.wlan_80211_mode == QCA_WLAN_802_11_MODE_11BE &&
-	    (conn.ch_width == CH_WIDTH_160MHZ ||
-	     conn.ch_width == CH_WIDTH_320MHZ)) {
-		*tx_pipe = false;
-		return QDF_STATUS_SUCCESS;
-	}
-
-	count = ucfg_policy_mgr_get_connection_count(hdd_ctx->psoc);
-	if (!count) {
-		/* For first connection that is below EHT160, select the
-		 * alternate pipe so as to reserve the primary pipe for
-		 * potential connections that are above EHT160.
-		 */
-		*tx_pipe = true;
-		return QDF_STATUS_SUCCESS;
-	}
-
-	return hdd_ipa_get_tx_pipe_multi_conn(hdd_ctx, &conn, tx_pipe);
-}
-#else /* !IPA_WDI3_TX_TWO_PIPES */
-QDF_STATUS hdd_ipa_get_tx_pipe(struct hdd_context *hdd_ctx,
-			       struct wlan_hdd_link_info *link,
-			       bool *tx_pipe)
-{
-	if (qdf_unlikely(!tx_pipe))
-		return QDF_STATUS_E_INVAL;
-
-	/* For IPA_WDI3_TX_TWO_PIPES=n, only one tx pipe is available */
-	*tx_pipe = false;
-
-	return QDF_STATUS_SUCCESS;
-}
-#endif /* IPA_WDI3_TX_TWO_PIPES */
-
-void hdd_ipa_set_perf_level_bw(enum hw_mode_bandwidth bw)
-{
-	struct hdd_context *hdd_ctx;
-	enum wlan_ipa_bw_level lvl;
-
-	hdd_ctx = cds_get_context(QDF_MODULE_ID_HDD);
-	if (!hdd_ctx)
-		return;
-
-	if (bw == HW_MODE_320_MHZ)
-		lvl = WLAN_IPA_BW_LEVEL_HIGH;
-	else if (bw == HW_MODE_160_MHZ)
-		lvl = WLAN_IPA_BW_LEVEL_MEDIUM;
-	else
-		lvl = WLAN_IPA_BW_LEVEL_LOW;
-
-	hdd_debug("Vote IPA perf level to %d", lvl);
-	ucfg_ipa_set_perf_level_bw(hdd_ctx->pdev, lvl);
-}
-
-#endif

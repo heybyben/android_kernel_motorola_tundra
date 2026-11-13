@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2011,2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -42,15 +41,11 @@ target_if_spectral_fill_samp_msg(struct target_if_spectral *spectral,
 	uint16_t dest_det_idx;
 	enum spectral_scan_mode spectral_mode;
 	uint16_t pwr_format;
-	struct spectral_data_stats *spectral_dp_stats;
 
 	if (!spectral) {
 		spectral_err_rl("Spectral LMAC object is null");
 		return QDF_STATUS_E_NULL_VALUE;
 	}
-
-	spectral_dp_stats = &spectral->data_stats;
-	spectral_dp_stats->fill_samp_msg_calls++;
 
 	if (!params) {
 		spectral_err_rl("SAMP msg params structure is null");
@@ -81,11 +76,10 @@ target_if_spectral_fill_samp_msg(struct target_if_spectral *spectral,
 
 	qdf_spin_lock_bh(&spectral->session_det_map_lock);
 
-	if (!spectral->det_map[params->hw_detector_id].
-				det_map_valid[spectral_mode]) {
+	if (!spectral->det_map[params->hw_detector_id].det_map_valid) {
 		qdf_spin_unlock_bh(&spectral->session_det_map_lock);
-		spectral_info("Detector Map not valid for det id = %d and spectral mode = %d",
-			      params->hw_detector_id, spectral_mode);
+		spectral_info("Detector Map not valid for det id = %d",
+			      params->hw_detector_id);
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -103,6 +97,7 @@ target_if_spectral_fill_samp_msg(struct target_if_spectral *spectral,
 	for (dest_det_idx = 0; dest_det_idx < det_map->num_dest_det_info;
 	     dest_det_idx++) {
 		struct per_session_dest_det_info *map_det_info;
+		struct spectral_fft_bin_len_adj_swar *swar;
 		struct samp_freq_span_info *span_info;
 		struct samp_detector_info *detector_info;
 		uint8_t dest_detector_id;
@@ -115,6 +110,7 @@ target_if_spectral_fill_samp_msg(struct target_if_spectral *spectral,
 		uint16_t start_bin_index;
 		uint32_t bytes_copied;
 
+		swar = &spectral->len_adj_swar;
 
 		map_det_info = &det_map->dest_det_info[dest_det_idx];
 		span_id = map_det_info->freq_span_id;
@@ -154,7 +150,6 @@ target_if_spectral_fill_samp_msg(struct target_if_spectral *spectral,
 		detector_info->agc_total_gain = params->agc_total_gain;
 		detector_info->gainchange = params->gainchange;
 		detector_info->is_sec80 = map_det_info->is_sec80;
-		detector_info->blanking_status = params->blanking_status;
 		/* In 165MHz, Pri80 indication to be set for Span ID 0 only */
 		if (span_id == SPECTRAL_FREQ_SPAN_ID_0)
 			detector_info->pri80ind = params->pri80ind;
@@ -284,12 +279,9 @@ target_if_spectral_fill_samp_msg(struct target_if_spectral *spectral,
 		if (spectral_debug_level & DEBUG_SPECTRAL4)
 			target_if_dbg_print_samp_msg(spec_samp_msg);
 
-		spectral_dp_stats->msgs_ready_for_user++;
 		if (spectral->send_phy_data(spectral->pdev_obj,
-					    msg_type) == 0) {
+					    msg_type) == 0)
 			spectral->spectral_sent_msg++;
-			spectral_dp_stats->msgs_queued_to_user++;
-		}
 		if (spectral->spectral_gen == SPECTRAL_GEN3)
 			reset_160mhz_delivery_state_machine(spectral,
 							    spectral_mode);

@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2019, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -41,7 +40,7 @@ typedef enum {
  * @wmi_handle: wmi handle
  * @evt_buf: pointer to event buffer
  * @len: length of the event buffer
- * @param: Pointer to hold params of install key complete
+ * @params: Pointer to hold params of install key complete
  *
  * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
  */
@@ -49,17 +48,5 @@ QDF_STATUS
 wmi_extract_install_key_comp_event(wmi_unified_t wmi_handle,
 				   void *evt_buf, uint32_t len,
 				   struct wmi_install_key_comp_event *param);
-
-/**
- * wmi_send_vdev_set_ltf_key_seed_cmd  - Set LTF key seed for PASN key
- * derivation.
- * @wmi: WMI handle
- * @data: LTF Keyseed data
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS
-wmi_send_vdev_set_ltf_key_seed_cmd(wmi_unified_t wmi,
-				   struct wlan_crypto_ltf_keyseed_data *data);
 #endif
 

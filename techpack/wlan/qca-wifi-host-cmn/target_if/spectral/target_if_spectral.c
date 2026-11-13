@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011,2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -33,7 +33,7 @@
 #include <wlan_reg_services_api.h>
 #include <wlan_dfs_ucfg_api.h>
 
-/*
+/**
  * @spectral_ops - Spectral function table, holds the Spectral functions that
  * depend on whether the architecture is Direct Attach or Offload. This is used
  * to populate the actual Spectral function table present in the Spectral
@@ -430,15 +430,9 @@ target_if_spectral_get_vdev(struct target_if_spectral *spectral,
 	struct wlan_objmgr_pdev *pdev = NULL;
 	struct wlan_objmgr_vdev *first_vdev = NULL;
 
-	if (!spectral) {
-		spectral_err("spectral variable in null.");
-		return NULL;
-	}
+	qdf_assert_always(spectral);
 	pdev = spectral->pdev_obj;
-	if (!pdev) {
-		spectral_err("pdev variable in null.");
-		return NULL;
-	}
+	qdf_assert_always(pdev);
 
 	if (smode >= SPECTRAL_SCAN_MODE_MAX) {
 		spectral_err("Invalid Spectral mode %u", smode);
@@ -494,13 +488,12 @@ target_if_send_vdev_spectral_configure_cmd(struct target_if_spectral *spectral,
 	struct wlan_objmgr_vdev *vdev = NULL;
 	struct target_if_psoc_spectral *psoc_spectral;
 
-	if (!spectral || !param || !(spectral->pdev_obj)) {
-		spectral_err("null params: spectral %pK, spectral_config %pK, pdev: %pK.",
-			     spectral, param, pdev);
-		return qdf_status_to_os_return(QDF_STATUS_E_NULL_VALUE);
-	}
+	qdf_assert_always(spectral);
+	qdf_assert_always(param);
 
 	pdev = spectral->pdev_obj;
+
+	qdf_assert_always(pdev);
 
 	psoc = wlan_pdev_get_psoc(pdev);
 	if (!psoc) {
@@ -525,7 +518,6 @@ target_if_send_vdev_spectral_configure_cmd(struct target_if_spectral *spectral,
 
 	sparam.count = param->ss_count;
 	sparam.period = param->ss_period;
-	sparam.fft_recap = param->ss_recapture;
 	sparam.spectral_pri = param->ss_spectral_pri;
 	sparam.fft_size = param->ss_fft_size;
 	sparam.gc_enable = param->ss_gc_ena;
@@ -578,17 +570,11 @@ target_if_send_vdev_spectral_enable_cmd(struct target_if_spectral *spectral,
 	struct wlan_objmgr_vdev *vdev = NULL;
 	struct target_if_psoc_spectral *psoc_spectral;
 
-	if (!spectral) {
-		spectral_err("spectral is null");
-		return qdf_status_to_os_return(QDF_STATUS_E_NULL_VALUE);
-	}
+	qdf_assert_always(spectral);
 
 	pdev = spectral->pdev_obj;
 
-	if (!pdev) {
-		spectral_err("pdev is null");
-		return qdf_status_to_os_return(QDF_STATUS_E_NULL_VALUE);
-	}
+	qdf_assert_always(pdev);
 
 	psoc = wlan_pdev_get_psoc(pdev);
 	if (!psoc) {
@@ -630,15 +616,13 @@ target_if_send_vdev_spectral_enable_cmd(struct target_if_spectral *spectral,
  */
 static inline bool is_spectral_arch_beryllium(uint32_t target_tpe)
 {
-	if ((target_tpe == TARGET_TYPE_QCN9224) ||
-	    (target_tpe == TARGET_TYPE_QCA5332) ||
-	    (target_tpe == TARGET_TYPE_QCN6432))
+	if (target_tpe == TARGET_TYPE_QCN9224)
 		return true;
 
 	return false;
 }
 
-/*
+/**
  * List of supported sscan BWs. Make sure to maintain the array elements in the
  * same order of BWs as that of struct spectral_supported_bws bitmap.
  */
@@ -899,8 +883,6 @@ target_if_spectral_info_init_defaults(struct target_if_spectral *spectral,
 		info->osps_cache.osc_params.ss_period =
 			SPECTRAL_SCAN_PERIOD_GEN_II_DEFAULT;
 
-	info->osps_cache.osc_params.ss_recapture =
-				SPECTRAL_FFT_RECAPTURE_DEFAULT;
 	info->osps_cache.osc_params.ss_spectral_pri =
 	    SPECTRAL_SCAN_PRIORITY_DEFAULT;
 
@@ -1015,7 +997,8 @@ target_if_log_read_spectral_enabled(
 }
 
 /**
- * target_if_log_read_spectral_params() - log spectral parameters
+ * target_if_log_read_spectral_enabled() - Helper function to log spectral
+ * parameters after reading cache
  * @function_name: Function name
  * @pparam: Spectral parameters
  *
@@ -1028,11 +1011,10 @@ target_if_log_read_spectral_params(
 	const char *function_name,
 	struct spectral_config *pparam)
 {
-	spectral_debug("%s: TARGET_IF_SPECTRAL_INFO_PARAMS. Returning following params:\nss_count = %u\nss_period = %u\nss_recapture = %u\nss_spectral_pri = %u\nss_fft_size = %u\nss_gc_ena = %u\nss_restart_ena = %u\nss_noise_floor_ref = %d\nss_init_delay = %u\nss_nb_tone_thr = %u\nss_str_bin_thr = %u\nss_wb_rpt_mode = %u\nss_rssi_rpt_mode = %u\nss_rssi_thr = %d\nss_pwr_format = %u\nss_rpt_mode = %u\nss_bin_scale = %u\nss_dbm_adj = %u\nss_chn_mask = %u\nss_frequency1=%u\nss_frequency2=%u\n",
+	spectral_debug("%s: TARGET_IF_SPECTRAL_INFO_PARAMS. Returning following params:\nss_count = %u\nss_period = %u\nss_spectral_pri = %u\nss_fft_size = %u\nss_gc_ena = %u\nss_restart_ena = %u\nss_noise_floor_ref = %d\nss_init_delay = %u\nss_nb_tone_thr = %u\nss_str_bin_thr = %u\nss_wb_rpt_mode = %u\nss_rssi_rpt_mode = %u\nss_rssi_thr = %d\nss_pwr_format = %u\nss_rpt_mode = %u\nss_bin_scale = %u\nss_dbm_adj = %u\nss_chn_mask = %u\nss_frequency1=%u\nss_frequency2=%u\n",
 		       function_name,
 		       pparam->ss_count,
 		       pparam->ss_period,
-		       pparam->ss_recapture,
 		       pparam->ss_spectral_pri,
 		       pparam->ss_fft_size,
 		       pparam->ss_gc_ena,
@@ -1055,11 +1037,11 @@ target_if_log_read_spectral_params(
 
 /**
  * target_if_log_read_spectral_active_catch_validate() - Helper function to
- * log whether spectral is active after initializing the cache
+ * log whether spectral is active after intializing the cache
  * @function_name: Function name
  * @output: whether spectral is active or not
  *
- * Helper function to log whether spectral is active after initializing cache
+ * Helper function to log whether spectral is active after intializing cache
  *
  * Return: none
  */
@@ -1074,11 +1056,11 @@ target_if_log_read_spectral_active_catch_validate(
 
 /**
  * target_if_log_read_spectral_enabled_catch_validate() - Helper function to
- * log whether spectral is enabled after initializing the cache
+ * log whether spectral is enabled after intializing the cache
  * @function_name: Function name
  * @output: whether spectral is enabled or not
  *
- * Helper function to log whether spectral is enabled after initializing cache
+ * Helper function to log whether spectral is enabled after intializing cache
  *
  * Return: none
  */
@@ -1093,11 +1075,11 @@ target_if_log_read_spectral_enabled_catch_validate(
 
 /**
  * target_if_log_read_spectral_params_catch_validate() - Helper function to
- * log spectral parameters after initializing the cache
+ * log spectral parameters after intializing the cache
  * @function_name: Function name
  * @pparam: Spectral parameters
  *
- * Helper function to log spectral parameters after initializing the cache
+ * Helper function to log spectral parameters after intializing the cache
  *
  * Return: none
  */
@@ -1106,11 +1088,10 @@ target_if_log_read_spectral_params_catch_validate(
 	const char *function_name,
 	struct spectral_config *pparam)
 {
-	spectral_debug("%s: TARGET_IF_SPECTRAL_INFO_PARAMS on initial cache validation\nReturning following params:\nss_count = %u\nss_period = %u\nss_recapture = %u\nss_spectral_pri = %u\nss_fft_size = %u\nss_gc_ena = %u\nss_restart_ena = %u\nss_noise_floor_ref = %d\nss_init_delay = %u\nss_nb_tone_thr = %u\nss_str_bin_thr = %u\nss_wb_rpt_mode = %u\nss_rssi_rpt_mode = %u\nss_rssi_thr = %d\nss_pwr_format = %u\nss_rpt_mode = %u\nss_bin_scale = %u\nss_dbm_adj = %u\nss_chn_mask = %u",
+	spectral_debug("%s: TARGET_IF_SPECTRAL_INFO_PARAMS on initial cache validation\nReturning following params:\nss_count = %u\nss_period = %u\nss_spectral_pri = %u\nss_fft_size = %u\nss_gc_ena = %u\nss_restart_ena = %u\nss_noise_floor_ref = %d\nss_init_delay = %u\nss_nb_tone_thr = %u\nss_str_bin_thr = %u\nss_wb_rpt_mode = %u\nss_rssi_rpt_mode = %u\nss_rssi_thr = %d\nss_pwr_format = %u\nss_rpt_mode = %u\nss_bin_scale = %u\nss_dbm_adj = %u\nss_chn_mask = %u",
 		       function_name,
 		       pparam->ss_count,
 		       pparam->ss_period,
-		       pparam->ss_recapture,
 		       pparam->ss_spectral_pri,
 		       pparam->ss_fft_size,
 		       pparam->ss_gc_ena,
@@ -1353,11 +1334,10 @@ target_if_log_write_spectral_params(
 	const char *function_name,
 	int ret)
 {
-	spectral_debug("%s: TARGET_IF_SPECTRAL_INFO_PARAMS. Params:\nss_count = %u\nss_period = %u\nss_recapture = %u\nss_spectral_pri = %u\nss_fft_size = %u\nss_gc_ena = %u\nss_restart_ena = %u\nss_noise_floor_ref = %d\nss_init_delay = %u\nss_nb_tone_thr = %u\nss_str_bin_thr = %u\nss_wb_rpt_mode = %u\nss_rssi_rpt_mode = %u\nss_rssi_thr = %d\nss_pwr_format = %u\nss_rpt_mode = %u\nss_bin_scale = %u\nss_dbm_adj = %u\nss_chn_mask = %u\nss_frequency1=%u\nss_frequency2=%u\nstatus = %d",
+	spectral_debug("%s: TARGET_IF_SPECTRAL_INFO_PARAMS. Params:\nss_count = %u\nss_period = %u\nss_spectral_pri = %u\nss_fft_size = %u\nss_gc_ena = %u\nss_restart_ena = %u\nss_noise_floor_ref = %d\nss_init_delay = %u\nss_nb_tone_thr = %u\nss_str_bin_thr = %u\nss_wb_rpt_mode = %u\nss_rssi_rpt_mode = %u\nss_rssi_thr = %d\nss_pwr_format = %u\nss_rpt_mode = %u\nss_bin_scale = %u\nss_dbm_adj = %u\nss_chn_mask = %u\nss_frequency1=%u\nss_frequency2=%u\nstatus = %d",
 		       function_name,
 		       param->ss_count,
 		       param->ss_period,
-		       param->ss_recapture,
 		       param->ss_spectral_pri,
 		       param->ss_fft_size,
 		       param->ss_gc_ena,
@@ -1816,11 +1796,7 @@ target_if_spectral_get_extension_channel(void *arg,
 	struct wlan_objmgr_vdev *vdev = NULL;
 	uint16_t sec20chan_freq = 0;
 
-	if (!arg) {
-		spectral_err("Null argument.");
-		return 0;
-	}
-
+	qdf_assert_always(arg);
 	spectral = (struct target_if_spectral *)arg;
 
 	if (smode >= SPECTRAL_SCAN_MODE_MAX) {
@@ -1863,11 +1839,7 @@ target_if_spectral_get_current_channel(void *arg, enum spectral_scan_mode smode)
 	int16_t chan_freq = 0;
 	struct wlan_objmgr_vdev *vdev = NULL;
 
-	if (!arg) {
-		spectral_err("Null argument.");
-		return 0;
-	}
-
+	qdf_assert_always(arg);
 	spectral = (struct target_if_spectral *)arg;
 
 	if (smode >= SPECTRAL_SCAN_MODE_MAX) {
@@ -2064,7 +2036,6 @@ target_if_init_spectral_param_min_max_be(struct target_if_spectral *spectral)
 
 	param_min_max = &spectral->param_min_max;
 	param_min_max->fft_size_min = SPECTRAL_PARAM_FFT_SIZE_MIN_GEN3_BE;
-	param_min_max->scan_count_max = SPECTRAL_PARAM_SCAN_COUNT_MAX_GEN3_BE;
 
 	for (op_bw = CH_WIDTH_20MHZ; op_bw < CH_WIDTH_MAX; op_bw++) {
 		bool is_supported;
@@ -2135,16 +2106,11 @@ target_if_init_spectral_param_min_max(
 		param_min_max->fft_size_min = SPECTRAL_PARAM_FFT_SIZE_MIN_GEN3;
 		param_min_max->fft_size_max[CH_WIDTH_20MHZ] =
 				SPECTRAL_PARAM_FFT_SIZE_MAX_GEN3_DEFAULT;
-		param_min_max->scan_count_max =
-				SPECTRAL_PARAM_SCAN_COUNT_MAX_GEN3;
 		if (target_type == TARGET_TYPE_QCN9000 ||
 		    target_type == TARGET_TYPE_QCN6122 ||
-		    target_type == TARGET_TYPE_QCN9160 ||
 		    target_type == TARGET_TYPE_QCA5018 ||
 		    target_type == TARGET_TYPE_QCA6490 ||
-		    target_type == TARGET_TYPE_KIWI ||
-		    target_type == TARGET_TYPE_MANGO ||
-		    target_type == TARGET_TYPE_PEACH) {
+		    target_type == TARGET_TYPE_KIWI) {
 			param_min_max->fft_size_max[CH_WIDTH_40MHZ] =
 				SPECTRAL_PARAM_FFT_SIZE_MAX_GEN3_QCN9000;
 			param_min_max->fft_size_max[CH_WIDTH_80MHZ] =
@@ -2272,10 +2238,7 @@ target_if_populate_supported_sscan_bws_be(struct target_if_spectral *spectral)
 	struct spectral_supported_bws *supported_bws;
 	QDF_STATUS status;
 
-	if (!spectral) {
-		spectral_err("spectral variable is null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
+	qdf_assert_always(spectral);
 
 	/* 20MHz */
 	op_bw = CH_WIDTH_20MHZ;
@@ -2352,10 +2315,7 @@ target_if_populate_supported_sscan_bws(struct target_if_spectral *spectral,
 	struct wlan_objmgr_psoc *psoc;
 	QDF_STATUS status;
 
-	if (!spectral) {
-		spectral_err("spectral is null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
+	qdf_assert_always(spectral);
 
 	if (is_spectral_arch_beryllium(target_type))
 		return target_if_populate_supported_sscan_bws_be(spectral);
@@ -2509,11 +2469,8 @@ target_if_init_spectral_capability(struct target_if_spectral *spectral,
 	pcap->num_detectors_80mhz = 1;
 	if (target_type == TARGET_TYPE_QCN9000 ||
 	    target_type == TARGET_TYPE_QCN6122 ||
-	    target_type == TARGET_TYPE_QCN9160 ||
 	    target_type == TARGET_TYPE_QCA6490 ||
-	    target_type == TARGET_TYPE_KIWI ||
-	    target_type == TARGET_TYPE_MANGO ||
-	    target_type == TARGET_TYPE_PEACH) {
+	    target_type == TARGET_TYPE_KIWI) {
 		pcap->num_detectors_160mhz = 1;
 		pcap->num_detectors_80p80mhz = 1;
 		pcap->num_detectors_320mhz = 0;
@@ -2698,14 +2655,9 @@ target_if_spectral_init_byte_swap_funcs_gen3(
 	bool is_swap_required;
 	QDF_STATUS status;
 
-	if (!spectral) {
-		spectral_err("spectral variable is null");
-		return;
-	}
-	if (!p_sops) {
-		spectral_err("spectral ops variable is null");
-		return;
-	}
+	qdf_assert_always(spectral);
+	qdf_assert_always(p_sops);
+
 	status = spectral_is_host_byte_swap_required(spectral->pdev_obj,
 						     &is_swap_required);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -2729,10 +2681,7 @@ target_if_spectral_init_byte_swap_funcs_gen3(
 	struct target_if_spectral *spectral,
 	struct target_if_spectral_ops *p_sops)
 {
-	if (!p_sops) {
-		spectral_err("spectral ops variable is null");
-		return;
-	}
+	qdf_assert_always(p_sops);
 
 	/* Byte-swap is not required for little-endian Hosts */
 	p_sops->byte_swap_headers = NULL;
@@ -3095,7 +3044,7 @@ target_if_spectral_detach_simulation(struct target_if_spectral *spectral)
 
 /**
  * target_if_spectral_detach() - De-initialize target_if Spectral
- * @spectral: Pointer to Spectral target_if internal private data
+ * @pdev: Pointer to pdev object
  *
  * Function to detach target_if spectral
  *
@@ -3175,13 +3124,10 @@ target_if_spectral_len_adj_swar_init(struct spectral_fft_bin_len_adj_swar *swar,
 	    target_type == TARGET_TYPE_QCA9574 ||
 	    target_type == TARGET_TYPE_QCN9000 ||
 	    target_type == TARGET_TYPE_QCN6122 ||
-	    target_type == TARGET_TYPE_QCN9160 ||
 	    target_type == TARGET_TYPE_QCA5018 ||
 	    target_type == TARGET_TYPE_QCA6750 ||
 	    target_type == TARGET_TYPE_QCA6490 ||
-	    target_type == TARGET_TYPE_KIWI ||
-	    target_type == TARGET_TYPE_MANGO ||
-	    target_type == TARGET_TYPE_PEACH) {
+	    target_type == TARGET_TYPE_KIWI) {
 		swar->fftbin_size_war = SPECTRAL_FFTBIN_SIZE_WAR_2BYTE_TO_1BYTE;
 		rparams->hw_fft_bin_width = 2;
 	} else if (target_type == TARGET_TYPE_QCA8074 ||
@@ -3199,16 +3145,10 @@ target_if_spectral_len_adj_swar_init(struct spectral_fft_bin_len_adj_swar *swar,
 	    target_type == TARGET_TYPE_QCA9574 ||
 	    target_type == TARGET_TYPE_QCA6018 ||
 	    target_type == TARGET_TYPE_QCN6122 ||
-	    target_type == TARGET_TYPE_QCN9160 ||
-	    target_type == TARGET_TYPE_QCN6432 ||
-	    target_type == TARGET_TYPE_QCA5332 ||
 	    target_type == TARGET_TYPE_QCA5018 ||
 	    target_type == TARGET_TYPE_QCN9000 ||
 	    target_type == TARGET_TYPE_QCA6490 ||
-	    target_type == TARGET_TYPE_QCN9224 ||
-	    target_type == TARGET_TYPE_KIWI ||
-	    target_type == TARGET_TYPE_MANGO ||
-	    target_type == TARGET_TYPE_PEACH) {
+	    target_type == TARGET_TYPE_KIWI) {
 		swar->inband_fftbin_size_adj = 1;
 		swar->null_fftbin_adj = 1;
 	} else {
@@ -3216,7 +3156,8 @@ target_if_spectral_len_adj_swar_init(struct spectral_fft_bin_len_adj_swar *swar,
 		swar->null_fftbin_adj = 0;
 	}
 
-	if (target_type == TARGET_TYPE_QCA8074V2)
+	if (target_type == TARGET_TYPE_QCA8074V2 ||
+	    target_type == TARGET_TYPE_QCA9574)
 		swar->packmode_fftbin_size_adj = 1;
 	else
 		swar->packmode_fftbin_size_adj = 0;
@@ -3247,16 +3188,10 @@ target_if_spectral_report_params_init(
 	 */
 	if (target_type == TARGET_TYPE_QCN9000 ||
 	    target_type == TARGET_TYPE_QCN6122 ||
-	    target_type == TARGET_TYPE_QCN9160 ||
-	    target_type == TARGET_TYPE_QCN6432 ||
 	    target_type == TARGET_TYPE_QCA5018 ||
 	    target_type == TARGET_TYPE_QCA6750 ||
 	    target_type == TARGET_TYPE_QCA6490 ||
-	    target_type == TARGET_TYPE_QCA5332 ||
-	    target_type == TARGET_TYPE_QCN9224 ||
-	    target_type == TARGET_TYPE_KIWI ||
-	    target_type == TARGET_TYPE_MANGO ||
-	    target_type == TARGET_TYPE_PEACH) {
+	    target_type == TARGET_TYPE_KIWI) {
 		rparams->version = SPECTRAL_REPORT_FORMAT_VERSION_2;
 		rparams->num_spectral_detectors =
 				NUM_SPECTRAL_DETECTORS_GEN3_V2;
@@ -3274,37 +3209,29 @@ target_if_spectral_report_params_init(
 
 	switch (rparams->version) {
 	case SPECTRAL_REPORT_FORMAT_VERSION_1:
-		rparams->ssummary_padding_bytes =
+		rparams->ssumaary_padding_bytes =
 			NUM_PADDING_BYTES_SSCAN_SUMARY_REPORT_GEN3_V1;
 		rparams->fft_report_hdr_len =
 			FFT_REPORT_HEADER_LENGTH_GEN3_V1;
 		break;
 	case SPECTRAL_REPORT_FORMAT_VERSION_2:
-		rparams->ssummary_padding_bytes =
+		rparams->ssumaary_padding_bytes =
 			NUM_PADDING_BYTES_SSCAN_SUMARY_REPORT_GEN3_V2;
 		rparams->fft_report_hdr_len =
 			FFT_REPORT_HEADER_LENGTH_GEN3_V2;
 		break;
+	default:
+		qdf_assert_always(0);
 	}
 
 	rparams->detid_mode_table[SPECTRAL_DETECTOR_ID_0] =
 						SPECTRAL_SCAN_MODE_NORMAL;
 	if (target_type == TARGET_TYPE_QCN9000 ||
 	    target_type == TARGET_TYPE_QCN6122 ||
-	    target_type == TARGET_TYPE_QCN9224 ||
-	    target_type == TARGET_TYPE_QCN6432 ||
-	    target_type == TARGET_TYPE_QCN9160 ||
 	    target_type == TARGET_TYPE_QCA6490 ||
-	    target_type == TARGET_TYPE_KIWI ||
-	    target_type == TARGET_TYPE_MANGO ||
-	    target_type == TARGET_TYPE_PEACH) {
+	    target_type == TARGET_TYPE_KIWI) {
 		rparams->detid_mode_table[SPECTRAL_DETECTOR_ID_1] =
 						SPECTRAL_SCAN_MODE_AGILE;
-		rparams->detid_mode_table[SPECTRAL_DETECTOR_ID_2] =
-						SPECTRAL_SCAN_MODE_INVALID;
-	} else if (target_type == TARGET_TYPE_QCA5332) {
-		rparams->detid_mode_table[SPECTRAL_DETECTOR_ID_1] =
-						SPECTRAL_SCAN_MODE_INVALID;
 		rparams->detid_mode_table[SPECTRAL_DETECTOR_ID_2] =
 						SPECTRAL_SCAN_MODE_INVALID;
 	} else {
@@ -3354,10 +3281,7 @@ target_if_spectral_is_hw_mode_sbs(struct wlan_objmgr_pdev *pdev,
 	struct target_psoc_info *tgt_hdl;
 	enum wmi_host_hw_mode_config_type mode;
 
-	if (!is_hw_mode_sbs) {
-		spectral_err("is_hw_mode_sbs pointer is null.");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
+	qdf_assert_always(is_hw_mode_sbs);
 
 	psoc = wlan_pdev_get_psoc(pdev);
 	if (!psoc) {
@@ -3445,7 +3369,7 @@ struct target_if_sscan_pdev_phy_info {
 /**
  * target_if_find_sscan_pdev_phya1() - This is an iterator function to
  * wlan_objmgr_iterate_obj_list(). It checks whether a given sscan_pdev (pdev on
- * which sscan is currently issued) is using PHYA1 by comparing against the pdev
+ * which sscan is currenly issued) is using PHYA1 by comparing against the pdev
  * argument given by the wlan_objmgr_iterate_obj_list()
  * @psoc: Pointer to psoc
  * @object: Pointer to pdev
@@ -3472,6 +3396,10 @@ target_if_find_sscan_pdev_phya1(struct wlan_objmgr_psoc *psoc,
 	spectral_debug("supported_bands: %0x phy_id: %d",
 		       cur_mac_phy_caps->supported_bands,
 		       cur_mac_phy_caps->phy_id);
+
+	/* No need to do anything if the current pdev is not a 5GHz pdev */
+	if (!(cur_mac_phy_caps->supported_bands & WMI_HOST_WLAN_5G_CAPABILITY))
+		return;
 
 	/* No need to do anything if the current pdev is same as sscan_pdev */
 	if (sscan_pdev_phy_info->phy_id == cur_mac_phy_caps->phy_id)
@@ -3513,7 +3441,7 @@ target_if_spectral_detector_list_init(struct target_if_spectral *spectral)
 
 	/**
 	 * Special handling is required for SBS mode where the detector
-	 * list should be the following.
+	 * list should be following for the 5GHz pdevs.
 	 * For the pdev that use PHYA0:
 	 *    detector 0 for normal mode
 	 *    detector 2 for agile mode
@@ -3537,7 +3465,6 @@ target_if_spectral_detector_list_init(struct target_if_spectral *spectral)
 
 	if (is_hw_mode_sbs) {
 		struct wlan_psoc_host_mac_phy_caps *mac_phy_caps;
-		struct target_if_sscan_pdev_phy_info pdev_phy_info;
 
 		mac_phy_caps =
 			target_if_get_pdev_mac_phy_caps(spectral->pdev_obj);
@@ -3551,16 +3478,22 @@ target_if_spectral_detector_list_init(struct target_if_spectral *spectral)
 			       mac_phy_caps->supported_bands,
 			       mac_phy_caps->phy_id);
 
-		pdev_phy_info.phy_id = mac_phy_caps->phy_id;
-		pdev_phy_info.is_using_phya1 = &is_using_phya1;
+		 /* We only care about 5GHz pdevs */
+		if (mac_phy_caps->supported_bands &
+		    WMI_HOST_WLAN_5G_CAPABILITY) {
+			struct target_if_sscan_pdev_phy_info pdev_phy_info;
 
-		/* Iterate over all pdevs on this psoc */
-		wlan_objmgr_iterate_obj_list
-			(wlan_pdev_get_psoc(spectral->pdev_obj),
-			 WLAN_PDEV_OP,
-			 target_if_find_sscan_pdev_phya1,
-			 &pdev_phy_info, 0,
-			 WLAN_SPECTRAL_ID);
+			pdev_phy_info.phy_id = mac_phy_caps->phy_id;
+			pdev_phy_info.is_using_phya1 = &is_using_phya1;
+
+			/* Iterate over all pdevs on this psoc */
+			wlan_objmgr_iterate_obj_list
+				(wlan_pdev_get_psoc(spectral->pdev_obj),
+				 WLAN_PDEV_OP,
+				 target_if_find_sscan_pdev_phya1,
+				 &pdev_phy_info, 0,
+				 WLAN_SPECTRAL_ID);
+		}
 	}
 
 	/**
@@ -3695,11 +3628,11 @@ target_if_pdev_spectral_init(struct wlan_objmgr_pdev *pdev)
 	if (p_sops->get_capability(spectral, SPECTRAL_CAP_PHYDIAG))
 		spectral_info("HAL_CAP_PHYDIAG : Capable");
 
-	/* TODO: Need to fix the capability check for RADAR */
+	/* TODO: Need to fix the capablity check for RADAR */
 	if (p_sops->get_capability(spectral, SPECTRAL_CAP_RADAR))
 		spectral_info("HAL_CAP_RADAR   : Capable");
 
-	/* TODO : Need to fix the capability check for SPECTRAL */
+	/* TODO : Need to fix the capablity check for SPECTRAL */
 	/* TODO : Should this be called here of after ath_attach ? */
 	if (p_sops->get_capability(spectral, SPECTRAL_CAP_SPECTRAL_SCAN))
 		spectral_info("HAL_CAP_SPECTRAL_SCAN : Capable");
@@ -3711,20 +3644,14 @@ target_if_pdev_spectral_init(struct wlan_objmgr_pdev *pdev)
 	if (target_type == TARGET_TYPE_QCA8074 ||
 	    target_type == TARGET_TYPE_QCA8074V2 ||
 	    target_type == TARGET_TYPE_QCA9574 ||
-	    target_type == TARGET_TYPE_QCA5332 ||
 	    target_type == TARGET_TYPE_QCA6018 ||
 	    target_type == TARGET_TYPE_QCA5018 ||
 	    target_type == TARGET_TYPE_QCA6390 ||
 	    target_type == TARGET_TYPE_QCN6122 ||
-	    target_type == TARGET_TYPE_QCN9160 ||
-	    target_type == TARGET_TYPE_QCN6432 ||
 	    target_type == TARGET_TYPE_QCA6490 ||
 	    target_type == TARGET_TYPE_QCN9000 ||
 	    target_type == TARGET_TYPE_QCA6750 ||
-	    target_type == TARGET_TYPE_QCN9224 ||
-	    target_type == TARGET_TYPE_KIWI ||
-	    target_type == TARGET_TYPE_MANGO ||
-	    target_type == TARGET_TYPE_PEACH)
+	    target_type == TARGET_TYPE_KIWI)
 		spectral->direct_dma_support = true;
 
 	target_if_spectral_report_params_init(&spectral->rparams,
@@ -3738,19 +3665,13 @@ target_if_pdev_spectral_init(struct wlan_objmgr_pdev *pdev)
 	    (target_type == TARGET_TYPE_QCA9574) ||
 	    (target_type == TARGET_TYPE_QCA6018) ||
 	    (target_type == TARGET_TYPE_QCA5018) ||
-	    (target_type == TARGET_TYPE_QCA5332) ||
 	    (target_type == TARGET_TYPE_QCN6122) ||
-	    (target_type == TARGET_TYPE_QCN9160) ||
-	    (target_type == TARGET_TYPE_QCN6432) ||
 	    (target_type == TARGET_TYPE_QCN9000) ||
 	    (target_type == TARGET_TYPE_QCA6290) ||
 	    (target_type == TARGET_TYPE_QCA6390) ||
 	    (target_type == TARGET_TYPE_QCA6490) ||
-	    (target_type == TARGET_TYPE_QCN9224) ||
 	    (target_type == TARGET_TYPE_QCA6750) ||
-	    (target_type == TARGET_TYPE_KIWI) ||
-	    (target_type == TARGET_TYPE_MANGO) ||
-	    (target_type == TARGET_TYPE_PEACH)) {
+	    (target_type == TARGET_TYPE_KIWI)) {
 		spectral->spectral_gen = SPECTRAL_GEN3;
 		spectral->hdr_sig_exp = SPECTRAL_PHYERR_SIGNATURE_GEN3;
 		spectral->tag_sscan_summary_exp =
@@ -3931,13 +3852,13 @@ fail:
 }
 
 /**
- * target_if_is_center_freq_of_any_chan() - Check for center frequency
- * @pdev: Pointer to pdev object
+ * target_if_calculate_center_freq() - Helper routine to
+ * check whether given frequency is center frequency of a
+ * WLAN channel
+ *
+ * @spectral: Pointer to Spectral object
  * @chan_freq: Center frequency of a WLAN channel
  * @is_valid: Indicates whether given frequency is valid
- *
- * Helper routine to check whether given frequency is center frequency
- * of a WLAN channel
  *
  * Return: QDF_STATUS
  */
@@ -3991,14 +3912,14 @@ target_if_is_center_freq_of_any_chan(struct wlan_objmgr_pdev *pdev,
 }
 
 /**
- * target_if_calculate_center_freq() - find center frequency of agile span
+ * target_if_calculate_center_freq() - Helper routine to
+ * find the center frequency of the agile span from a
+ * WLAN channel center frequency
+ *
  * @spectral: Pointer to Spectral object
  * @ch_width: Channel width array
  * @chan_freq: Center frequency of a WLAN channel
  * @center_freq: Pointer to center frequency
- *
- * Helper routine to find the center frequency of the agile span from
- * a WLAN channel center frequency
  *
  * Return: QDF_STATUS
  */
@@ -4034,10 +3955,9 @@ target_if_calculate_center_freq(struct target_if_spectral *spectral,
 		const struct bonded_channel_freq *bonded_chan_ptr = NULL;
 		enum channel_state state;
 
-		state = wlan_reg_get_5g_bonded_channel_and_state_for_pwrmode
+		state = wlan_reg_get_5g_bonded_channel_and_state_for_freq
 			(spectral->pdev_obj, chan_freq, agile_ch_width,
-			 &bonded_chan_ptr, REG_CURRENT_PWR_MODE,
-			 NO_SCHANS_PUNC);
+			 &bonded_chan_ptr);
 		if (state == CHANNEL_STATE_DISABLE ||
 		    state == CHANNEL_STATE_INVALID) {
 			spectral_err("Channel state is disable or invalid");
@@ -4056,13 +3976,13 @@ target_if_calculate_center_freq(struct target_if_spectral *spectral,
 }
 
 /**
- * target_if_validate_center_freq() - validate agile center frequency
+ * target_if_validate_center_freq() - Helper routine to
+ * validate user provided agile center frequency
+ *
  * @spectral: Pointer to Spectral object
  * @ch_width: Channel width array
  * @center_freq: User provided agile span center frequency
  * @is_valid: Indicates whether agile span center frequency is valid
- *
- * Helper routine to validate user provided agile center frequency
  *
  * Return: QDF_STATUS
  */
@@ -4115,13 +4035,10 @@ target_if_validate_center_freq(struct target_if_spectral *spectral,
 			uint32_t calulated_center_freq;
 			enum channel_state st;
 
-			st =
-			    wlan_reg_get_5g_bonded_channel_and_state_for_pwrmode
+			st = wlan_reg_get_5g_bonded_channel_and_state_for_freq
 				(pdev, center_freq + FREQ_OFFSET_10MHZ,
 				 agile_ch_width,
-				 &bonded_chan_ptr,
-				 REG_CURRENT_PWR_MODE,
-				 NO_SCHANS_PUNC);
+				 &bonded_chan_ptr);
 			if (st == CHANNEL_STATE_DISABLE ||
 			    st == CHANNEL_STATE_INVALID) {
 				spectral_err("Channel state disable/invalid");
@@ -4177,7 +4094,7 @@ target_if_is_agile_span_overlap_with_operating_span
 	uint32_t cfreq2;
 
 	if (!spectral) {
-		spectral_err("spectral object is NULL");
+		spectral_err("Spectral object is NULL");
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -4227,9 +4144,8 @@ target_if_is_agile_span_overlap_with_operating_span
 	} else {
 		enum channel_state state;
 
-		state = wlan_reg_get_5g_bonded_channel_and_state_for_pwrmode
-			(pdev, chan_freq, op_ch_width, &bonded_chan_ptr,
-			 REG_CURRENT_PWR_MODE, NO_SCHANS_PUNC);
+		state = wlan_reg_get_5g_bonded_channel_and_state_for_freq
+			(pdev, chan_freq, op_ch_width, &bonded_chan_ptr);
 		if (state == CHANNEL_STATE_DISABLE ||
 		    state == CHANNEL_STATE_INVALID) {
 			spectral_err("Channel state is disable or invalid");
@@ -4321,10 +4237,7 @@ target_if_spectral_populate_chwidth(struct target_if_spectral *spectral,
 {
 	enum spectral_scan_mode smode;
 
-	if (!spectral) {
-		spectral_err("Spectral variable is null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
+	qdf_assert_always(spectral);
 
 	smode = SPECTRAL_SCAN_MODE_NORMAL;
 	for (; smode < SPECTRAL_SCAN_MODE_MAX; ++smode) {
@@ -4353,101 +4266,66 @@ target_if_spectral_populate_chwidth(struct target_if_spectral *spectral,
  * @pdev: pointer to pdev
  * @cfreq1: center frequency 1
  * @cfreq2: center frequency 2
- * @is_valid: Indicates weather the frequency is valid
  *
  * API to check whether given (cfreq1, cfreq2) pair forms a valid 80+80
  * combination
  *
- * Return: QDF_Status
+ * Return: true or false
  */
-static QDF_STATUS
+static bool
 target_if_spectral_is_valid_80p80_freq(struct wlan_objmgr_pdev *pdev,
-				       uint32_t cfreq1, uint32_t cfreq2,
-				       bool *is_valid)
+				       uint32_t cfreq1, uint32_t cfreq2)
 {
-	struct ch_params ch_params = {0};
+	struct ch_params ch_params;
 	enum channel_state chan_state1;
 	enum channel_state chan_state2;
 	struct wlan_objmgr_psoc *psoc;
-	struct ch_params temp_params = {0};
 
-	if (!is_valid) {
-		spectral_err("Argument(is_valid) is null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	if (!pdev) {
-		spectral_err("pdev is null.");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
+	qdf_assert_always(pdev);
 	psoc = wlan_pdev_get_psoc(pdev);
-	if (!psoc) {
-		spectral_err("psoc is null.");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
+	qdf_assert_always(psoc);
 
 	/* In restricted 80P80 MHz enabled, only one 80+80 MHz
 	 * channel is supported with cfreq=5690 and cfreq=5775.
 	 */
 	if (wlan_psoc_nif_fw_ext_cap_get(
-				psoc, WLAN_SOC_RESTRICTED_80P80_SUPPORT)) {
-		*is_valid = CHAN_WITHIN_RESTRICTED_80P80(cfreq1, cfreq2);
-		return QDF_STATUS_SUCCESS;
-	}
+				psoc, WLAN_SOC_RESTRICTED_80P80_SUPPORT))
+		return CHAN_WITHIN_RESTRICTED_80P80(cfreq1, cfreq2);
 
 	ch_params.center_freq_seg1 = wlan_reg_freq_to_chan(pdev, cfreq2);
 	ch_params.mhz_freq_seg1 = cfreq2;
 	ch_params.ch_width = CH_WIDTH_80P80MHZ;
-	wlan_reg_set_channel_params_for_pwrmode(
-					pdev,
-					cfreq1 - FREQ_OFFSET_10MHZ,
-					0,
-					&ch_params,
-					REG_CURRENT_PWR_MODE);
+	wlan_reg_set_channel_params_for_freq(pdev, cfreq1 - FREQ_OFFSET_10MHZ,
+					     0, &ch_params);
 
-	if (ch_params.ch_width != CH_WIDTH_80P80MHZ) {
-		*is_valid = false;
-		return QDF_STATUS_SUCCESS;
-	}
+	if (ch_params.ch_width != CH_WIDTH_80P80MHZ)
+		return false;
 
 	if (ch_params.mhz_freq_seg0 != cfreq1 ||
-	    ch_params.mhz_freq_seg1 != cfreq2) {
-		*is_valid = false;
-		return QDF_STATUS_SUCCESS;
-	}
+	    ch_params.mhz_freq_seg1 != cfreq2)
+		return false;
 
-	temp_params.ch_width = CH_WIDTH_80MHZ;
-	chan_state1 = wlan_reg_get_5g_bonded_channel_state_for_pwrmode(
+	chan_state1 = wlan_reg_get_5g_bonded_channel_state_for_freq(
 				pdev,
 				ch_params.mhz_freq_seg0 - FREQ_OFFSET_10MHZ,
-				&temp_params,
-				REG_CURRENT_PWR_MODE);
+				CH_WIDTH_80MHZ);
 	if ((chan_state1 == CHANNEL_STATE_DISABLE) ||
-	    (chan_state1 == CHANNEL_STATE_INVALID)) {
-		*is_valid = false;
-		return QDF_STATUS_SUCCESS;
-	}
+	    (chan_state1 == CHANNEL_STATE_INVALID))
+		return false;
 
-	temp_params.ch_width = CH_WIDTH_80MHZ;
-	chan_state2 = wlan_reg_get_5g_bonded_channel_state_for_pwrmode(
+	chan_state2 = wlan_reg_get_5g_bonded_channel_state_for_freq(
 				pdev,
 				ch_params.mhz_freq_seg1 - FREQ_OFFSET_10MHZ,
-				&temp_params,
-				REG_CURRENT_PWR_MODE);
+				CH_WIDTH_80MHZ);
 	if ((chan_state2 == CHANNEL_STATE_DISABLE) ||
-	    (chan_state2 == CHANNEL_STATE_INVALID)) {
-		*is_valid = false;
-		return QDF_STATUS_SUCCESS;
-	}
+	    (chan_state2 == CHANNEL_STATE_INVALID))
+		return false;
 
 	if (abs(ch_params.mhz_freq_seg0 - ch_params.mhz_freq_seg1) <=
-	    FREQ_OFFSET_80MHZ) {
-		*is_valid = false;
-		return QDF_STATUS_SUCCESS;
-	}
+	    FREQ_OFFSET_80MHZ)
+		return false;
 
-	*is_valid = true;
-	return QDF_STATUS_SUCCESS;
+	return true;
 }
 
 /**
@@ -4484,7 +4362,8 @@ _target_if_set_spectral_config(struct target_if_spectral *spectral,
 
 	if (!err) {
 		spectral_err("Error code argument is null");
-		return QDF_STATUS_E_NULL_VALUE;
+		QDF_ASSERT(0);
+		return QDF_STATUS_E_FAILURE;
 	}
 	*err = SPECTRAL_SCAN_ERR_INVALID;
 
@@ -4526,34 +4405,8 @@ _target_if_set_spectral_config(struct target_if_spectral *spectral,
 		break;
 	case SPECTRAL_PARAM_SCAN_PERIOD:
 		sparams->ss_period = param->value;
-		if (sparams->ss_recapture && ((sparams->ss_period <
-		    SPECTRAL_RECAPTURE_SCAN_PERIOD_THRESHOLD) ||
-		    (smode == SPECTRAL_SCAN_MODE_AGILE))) {
-			sparams->ss_recapture = false;
-			spectral_err("FFT recapture cannot be enabled due to scan period: %d us or spectral scan mode: %d",
-				     sparams->ss_period, smode);
-		}
-		break;
-	case SPECTRAL_PARAM_FFT_RECAPTURE:
-		if (param->value) {
-			if (sparams->ss_period >=
-			    SPECTRAL_RECAPTURE_SCAN_PERIOD_THRESHOLD &&
-			    smode == SPECTRAL_SCAN_MODE_NORMAL) {
-				sparams->ss_recapture = true;
-			} else {
-				spectral_err("FFT recapture cannot be enabled due to scan period: %d us or spectral scan mode: %d",
-					     sparams->ss_period, smode);
-				sparams->ss_recapture = false;
-			}
-		} else {
-			sparams->ss_recapture = false;
-		}
 		break;
 	case SPECTRAL_PARAM_SCAN_COUNT:
-		if (param->value > param_min_max->scan_count_max) {
-			*err = SPECTRAL_SCAN_ERR_PARAM_INVALID_VALUE;
-			return QDF_STATUS_E_FAILURE;
-		}
 		sparams->ss_count = param->value;
 		break;
 	case SPECTRAL_PARAM_SHORT_REPORT:
@@ -4731,14 +4584,10 @@ _target_if_set_spectral_config(struct target_if_spectral *spectral,
 		if (ch_width[smode] == CH_WIDTH_80P80MHZ) {
 			bool is_valid_80p80;
 
-			status = target_if_spectral_is_valid_80p80_freq(
+			is_valid_80p80 = target_if_spectral_is_valid_80p80_freq(
 						spectral->pdev_obj,
 						center_freq.cfreq1,
-						center_freq.cfreq2,
-						&is_valid_80p80);
-
-			if (QDF_IS_STATUS_ERROR(status))
-				return status;
+						center_freq.cfreq2);
 
 			if (!is_valid_80p80) {
 				spectral_err("Agile freq %u, %u is invalid 80+80 combination",
@@ -4811,7 +4660,8 @@ target_if_set_spectral_config(struct wlan_objmgr_pdev *pdev,
 
 	if (!err) {
 		spectral_err("Error code argument is null");
-		return QDF_STATUS_E_NULL_VALUE;
+		QDF_ASSERT(0);
+		return QDF_STATUS_E_FAILURE;
 	}
 	*err = SPECTRAL_SCAN_ERR_INVALID;
 
@@ -4861,6 +4711,7 @@ target_if_set_spectral_config(struct wlan_objmgr_pdev *pdev,
 /**
  * target_if_get_fft_bin_count() - Get fft bin count for a given fft length
  * @fft_len: FFT length
+ * @pdev: Pointer to pdev object
  *
  * API to get fft bin count for a given fft length
  *
@@ -5487,25 +5338,12 @@ target_if_is_aspectral_prohibited_by_adfs(struct wlan_objmgr_psoc *psoc,
 	bool is_agile_rcac_enabled_cur_pdev = false;
 	QDF_STATUS status;
 
-	if (!is_aspectral_prohibited) {
-		spectral_err("Arg(Indication flag for agile spectral prohibition) is null.");
-		return;
-	}
-
+	qdf_assert_always(is_aspectral_prohibited);
 	if (*is_aspectral_prohibited)
 		return;
 
-	if (!psoc) {
-		spectral_err("psoc is null.");
-		*is_aspectral_prohibited = true;
-		return;
-	}
-
-	if (!cur_pdev) {
-		spectral_err("Current pdev is null.");
-		*is_aspectral_prohibited = true;
-		return;
-	}
+	qdf_assert_always(psoc);
+	qdf_assert_always(cur_pdev);
 
 	status = ucfg_dfs_get_agile_precac_enable
 				(cur_pdev,
@@ -5536,8 +5374,8 @@ target_if_is_aspectral_prohibited_by_adfs(struct wlan_objmgr_psoc *psoc,
 
 /**
  * target_if_get_curr_band() - Get current operating band of pdev
+ *
  * @pdev: pointer to pdev object
- * @vdev_id: id of vdev
  *
  * API to get current operating band of a given pdev.
  *
@@ -5802,7 +5640,7 @@ target_if_spectral_populate_session_report_info(
 		spectral_err_rl("Spectral LMAC object is null");
 		return QDF_STATUS_E_NULL_VALUE;
 	}
-	if (smode >= SPECTRAL_SCAN_MODE_MAX) {
+	if (smode > SPECTRAL_SCAN_MODE_MAX) {
 		spectral_err_rl("Invalid Spectral scan mode");
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -5820,11 +5658,7 @@ target_if_spectral_populate_session_report_info(
 						spectral->pdev_obj,
 						rpt_info->sscan_bw);
 
-	if (rpt_info->num_spans == INVALID_SPAN_NUM) {
-		spectral_err_rl("Invalid number of spans: %u",
-				rpt_info->num_spans);
-		return QDF_STATUS_E_INVAL;
-	}
+	qdf_assert_always(rpt_info->num_spans != INVALID_SPAN_NUM);
 	rpt_info->valid = true;
 
 	qdf_spin_unlock_bh(&spectral->session_report_info_lock);
@@ -5858,7 +5692,7 @@ target_if_spectral_populate_session_det_host_info(
 		spectral_err_rl("Spectral LMAC object is null");
 		return QDF_STATUS_E_NULL_VALUE;
 	}
-	if (smode >= SPECTRAL_SCAN_MODE_MAX) {
+	if (smode > SPECTRAL_SCAN_MODE_MAX) {
 		spectral_err_rl("Invalid Spectral scan mode");
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -5932,7 +5766,7 @@ target_if_spectral_populate_session_det_host_info(
 			}
 			is_sec80 = !is_sec80;
 		}
-		det_map->det_map_valid[smode] = true;
+		det_map->det_map_valid = true;
 		qdf_spin_unlock_bh(&spectral->session_det_map_lock);
 	}
 	qdf_spin_unlock_bh(&spectral->detector_list_lock);
@@ -6005,7 +5839,8 @@ target_if_start_spectral_scan(struct wlan_objmgr_pdev *pdev,
 
 	if (!err) {
 		spectral_err("Error code argument is null");
-		return QDF_STATUS_E_NULL_VALUE;
+		QDF_ASSERT(0);
+		return QDF_STATUS_E_FAILURE;
 	}
 	*err = SPECTRAL_SCAN_ERR_INVALID;
 
@@ -6134,12 +5969,13 @@ target_if_start_spectral_scan(struct wlan_objmgr_pdev *pdev,
 		spectral->params_valid[smode] = true;
 	}
 
-	qdf_spin_lock_bh(&spectral->spectral_lock);
+	qdf_spin_lock(&spectral->spectral_lock);
 	if (smode == SPECTRAL_SCAN_MODE_AGILE) {
 		QDF_STATUS status;
 		bool is_overlapping;
 		enum phy_ch_width ch_width[SPECTRAL_SCAN_MODE_MAX];
 		enum spectral_scan_mode m;
+		enum phy_ch_width op_ch_width;
 		enum phy_ch_width agile_ch_width;
 
 		m = SPECTRAL_SCAN_MODE_NORMAL;
@@ -6149,21 +5985,22 @@ target_if_start_spectral_scan(struct wlan_objmgr_pdev *pdev,
 			(spectral, ch_width, spectral->params
 			 [SPECTRAL_SCAN_MODE_AGILE].ss_frequency.cfreq2 > 0);
 		if (QDF_IS_STATUS_ERROR(status)) {
-			qdf_spin_unlock_bh(&spectral->spectral_lock);
+			qdf_spin_unlock(&spectral->spectral_lock);
 			spectral_err("Failed to populate channel width");
 			return QDF_STATUS_E_FAILURE;
 		}
+		op_ch_width = ch_width[SPECTRAL_SCAN_MODE_NORMAL];
 		agile_ch_width = ch_width[SPECTRAL_SCAN_MODE_AGILE];
 
 		if (!spectral->params[smode].ss_frequency.cfreq1) {
 			*err = SPECTRAL_SCAN_ERR_PARAM_NOT_INITIALIZED;
-			qdf_spin_unlock_bh(&spectral->spectral_lock);
+			qdf_spin_unlock(&spectral->spectral_lock);
 			spectral_err("Agile Spectral cfreq1 is 0");
 			return QDF_STATUS_E_FAILURE;
 		} else if (agile_ch_width == CH_WIDTH_80P80MHZ &&
 			   !spectral->params[smode].ss_frequency.cfreq2) {
 			*err = SPECTRAL_SCAN_ERR_PARAM_NOT_INITIALIZED;
-			qdf_spin_unlock_bh(&spectral->spectral_lock);
+			qdf_spin_unlock(&spectral->spectral_lock);
 			spectral_err("Agile Spectral cfreq2 is 0");
 			return QDF_STATUS_E_FAILURE;
 		}
@@ -6173,13 +6010,13 @@ target_if_start_spectral_scan(struct wlan_objmgr_pdev *pdev,
 				 &spectral->params[smode].ss_frequency,
 				 &is_overlapping);
 		if (QDF_IS_STATUS_ERROR(status)) {
-			qdf_spin_unlock_bh(&spectral->spectral_lock);
+			qdf_spin_unlock(&spectral->spectral_lock);
 			return QDF_STATUS_E_FAILURE;
 		}
 
 		if (is_overlapping) {
 			*err = SPECTRAL_SCAN_ERR_PARAM_INVALID_VALUE;
-			qdf_spin_unlock_bh(&spectral->spectral_lock);
+			qdf_spin_unlock(&spectral->spectral_lock);
 			return QDF_STATUS_E_FAILURE;
 		}
 	}
@@ -6187,7 +6024,7 @@ target_if_start_spectral_scan(struct wlan_objmgr_pdev *pdev,
 	/* Populate detectot list first */
 	ret = target_if_spectral_detector_list_init(spectral);
 	if (QDF_IS_STATUS_ERROR(ret)) {
-		qdf_spin_unlock_bh(&spectral->spectral_lock);
+		qdf_spin_unlock(&spectral->spectral_lock);
 		spectral_err("Failed to initialize detector list");
 		return ret;
 	}
@@ -6197,7 +6034,7 @@ target_if_start_spectral_scan(struct wlan_objmgr_pdev *pdev,
 			spectral->params[SPECTRAL_SCAN_MODE_AGILE].
 			ss_frequency.cfreq2 > 0);
 	if (QDF_IS_STATUS_ERROR(ret)) {
-		qdf_spin_unlock_bh(&spectral->spectral_lock);
+		qdf_spin_unlock(&spectral->spectral_lock);
 		spectral_err("Failed to get channel widths");
 		return ret;
 	}
@@ -6206,7 +6043,7 @@ target_if_start_spectral_scan(struct wlan_objmgr_pdev *pdev,
 				spectral->pdev_obj,
 				&is_session_info_expected);
 	if (QDF_IS_STATUS_ERROR(ret)) {
-		qdf_spin_unlock_bh(&spectral->spectral_lock);
+		qdf_spin_unlock(&spectral->spectral_lock);
 		spectral_err("Failed to check if session info is expected");
 		return ret;
 	}
@@ -6216,7 +6053,7 @@ target_if_start_spectral_scan(struct wlan_objmgr_pdev *pdev,
 		ret = target_if_spectral_populate_session_report_info(spectral,
 								      smode);
 		if (QDF_IS_STATUS_ERROR(ret)) {
-			qdf_spin_unlock_bh(&spectral->spectral_lock);
+			qdf_spin_unlock(&spectral->spectral_lock);
 			spectral_err("Failed to populate per-session report info");
 			return QDF_STATUS_E_FAILURE;
 		}
@@ -6224,7 +6061,7 @@ target_if_start_spectral_scan(struct wlan_objmgr_pdev *pdev,
 		ret = target_if_spectral_populate_session_det_host_info(
 					spectral, smode);
 		if (QDF_IS_STATUS_ERROR(ret)) {
-			qdf_spin_unlock_bh(&spectral->spectral_lock);
+			qdf_spin_unlock(&spectral->spectral_lock);
 			spectral_err("Failed to populate per-session detector info");
 			return QDF_STATUS_E_FAILURE;
 		}
@@ -6235,7 +6072,7 @@ target_if_start_spectral_scan(struct wlan_objmgr_pdev *pdev,
 					      err);
 
 	spectral->sscan_width_configured[smode] = false;
-	qdf_spin_unlock_bh(&spectral->spectral_lock);
+	qdf_spin_unlock(&spectral->spectral_lock);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -6261,7 +6098,8 @@ target_if_stop_spectral_scan(struct wlan_objmgr_pdev *pdev,
 
 	if (!err) {
 		spectral_err("Error code argument is null");
-		return QDF_STATUS_E_NULL_VALUE;
+		QDF_ASSERT(0);
+		return QDF_STATUS_E_FAILURE;
 	}
 	*err = SPECTRAL_SCAN_ERR_INVALID;
 
@@ -6278,7 +6116,7 @@ target_if_stop_spectral_scan(struct wlan_objmgr_pdev *pdev,
 	}
 	p_sops = GET_TARGET_IF_SPECTRAL_OPS(spectral);
 
-	qdf_spin_lock_bh(&spectral->spectral_lock);
+	qdf_spin_lock(&spectral->spectral_lock);
 	p_sops->stop_spectral_scan(spectral, smode);
 	if (spectral->classify_scan) {
 		/* TODO : Check if this logic is necessary */
@@ -6294,7 +6132,7 @@ target_if_stop_spectral_scan(struct wlan_objmgr_pdev *pdev,
 
 	qdf_spin_lock_bh(&spectral->session_det_map_lock);
 	for (det = 0; det < MAX_DETECTORS_PER_PDEV; det++)
-		spectral->det_map[det].det_map_valid[smode] = false;
+		spectral->det_map[det].det_map_valid = false;
 
 	qdf_spin_unlock_bh(&spectral->session_det_map_lock);
 
@@ -6303,7 +6141,7 @@ target_if_stop_spectral_scan(struct wlan_objmgr_pdev *pdev,
 	spectral->report_info[smode].valid = false;
 	qdf_spin_unlock_bh(&spectral->session_report_info_lock);
 
-	qdf_spin_unlock_bh(&spectral->spectral_lock);
+	qdf_spin_unlock(&spectral->spectral_lock);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -7192,124 +7030,6 @@ target_if_extract_pdev_spectral_session_detector_info(
 			extract_pdev_spectral_session_detector_info(
 				wmi_handle, evt_buf, det_info, det_info_idx);
 }
-
-/**
- * target_if_wmi_extract_spectral_caps_fixed_param() - Wrapper function to
- * extract fixed params from Spectral capabilities WMI event
- * @psoc: Pointer to psoc object
- * @evt_buf: Event buffer
- * @param: Spectral capabilities event parameters data structure to be filled
- * by this API
- *
- * Return: QDF_STATUS of operation
- */
-QDF_STATUS
-target_if_wmi_extract_spectral_caps_fixed_param(
-			struct wlan_objmgr_psoc *psoc,
-			uint8_t *evt_buf,
-			struct spectral_capabilities_event_params *param)
-{
-	struct target_if_psoc_spectral *psoc_spectral;
-	wmi_unified_t wmi_handle;
-
-	if (!psoc) {
-		spectral_err("psoc is null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	wmi_handle = GET_WMI_HDL_FROM_PSOC(psoc);
-	if (!wmi_handle) {
-		spectral_err("WMI handle is null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	psoc_spectral = get_target_if_spectral_handle_from_psoc(psoc);
-	if (!psoc_spectral) {
-		spectral_err("spectral object is null");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	return psoc_spectral->wmi_ops.extract_spectral_caps_fixed_param(
-			wmi_handle, evt_buf, param);
-}
-
-/**
- * target_if_wmi_extract_spectral_scan_bw_caps() - Wrapper function to
- * extract bandwidth capabilities from Spectral capabilities WMI event
- * @psoc: Pointer to psoc object
- * @evt_buf: Event buffer
- * @bw_caps: Data structure to be filled by this API after extraction
- *
- * Return: QDF_STATUS of operation
- */
-QDF_STATUS
-target_if_wmi_extract_spectral_scan_bw_caps(
-			struct wlan_objmgr_psoc *psoc,
-			uint8_t *evt_buf,
-			struct spectral_scan_bw_capabilities *bw_caps)
-{
-	struct target_if_psoc_spectral *psoc_spectral;
-	wmi_unified_t wmi_handle;
-
-	if (!psoc) {
-		spectral_err("psoc is null");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	wmi_handle = GET_WMI_HDL_FROM_PSOC(psoc);
-	if (!wmi_handle) {
-		spectral_err("WMI handle is null");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	psoc_spectral = get_target_if_spectral_handle_from_psoc(psoc);
-	if (!psoc_spectral) {
-		spectral_err("spectral object is null");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	return psoc_spectral->wmi_ops.extract_spectral_scan_bw_caps(
-			wmi_handle, evt_buf, bw_caps);
-}
-
-/**
- * target_if_wmi_extract_spectral_fft_size_caps() - Wrapper function to
- * extract fft size capabilities from Spectral capabilities WMI event
- * @psoc: Pointer to psoc object
- * @evt_buf: Event buffer
- * @fft_size_caps: Data structure to be filled by this API after extraction
- *
- * Return: QDF_STATUS of operation
- */
-QDF_STATUS
-target_if_wmi_extract_spectral_fft_size_caps(
-			struct wlan_objmgr_psoc *psoc,
-			uint8_t *evt_buf,
-			struct spectral_fft_size_capabilities *fft_size_caps)
-{
-	struct target_if_psoc_spectral *psoc_spectral;
-	wmi_unified_t wmi_handle;
-
-	if (!psoc) {
-		spectral_err("psoc is null");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	wmi_handle = GET_WMI_HDL_FROM_PSOC(psoc);
-	if (!wmi_handle) {
-		spectral_err("WMI handle is null");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	psoc_spectral = get_target_if_spectral_handle_from_psoc(psoc);
-	if (!psoc_spectral) {
-		spectral_err("spectral object is null");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	return psoc_spectral->wmi_ops.extract_spectral_fft_size_caps(
-			wmi_handle, evt_buf, fft_size_caps);
-}
 #else
 /**
  * target_if_spectral_wmi_unified_register_event_handler() - Wrapper function to
@@ -7498,7 +7218,7 @@ target_if_spectral_get_psoc_from_scn_handle(ol_scn_t scn)
  * function to extract channel information for a spectral scan session
  * @psoc: Pointer to psoc object
  * @evt_buf: Event buffer
- * @chan_info: Spectral session channel information data structure to be filled
+ * @chan_info: Spectral session channel information data structure to be fille
  * by this API
  *
  * Return: QDF_STATUS of operation
@@ -7549,59 +7269,6 @@ target_if_extract_pdev_spectral_session_detector_info(
 	return wmi_extract_pdev_spectral_session_detector_info(
 				wmi_handle, evt_buf, det_info, det_info_idx);
 }
-
-QDF_STATUS
-target_if_wmi_extract_spectral_caps_fixed_param(
-			struct wlan_objmgr_psoc *psoc,
-			uint8_t *evt_buf,
-			struct spectral_capabilities_event_params *param)
-{
-	wmi_unified_t wmi_handle;
-
-	wmi_handle = GET_WMI_HDL_FROM_PSOC(psoc);
-	if (!wmi_handle) {
-		spectral_err("WMI handle is null");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	return wmi_extract_spectral_caps_fixed_param(wmi_handle, evt_buf,
-						     param);
-}
-
-QDF_STATUS
-target_if_wmi_extract_spectral_scan_bw_caps(
-			struct wlan_objmgr_psoc *psoc,
-			uint8_t *evt_buf,
-			struct spectral_scan_bw_capabilities *bw_caps)
-{
-	wmi_unified_t wmi_handle;
-
-	wmi_handle = GET_WMI_HDL_FROM_PSOC(psoc);
-	if (!wmi_handle) {
-		spectral_err("WMI handle is null");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	return wmi_extract_spectral_scan_bw_caps(wmi_handle, evt_buf, bw_caps);
-}
-
-QDF_STATUS
-target_if_wmi_extract_spectral_fft_size_caps(
-			struct wlan_objmgr_psoc *psoc,
-			uint8_t *evt_buf,
-			struct spectral_fft_size_capabilities *fft_size_caps)
-{
-	wmi_unified_t wmi_handle;
-
-	wmi_handle = GET_WMI_HDL_FROM_PSOC(psoc);
-	if (!wmi_handle) {
-		spectral_err("WMI handle is null");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	return wmi_extract_spectral_fft_size_caps(wmi_handle, evt_buf,
-						  fft_size_caps);
-}
 #endif
 
 /**
@@ -7609,15 +7276,13 @@ target_if_wmi_extract_spectral_fft_size_caps(
  * information in spectral scan session
  * @spectral: Spectral LMAC object
  * @det_info: Pointer to spectral session detector information
- * @smode: Spectral scan mode
  *
  * Return: QDF_STATUS of operation
  */
 static QDF_STATUS
 target_if_update_det_info_in_spectral_session(
 	struct target_if_spectral *spectral,
-	const struct spectral_session_det_info *det_info,
-	enum spectral_scan_mode smode)
+	const struct spectral_session_det_info *det_info)
 {
 	struct per_session_det_map *det_map;
 	struct per_session_dest_det_info *dest_det_info;
@@ -7627,11 +7292,7 @@ target_if_update_det_info_in_spectral_session(
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
-	if (det_info->det_id >= MAX_DETECTORS_PER_PDEV) {
-		spectral_err_rl("Detector Id: %u exceeding Max detectors.",
-				det_info->det_id);
-		return QDF_STATUS_E_INVAL;
-	}
+	qdf_assert_always(det_info->det_id < MAX_DETECTORS_PER_PDEV);
 
 	qdf_spin_lock_bh(&spectral->session_det_map_lock);
 
@@ -7642,9 +7303,6 @@ target_if_update_det_info_in_spectral_session(
 	dest_det_info->end_freq = det_info->end_freq;
 
 	qdf_spin_unlock_bh(&spectral->session_det_map_lock);
-
-	/* This detector will be used for this smode throughout this session */
-	spectral->rparams.detid_mode_table[det_info->det_id] = smode;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -7692,11 +7350,7 @@ target_if_update_chan_info_in_spectral_session(
 	rpt_info->num_spans = target_if_spectral_get_num_spans(
 					spectral->pdev_obj,
 					rpt_info->sscan_bw);
-	if (rpt_info->num_spans == INVALID_SPAN_NUM) {
-		spectral_err_rl("Invalid number of spans: %u",
-				rpt_info->num_spans);
-		return QDF_STATUS_E_INVAL;
-	}
+	qdf_assert_always(rpt_info->num_spans != INVALID_SPAN_NUM);
 
 	rpt_info->valid = true;
 
@@ -7854,8 +7508,7 @@ target_if_spectral_fw_param_event_handler(ol_scn_t scn, uint8_t *data_buf,
 			}
 
 			status = target_if_update_det_info_in_spectral_session(
-					spectral, &det_info,
-					event_params.smode);
+					spectral, &det_info);
 			if (QDF_IS_STATUS_ERROR(status)) {
 				spectral_err("Unable to update detector info");
 				goto release_pdev_ref;
@@ -7867,108 +7520,6 @@ target_if_spectral_fw_param_event_handler(ol_scn_t scn, uint8_t *data_buf,
 
 release_pdev_ref:
 	wlan_objmgr_pdev_release_ref(pdev, WLAN_SPECTRAL_ID);
-	return qdf_status_to_os_return(status);
-}
-
-/**
- * target_if_spectral_capabilities_event_handler() - Handler for the Spectral
- * Capabilities event
- * @scn: Pointer to scn object
- * @data_buf: Pointer to event buffer
- * @data_len: Length of event buffer
- *
- * Return: 0 for success, else failure
- */
-static int
-target_if_spectral_capabilities_event_handler(ol_scn_t scn, uint8_t *data_buf,
-					      uint32_t data_len)
-{
-	QDF_STATUS status;
-	struct wlan_objmgr_psoc *psoc;
-	struct wmi_unified *wmi_handle;
-	struct spectral_capabilities_event_params event_params = {0};
-	struct spectral_scan_bw_capabilities *bw_caps;
-	struct spectral_fft_size_capabilities *fft_size_caps;
-
-	if (!scn) {
-		spectral_err("scn handle is null");
-		return qdf_status_to_os_return(QDF_STATUS_E_INVAL);
-	}
-
-	if (!data_buf) {
-		spectral_err("WMI event buffer null");
-		return qdf_status_to_os_return(QDF_STATUS_E_INVAL);
-	}
-
-	psoc = target_if_spectral_get_psoc_from_scn_handle(scn);
-	if (!psoc) {
-		spectral_err("psoc is null");
-		return qdf_status_to_os_return(QDF_STATUS_E_FAILURE);
-	}
-
-	wmi_handle = GET_WMI_HDL_FROM_PSOC(psoc);
-	if (!wmi_handle) {
-		spectral_err("WMI handle is null");
-		return qdf_status_to_os_return(QDF_STATUS_E_FAILURE);
-	}
-
-	status = target_if_wmi_extract_spectral_caps_fixed_param(
-				psoc, data_buf, &event_params);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		spectral_err("Failed to extract fixed parameters");
-		return qdf_status_to_os_return(QDF_STATUS_E_FAILURE);
-	}
-
-	/* There should be atleast one capability */
-	if (!event_params.num_sscan_bw_caps) {
-		spectral_err("Number of spectral_scan_bw_capabilities is less than one.");
-		return qdf_status_to_os_return(QDF_STATUS_E_INVAL);
-	}
-
-	if (!event_params.num_fft_size_caps) {
-		spectral_err("Number of spectral_scan_fft_size_capabilities is less than one.");
-		return qdf_status_to_os_return(QDF_STATUS_E_INVAL);
-	}
-
-	bw_caps = qdf_mem_malloc(
-			sizeof(*bw_caps) * event_params.num_sscan_bw_caps);
-	if (!bw_caps) {
-		spectral_err("memory allocation failed");
-		return qdf_status_to_os_return(QDF_STATUS_E_NOMEM);
-	}
-
-	status = target_if_wmi_extract_spectral_scan_bw_caps(psoc, data_buf,
-							     bw_caps);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		spectral_err("Failed to extract BW caps");
-		status = QDF_STATUS_E_FAILURE;
-		goto free_bw_caps;
-	}
-
-	fft_size_caps = qdf_mem_malloc(
-		sizeof(*fft_size_caps) * event_params.num_fft_size_caps);
-	if (!fft_size_caps) {
-		spectral_err("memory allocation failed");
-		status = QDF_STATUS_E_NOMEM;
-		goto free_bw_caps;
-	}
-
-	status = target_if_wmi_extract_spectral_fft_size_caps(psoc, data_buf,
-							      fft_size_caps);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		spectral_err("Failed to extract fft size caps");
-		status = QDF_STATUS_E_FAILURE;
-		goto free_fft_size_caps;
-	}
-
-	status = QDF_STATUS_SUCCESS;
-
-free_fft_size_caps:
-	qdf_mem_free(fft_size_caps);
-
-free_bw_caps:
-	qdf_mem_free(bw_caps);
-
 	return qdf_status_to_os_return(status);
 }
 
@@ -7991,14 +7542,6 @@ target_if_spectral_register_events(struct wlan_objmgr_psoc *psoc)
 	if (ret)
 		spectral_debug("event handler not supported, ret=%d", ret);
 
-	ret = target_if_spectral_wmi_unified_register_event_handler(
-			psoc,
-			wmi_spectral_capabilities_eventid,
-			target_if_spectral_capabilities_event_handler,
-			WMI_RX_UMAC_CTX);
-	if (ret)
-		spectral_debug("event handler not supported, ret=%d", ret);
-
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -8011,9 +7554,6 @@ target_if_spectral_unregister_events(struct wlan_objmgr_psoc *psoc)
 		spectral_err("psoc is null");
 		return QDF_STATUS_E_INVAL;
 	}
-
-	target_if_spectral_wmi_unified_unregister_event_handler(
-			psoc, wmi_spectral_capabilities_eventid);
 
 	ret = target_if_spectral_wmi_unified_unregister_event_handler(
 			psoc, wmi_pdev_sscan_fw_param_eventid);

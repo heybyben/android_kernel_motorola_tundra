@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -20,50 +19,6 @@
 #ifndef _DP_MON_FILTER_H_
 #define _DP_MON_FILTER_H_
 
-/*
- * Accessor Macros to access the software
- * defined HTT filter htt_rx_ring_tlv_filter.
- */
-#define DP_MON_FILTER_TLV_OFFSET                      0x00000000
-#define DP_MON_FILTER_TLV_MASK                        0xffffffff
-#define DP_MON_FILTER_TLV_LSB                         0
-
-#define DP_MON_FILTER_FP_MGMT_OFFSET                  0x00000004
-#define DP_MON_FILTER_FP_MGMT_MASK                    0x0000ffff
-#define DP_MON_FILTER_FP_MGMT_LSB                     0
-
-#define DP_MON_FILTER_MO_MGMT_OFFSET                  0x00000004
-#define DP_MON_FILTER_MO_MGMT_MASK                    0xffff0000
-#define DP_MON_FILTER_MO_MGMT_LSB                     16
-
-#define DP_MON_FILTER_FP_CTRL_OFFSET                  0x00000008
-#define DP_MON_FILTER_FP_CTRL_MASK                    0x0000ffff
-#define DP_MON_FILTER_FP_CTRL_LSB                     0
-
-#define DP_MON_FILTER_MO_CTRL_OFFSET                  0x00000008
-#define DP_MON_FILTER_MO_CTRL_MASK                    0xffff0000
-#define DP_MON_FILTER_MO_CTRL_LSB                     16
-
-#define DP_MON_FILTER_FP_DATA_OFFSET                  0x0000000c
-#define DP_MON_FILTER_FP_DATA_MASK                    0x0000ffff
-#define DP_MON_FILTER_FP_DATA_LSB                     0
-
-#define DP_MON_FILTER_MO_DATA_OFFSET                  0x0000000c
-#define DP_MON_FILTER_MO_DATA_MASK                    0xffff0000
-#define DP_MON_FILTER_MO_DATA_LSB                     16
-
-#define DP_MON_FILTER_MD_DATA_OFFSET                  0x00000010
-#define DP_MON_FILTER_MD_DATA_MASK                    0x0000ffff
-#define DP_MON_FILTER_MD_DATA_LSB                     0
-
-#define DP_MON_FILTER_MD_MGMT_OFFSET                  0x00000010
-#define DP_MON_FILTER_MD_MGMT_MASK                    0xffff0000
-#define DP_MON_FILTER_MD_MGMT_LSB                     16
-
-#define DP_MON_FILTER_MD_CTRL_OFFSET                  0x00000014
-#define DP_MON_FILTER_MD_CTRL_MASK                    0x0000ffff
-#define DP_MON_FILTER_MD_CTRL_LSB                     0
-
 #define DP_MON_FILTER_GET(src, field) \
 	((*((uint32_t *)((uint8_t *)(src) + DP_MON_ ## field ## _OFFSET)) & \
 	(DP_MON_ ## field ## _MASK)) >> DP_MON_ ## field ## _LSB) \
@@ -75,16 +30,6 @@ do { \
 	*val &= ~(DP_MON_ ## field ## _MASK); \
 	*val |= ((value) << DP_MON_ ## field ## _LSB); \
 } while (0)
-
-#if defined(WLAN_PKT_CAPTURE_RX_2_0) || defined(CONFIG_WORD_BASED_TLV) || \
-	defined(WLAN_FEATURE_LOCAL_PKT_CAPTURE)
-#define DP_RX_MON_FILTER_SET_RX_HDR_LEN(dst, src) \
-do { \
-	(dst)->rx_hdr_length = src.rx_hdr_length; \
-} while (0)
-#else
-#define DP_RX_MON_FILTER_SET_RX_HDR_LEN(dst, src)
-#endif
 
 #define DP_MON_FILTER_PRINT(fmt, args ...) \
 	QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_DEBUG, \
@@ -106,21 +51,7 @@ struct dp_mon_filter {
 	struct htt_rx_ring_tlv_filter tlv_filter;
 };
 
-/* rx hdr tlv dma lengths */
-enum dp_rx_hdr_dma_length {
-	/* default dma length(128B) */
-	DEFAULT_RX_HDR_DMA_LENGTH = 0,
-	/* dma length 64 bytes */
-	RX_HDR_DMA_LENGTH_64B = 1,
-	/* dma length 128 bytes */
-	RX_HDR_DMA_LENGTH_128B = 2,
-	/* dma length 256 bytes */
-	RX_HDR_DMA_LENGTH_256B = 3,
-};
-
-/*
- * NB: intentionally not using kernel-doc comment because the kernel-doc
- *     script does not handle the complex conditional compilation
+/**
  * enum dp_mon_filter_mode - Different modes for SRNG filters
  * @DP_MON_FILTER_ENHACHED_STATS_MODE: PPDU enhanced stats mode
  * @DP_MON_FILTER_SMART_MONITOR_MODE: Smart monitor mode
@@ -131,9 +62,6 @@ enum dp_rx_hdr_dma_length {
  * @DP_MON_FILTER_PKT_LOG_LITE_MODE: Packet log lite mode
  * @DP_MON_FILTER_PKT_LOG_CBF_MODE: Packet log cbf mode
  * @DP_MON_FILTER_PKT_LOG_HYBRID_MODE: Packet log hybrid mode
- * @DP_MON_FILTER_UNDECODED_METADATA_CAPTURE_MODE: Undecoded frame capture
- * @DP_MON_FILTER_LITE_MON_MODE:
- * @DP_MON_FILTER_MAX_MODE: max filter mode
  */
 enum dp_mon_filter_mode {
 #ifdef QCA_ENHANCED_STATS_SUPPORT
@@ -154,16 +82,10 @@ enum dp_mon_filter_mode {
 	DP_MON_FILTER_PKT_LOG_FULL_MODE,
 	DP_MON_FILTER_PKT_LOG_LITE_MODE,
 	DP_MON_FILTER_PKT_LOG_CBF_MODE,
-#ifdef BE_PKTLOG_SUPPORT
+#ifdef QCA_WIFI_QCN9224
 	DP_MON_FILTER_PKT_LOG_HYBRID_MODE,
 #endif
 #endif /* WDI_EVENT_ENABLE */
-#ifdef QCA_UNDECODED_METADATA_SUPPORT
-	DP_MON_FILTER_UNDECODED_METADATA_CAPTURE_MODE,
-#endif
-#ifdef QCA_SUPPORT_LITE_MONITOR
-	DP_MON_FILTER_LITE_MON_MODE,
-#endif /*QCA_SUPPORT_LITE_MONITOR*/
 	DP_MON_FILTER_MAX_MODE
 };
 
@@ -189,51 +111,13 @@ enum dp_mon_filter_srng_type {
 /**
  * enum dp_mon_filter_action - Action for storing the filters
  * into the radio structure.
- * @DP_MON_FILTER_CLEAR: Clears the filter for a mode
- * @DP_MON_FILTER_SET: Set the filtes for a mode
+ * @DP_MON_FILTER_CLEAR - Clears the filter for a mode
+ * @DP_MON_FILTER_SET - Set the filtes for a mode
  */
 enum dp_mon_filter_action {
 	DP_MON_FILTER_CLEAR,
 	DP_MON_FILTER_SET,
 };
-
-#ifdef QCA_UNDECODED_METADATA_SUPPORT
-/**
- * enum dp_mon_fp_phy_err_buf_source - fp_phy_err_buf_src indicates the source
- * ring selection for the FP PHY ERR status tlv.
- * @WBM2RXDMA_BUF_SOURCE_RING: 0 - wbm2rxdma_buf_source_ring
- * @FW2RXDMA_BUF_SOURCE_RING: 1 - fw2rxdma_buf_source_ring
- * @SW2RXDMA_BUF_SOURCE_RING: 2 - sw2rxdma_buf_source_ring
- * @NO_BUFFER_RING: 3 - no_buffer_ring
- */
-enum dp_mon_fp_phy_err_buf_source {
-	WBM2RXDMA_BUF_SOURCE_RING,
-	FW2RXDMA_BUF_SOURCE_RING,
-	SW2RXDMA_BUF_SOURCE_RING,
-	NO_BUFFER_RING
-};
-
-/**
- * enum dp_mon_fp_phy_err_buf_dest - fp_phy_err_buf_dest indicates the
- * destination ring selection for the FP PHY ERR status tlv.
- * @RXDMA_RELEASING_RING: 0 - rxdma_release_ring
- * @RXDMA2FW_RING: 1 - rxdma2fw_ring
- * @RXDMA2SW_RING: 2 - rxdma2sw_ring
- * @RXDMA2REO_RING: 3 - rxdma2reo_ring
- */
-enum dp_mon_fp_phy_err_buf_dest {
-	RXDMA_RELEASING_RING,
-	RXDMA2FW_RING,
-	RXDMA2SW_RING,
-	RXDMA2REO_RING
-};
-#endif
-
-/**
- * dp_mon_filters_reset() - reset all filters
- * @pdev: DP pdev handle
- */
-void dp_mon_filters_reset(struct dp_pdev *pdev);
 
 #ifdef QCA_ENHANCED_STATS_SUPPORT
 /**
@@ -263,22 +147,6 @@ void dp_mon_filter_setup_mcopy_mode(struct dp_pdev *pdev);
 void dp_mon_filter_reset_mcopy_mode(struct dp_pdev *pdev);
 #endif /* QCA_MCOPY_SUPPORT */
 
-#ifdef QCA_UNDECODED_METADATA_SUPPORT
-/**
- * dp_mon_filter_setup_undecoded_metadata_mode() - Setup the undecoded
- *  metadata capture mode filter
- * @pdev: DP pdev handle
- */
-void dp_mon_filter_setup_undecoded_metadata_mode(struct dp_pdev *pdev);
-
-/**
- * dp_mon_filter_reset_undecoded_metadata_mode() - Reset the undecoded
- * metadata capture mode filter
- * @pdev: DP pdev handle
- */
-void dp_mon_filter_reset_undecoded_metadata_mode(struct dp_pdev *pdev);
-#endif /* QCA_UNDECODED_METADATA_SUPPORT */
-
 #if defined(ATH_SUPPORT_NAC_RSSI) || defined(ATH_SUPPORT_NAC)
 /**
  * dp_mon_filter_setup_smart_monitor() - Setup the smart monitor mode filter
@@ -292,13 +160,6 @@ void dp_mon_filter_setup_smart_monitor(struct dp_pdev *pdev);
  */
 void dp_mon_filter_reset_smart_monitor(struct dp_pdev *pdev);
 #endif /* ATH_SUPPORT_NAC_RSSI || ATH_SUPPORT_NAC */
-
-/**
- * dp_mon_filter_set_reset_mon_mac_filter() - Setup the monitor mac filter
- * @pdev: DP pdev handle
- * @val: indicating set/reset
- */
-void dp_mon_filter_set_reset_mon_mac_filter(struct dp_pdev *pdev, bool val);
 
 #ifdef  WLAN_RX_PKT_CAPTURE_ENH
 /**
@@ -315,16 +176,10 @@ void dp_mon_filter_reset_rx_enh_capture(struct dp_pdev *pdev);
 #endif /* WLAN_RX_PKT_CAPTURE_ENH */
 
 /**
- * dp_mon_filter_setup_mon_mode() - Setup the Rx and Tx monitor mode filter
+ * dp_mon_filter_setup_mon_mode() - Setup the Rx monitor mode filter
  * @pdev: DP pdev handle
  */
 void dp_mon_filter_setup_mon_mode(struct dp_pdev *pdev);
-
-/**
- * dp_mon_filter_setup_tx_mon_mode() - Setup the Tx monitor mode filter
- * @pdev: DP pdev handle
- */
-void dp_mon_filter_setup_tx_mon_mode(struct dp_pdev *pdev);
 
 /**
  * dp_mon_filter_reset_mon_mode() - Reset the Rx monitor mode filter
@@ -371,7 +226,7 @@ void dp_mon_filter_setup_rx_pkt_log_cbf(struct dp_pdev *pdev);
  */
 void dp_mon_filter_reset_rx_pktlog_cbf(struct dp_pdev *pdev);
 
-#ifdef BE_PKTLOG_SUPPORT
+#ifdef QCA_WIFI_QCN9224
 /**
  * dp_mon_filter_setup_pktlog_hybrid() - Setup the pktlog hybrid mode filter
  * in the radio object.
@@ -398,7 +253,7 @@ void dp_mon_filter_set_status_cbf(struct dp_pdev *pdev,
 				  struct dp_mon_filter *filter);
 
 /**
- * dp_mon_filter_update() - Setup the RX & Tx monitor filter setting for a srng
+ * dp_mon_filter_update() - Setup the monitor filter setting for a srng
  * type
  * @pdev: DP pdev handle
  *
@@ -422,9 +277,9 @@ struct dp_mon_filter  **dp_mon_filter_alloc(struct dp_mon_pdev *mon_pdev);
 
 /**
  * dp_mon_filter_show_filter() - Show the set filters
- * @mon_pdev: DP pdev handle
+ * @pdev: DP pdev handle
  * @mode: The filter modes
- * @filter: tlv filter
+ * @tlv_filter: tlv filter
  */
 void dp_mon_filter_show_filter(struct dp_mon_pdev *mon_pdev,
 			       enum dp_mon_filter_mode mode,
@@ -435,7 +290,7 @@ void dp_mon_filter_show_filter(struct dp_mon_pdev *mon_pdev,
  * based on target
  * @soc: DP soc handle
  * @pdev: DP pdev handle
- * @srng_type: The srng type for which filter will be set
+ * @srng_type: The srng type for which filter wll be set
  * @tlv_filter: tlv filter
  */
 QDF_STATUS
@@ -459,14 +314,14 @@ dp_mon_filter_reset_mon_srng(struct dp_soc *soc, struct dp_pdev *pdev,
  * @pdev: DP pdev handle
  * @filter: DP mon filter
  *
- * Return: None
+ * Return: QDF_STATUS
  */
-void dp_mon_filter_set_mon_cmn(struct dp_pdev *pdev,
+void dp_mon_filter_set_mon_cmn(struct dp_mon_pdev *mon_pdev,
 			       struct dp_mon_filter *filter);
 
 /**
  * dp_mon_filter_set_status_cmn() - Setp the common status filters
- * @mon_pdev: DP pdev handle
+ * @pdev: DP pdev handle
  * @filter: Dp mon filters
  *
  * Return: QDF_STATUS
@@ -479,18 +334,6 @@ void dp_mon_filter_set_status_cmn(struct dp_mon_pdev *mon_pdev,
  * @pdev: DP pdev handle
  */
 void dp_mon_filter_setup_mon_mode(struct dp_pdev *pdev);
-
-/**
- * dp_mon_filter_setup_tx_mon_mode() - Setup the Tx monitor mode filter
- * @pdev: DP pdev handle
- */
-void dp_mon_filter_setup_tx_mon_mode(struct dp_pdev *pdev);
-
-/**
- * dp_mon_filter_reset_tx_mon_mode() - Reset the Tx monitor mode filter
- * @pdev: DP pdev handle
- */
-void dp_mon_filter_reset_tx_mon_mode(struct dp_pdev *pdev);
 
 /**
  * dp_mon_filter_reset_mon_mode() - Reset the Rx monitor mode filter
@@ -509,18 +352,18 @@ void dp_mon_filter_set_cbf_cmn(struct dp_pdev *pdev,
 			       struct dp_mon_filter *filter);
 
 /**
- * dp_tx_mon_filter_update() - Setup the tx monitor filter setting for a srng
+ * dp_mon_filter_update() - Setup the monitor filter setting for a srng
  * type
  * @pdev: DP pdev handle
  *
  * Return: QDF_STATUS
  */
-QDF_STATUS dp_tx_mon_filter_update(struct dp_pdev *pdev);
+QDF_STATUS dp_mon_filter_update(struct dp_pdev *pdev);
 
 /**
  * dp_mon_filter_dealloc() - Deallocate the filter objects to be stored in
  * the radio object.
- * @mon_pdev: DP pdev handle
+ * @pdev: DP pdev handle
  */
 void dp_mon_filter_dealloc(struct dp_mon_pdev *mon_pdev);
 
@@ -531,102 +374,4 @@ void dp_mon_filter_dealloc(struct dp_mon_pdev *mon_pdev);
  */
 struct dp_mon_filter **dp_mon_filter_alloc(struct dp_mon_pdev *mon_pdev);
 
-/**
- * dp_mon_filter_h2t_setup() - Setup filter
- * @soc: Dp soc handle
- * @pdev: pdev handle
- * @srng_type: srng type
- * @filter: filter
- */
-void dp_mon_filter_h2t_setup(struct dp_soc *soc, struct dp_pdev *pdev,
-			     enum dp_mon_filter_srng_type srng_type,
-			     struct dp_mon_filter *filter);
-
-/**
- * dp_mon_ht2_rx_ring_cfg() - Configure filter to HW
- * @soc: Dp soc handle
- * @pdev: Dp pdev handle
- * @srng_type: SRNG type
- * @tlv_filter: filter
- */
-QDF_STATUS
-dp_mon_ht2_rx_ring_cfg(struct dp_soc *soc,
-		       struct dp_pdev *pdev,
-		       enum dp_mon_filter_srng_type srng_type,
-		       struct htt_rx_ring_tlv_filter *tlv_filter);
-
-/**
- * dp_rx_mon_hdr_length_set() - Setup rx monitor hdr tlv length
- * @msg_word: msg word
- * @tlv_filter: rx ring filter configuration
- */
-void
-dp_rx_mon_hdr_length_set(uint32_t *msg_word,
-			 struct htt_rx_ring_tlv_filter *tlv_filter);
-
-#ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
-/**
- * dp_mon_start_local_pkt_capture() - start local packet capture
- * @cdp_soc: cdp soc
- * @pdev_id: pdev id
- * @filter: filter configuration
- */
-QDF_STATUS dp_mon_start_local_pkt_capture(struct cdp_soc_t *cdp_soc,
-					  uint8_t pdev_id,
-					  struct cdp_monitor_filter *filter);
-
-/**
- * dp_mon_stop_local_pkt_capture() - stop local packet capture
- * @cdp_soc: cdp soc
- * @pdev_id: pdev id
- */
-QDF_STATUS dp_mon_stop_local_pkt_capture(struct cdp_soc_t *cdp_soc,
-					 uint8_t pdev_id);
-
-/**
- * dp_mon_set_local_pkt_capture_running() - set local packet capture running
- * @mon_pdev: monitor pdev
- * @val: value
- */
-QDF_STATUS dp_mon_set_local_pkt_capture_running(struct dp_mon_pdev *mon_pdev,
-						bool val);
-
-/**
- * dp_mon_get_is_local_pkt_capture_running() - get local packet capture running
- * @cdp_soc: cdp soc
- * @pdev_id: pdev id
- */
-bool dp_mon_get_is_local_pkt_capture_running(struct cdp_soc_t *cdp_soc,
-					     uint8_t pdev_id);
-#else
-static inline
-QDF_STATUS dp_mon_set_local_pkt_capture_running(struct dp_mon_pdev *mon_pdev,
-						   bool val)
-{
-	return QDF_STATUS_E_NOSUPPORT;
-}
-
-static inline
-QDF_STATUS dp_mon_start_local_pkt_capture(struct cdp_soc_t *cdp_soc,
-					  uint8_t pdev_id,
-					  struct cdp_monitor_filter *filter)
-{
-	return QDF_STATUS_E_NOSUPPORT;
-}
-
-static inline
-QDF_STATUS dp_mon_stop_local_pkt_capture(struct cdp_soc_t *cdp_soc,
-					 uint8_t pdev_id)
-{
-	return QDF_STATUS_E_NOSUPPORT;
-}
-
-static inline
-bool dp_mon_get_is_local_pkt_capture_running(struct cdp_soc_t *cdp_soc,
-					     uint8_t pdev_id)
-{
-	return false;
-}
-
-#endif /* WLAN_FEATURE_LOCAL_PKT_CAPTURE */
 #endif /* #ifndef _DP_MON_FILTER_H_ */

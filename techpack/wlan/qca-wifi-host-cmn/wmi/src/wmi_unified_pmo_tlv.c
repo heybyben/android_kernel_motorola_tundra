@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -25,7 +25,7 @@
 #ifdef FEATURE_WLAN_D0WOW
 /**
  *  send_d0wow_enable_cmd_tlv() - WMI d0 wow enable function
- *  @wmi_handle: handle to WMI.
+ *  @param wmi_handle: handle to WMI.
  *  @mac_id: radio context
  *
  *  Return: 0  on success  and  error code on failure.
@@ -63,7 +63,7 @@ static QDF_STATUS send_d0wow_enable_cmd_tlv(wmi_unified_t wmi_handle,
 
 /**
  *  send_d0wow_disable_cmd_tlv() - WMI d0 wow disable function
- *  @wmi_handle: handle to WMI.
+ *  @param wmi_handle: handle to WMI.
  *  @mac_id: radio context
  *
  *  Return: 0  on success  and  error code on failure.
@@ -115,7 +115,7 @@ void wmi_d0wow_attach_tlv(struct wmi_unified *wmi_handle)
  * @bitmap: Event bitmap
  * @enable: enable/disable
  *
- * Return: QDF status
+ * Return: CDF status
  */
 static QDF_STATUS send_add_wow_wakeup_event_cmd_tlv(wmi_unified_t wmi_handle,
 						    uint32_t vdev_id,
@@ -171,7 +171,7 @@ static QDF_STATUS send_add_wow_wakeup_event_cmd_tlv(wmi_unified_t wmi_handle,
  * @user: true for user configured pattern and false for default pattern
  * @default_patterns: default patterns
  *
- * Return: QDF status
+ * Return: CDF status
  */
 static QDF_STATUS send_wow_patterns_to_fw_cmd_tlv(wmi_unified_t wmi_handle,
 				uint8_t vdev_id, uint8_t ptrn_id,
@@ -317,7 +317,7 @@ static void fill_arp_offload_params_tlv(wmi_unified_t wmi_handle,
 			WMITLV_TAG_STRUC_WMI_ARP_OFFLOAD_TUPLE,
 			WMITLV_GET_STRUCT_TLVLEN(WMI_ARP_OFFLOAD_TUPLE));
 
-		/* Fill data for ARP and NS in the first tuple for LA */
+		/* Fill data for ARP and NS in the first tupple for LA */
 		if ((enable_or_disable & PMO_OFFLOAD_ENABLE) && (i == 0)) {
 			/* Copy the target ip addr and flags */
 			arp_tuple->flags = WMI_ARPOFF_FLAGS_VALID;
@@ -334,8 +334,8 @@ static void fill_arp_offload_params_tlv(wmi_unified_t wmi_handle,
 #ifdef WLAN_NS_OFFLOAD
 /**
  * fill_ns_offload_params_tlv() - Fill NS offload data
- * @wmi_handle: wmi handle
- * @ns_req: offload request
+ * @wmi|_handle: wmi handle
+ * @offload_req: offload request
  * @buf_ptr: buffer pointer
  *
  * To fill NS offload data to firmware
@@ -398,8 +398,8 @@ static void fill_ns_offload_params_tlv(wmi_unified_t wmi_handle,
 
 /**
  * fill_nsoffload_ext_tlv() - Fill NS offload ext data
- * @wmi_handle: wmi handle
- * @ns_req: offload request
+ * @wmi: wmi handle
+ * @offload_req: offload request
  * @buf_ptr: buffer pointer
  *
  * To fill extended NS offload extended data to firmware
@@ -478,10 +478,10 @@ static void fill_nsoffload_ext_tlv(wmi_unified_t wmi_handle,
 
 /**
  * send_enable_arp_ns_offload_cmd_tlv() - enable ARP NS offload
- * @wmi_handle: wmi handle
+ * @wma: wmi handle
  * @arp_offload_req: arp offload request
  * @ns_offload_req: ns offload request
- * @vdev_id: vdev ID
+ * @arp_only: flag
  *
  * To configure ARP NS off load data to firmware
  * when target goes to wow mode.
@@ -566,7 +566,7 @@ static QDF_STATUS send_enable_arp_ns_offload_cmd_tlv(wmi_unified_t wmi_handle,
  * send_add_clear_mcbc_filter_cmd_tlv() - set mcast filter command to fw
  * @wmi_handle: wmi handle
  * @vdev_id: vdev id
- * @multicast_addr: mcast address
+ * @multicastAddr: mcast address
  * @clearList: clear list flag
  *
  * Return: QDF_STATUS_SUCCESS for success or error code
@@ -619,7 +619,7 @@ static QDF_STATUS send_add_clear_mcbc_filter_cmd_tlv(wmi_unified_t wmi_handle,
  *						   command to fw
  * @wmi_handle: wmi handle
  * @vdev_id: vdev id
- * @filter_param: mcast filter params
+ * @mcast_filter_params: mcast filter params
  *
  * Return: QDF_STATUS_SUCCESS for success or error code
  */
@@ -671,12 +671,8 @@ static QDF_STATUS send_multiple_add_clear_mcbc_filter_cmd_tlv(
 	mac_addr_dst_ptr = (wmi_mac_addr *)
 			(buf_ptr + WMI_TLV_HDR_SIZE);
 
-	wmi_debug("multicast addr cnt: %u", filter_param->multicast_addr_cnt);
 	for (i = 0; i < filter_param->multicast_addr_cnt; i++) {
 		WMI_CHAR_ARRAY_TO_MAC_ADDR(mac_addr_src_ptr, mac_addr_dst_ptr);
-		wmi_nofl_debug("mac addr[%d]: " QDF_MAC_ADDR_FMT, i,
-			       QDF_MAC_ADDR_REF(
-					filter_param->multicast_addr[i].bytes));
 		mac_addr_src_ptr += ATH_MAC_LEN;
 		mac_addr_dst_ptr++;
 	}
@@ -771,7 +767,7 @@ fill_fils_tlv_params(WMI_GTK_OFFLOAD_CMD_fixed_param *cmd,
 /**
  * send_igmp_offload_cmd_tlv() - send IGMP offload command to fw
  * @wmi_handle: wmi handle
- * @pmo_igmp_req: IGMP offload parameters
+ * @params: IGMP offload parameters
  *
  * Return: QDF status
  */
@@ -844,10 +840,8 @@ out:
  * @wmi_handle: wmi handle
  * @vdev_id: vdev id
  * @params: GTK offload parameters
- * @enable_offload: true to enable the offload
- * @gtk_offload_opcode: GTK offload opcode
  *
- * Return: QDF status
+ * Return: CDF status
  */
 static
 QDF_STATUS send_gtk_offload_cmd_tlv(wmi_unified_t wmi_handle, uint8_t vdev_id,
@@ -856,22 +850,15 @@ QDF_STATUS send_gtk_offload_cmd_tlv(wmi_unified_t wmi_handle, uint8_t vdev_id,
 				    uint32_t gtk_offload_opcode)
 {
 	int len;
-	uint8_t *buf_ptr;
 	wmi_buf_t buf;
 	WMI_GTK_OFFLOAD_CMD_fixed_param *cmd;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 
 	len = sizeof(*cmd);
 
-	len += WMI_TLV_HDR_SIZE;
 	if (params->is_fils_connection)
-		len += sizeof(wmi_gtk_offload_fils_tlv_param);
-
-	if (params->kck_len > 16)
 		len += WMI_TLV_HDR_SIZE +
-		       roundup(params->kek_len, sizeof(uint32_t)) +
-		       WMI_TLV_HDR_SIZE +
-		       roundup(params->kck_len, sizeof(uint32_t));
+		       sizeof(wmi_gtk_offload_fils_tlv_param);
 
 	/* alloc wmi buffer */
 	buf = wmi_buf_alloc(wmi_handle, len);
@@ -886,7 +873,6 @@ QDF_STATUS send_gtk_offload_cmd_tlv(wmi_unified_t wmi_handle, uint8_t vdev_id,
 		       WMITLV_GET_STRUCT_TLVLEN
 			       (WMI_GTK_OFFLOAD_CMD_fixed_param));
 
-	buf_ptr = wmi_buf_data(buf);
 	cmd->vdev_id = vdev_id;
 
 	/* Request target to enable GTK offload */
@@ -901,32 +887,8 @@ QDF_STATUS send_gtk_offload_cmd_tlv(wmi_unified_t wmi_handle, uint8_t vdev_id,
 	} else {
 		cmd->flags = gtk_offload_opcode;
 	}
-
-	buf_ptr = (uint8_t *)cmd + sizeof(*cmd);
-
-	if (params->is_fils_connection) {
+	if (params->is_fils_connection)
 		fill_fils_tlv_params(cmd, vdev_id, params);
-		buf_ptr += sizeof(wmi_gtk_offload_fils_tlv_param);
-	} else {
-		WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC, 0);
-		buf_ptr += WMI_TLV_HDR_SIZE;
-	}
-
-	if (params->kck_len > 16) {
-		WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_BYTE,
-			       roundup(params->kek_len, sizeof(uint32_t)));
-		buf_ptr += WMI_TLV_HDR_SIZE;
-
-		qdf_mem_copy(buf_ptr, params->kek, params->kek_len);
-		buf_ptr += roundup(params->kek_len, sizeof(uint32_t));
-
-		WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_BYTE,
-			       roundup(params->kck_len, sizeof(uint32_t)));
-		buf_ptr += WMI_TLV_HDR_SIZE;
-
-		qdf_mem_copy(buf_ptr, params->kck, params->kck_len);
-		buf_ptr += roundup(params->kck_len, sizeof(uint32_t));
-	}
 
 	wmi_debug("VDEVID: %d, GTK_FLAGS: x%x kek len %d",
 		 vdev_id, cmd->flags, params->kek_len);
@@ -946,10 +908,9 @@ out:
 /**
  * send_process_gtk_offload_getinfo_cmd_tlv() - send GTK offload cmd to fw
  * @wmi_handle: wmi handle
- * @vdev_id: vdev id
- * @offload_req_opcode: GTK offload request opcode
+ * @params: GTK offload params
  *
- * Return: QDF status
+ * Return: CDF status
  */
 static QDF_STATUS send_process_gtk_offload_getinfo_cmd_tlv(
 			wmi_unified_t wmi_handle,
@@ -1046,9 +1007,9 @@ QDF_STATUS send_enable_enhance_multicast_offload_tlv(
 /**
  * extract_gtk_rsp_event_tlv() - extract gtk rsp params from event
  * @wmi_handle: wmi handle
- * @evt_buf: pointer to event buffer
- * @gtk_rsp_param: Pointer to extraction buffer
- * @len: length of the @evt_buf event buffer
+ * @param evt_buf: pointer to event buffer
+ * @param hdr: Pointer to hold header
+ * @param bufp: Pointer to hold pointer to rx param buffer
  *
  * Return: QDF_STATUS_SUCCESS for success or error code
  */
@@ -1093,10 +1054,8 @@ static QDF_STATUS extract_gtk_rsp_event_tlv(wmi_unified_t wmi_handle,
  * send_wow_sta_ra_filter_cmd_tlv() - set RA filter pattern in fw
  * @wmi_handle: wmi handle
  * @vdev_id: vdev id
- * @default_pattern: default pattern
- * @rate_limit_interval: ra packets interval
  *
- * Return: QDF status
+ * Return: CDF status
  */
 static QDF_STATUS send_wow_sta_ra_filter_cmd_tlv(wmi_unified_t wmi_handle,
 						 uint8_t vdev_id,
@@ -1249,9 +1208,9 @@ static QDF_STATUS send_action_frame_patterns_cmd_tlv(wmi_unified_t wmi_handle,
 /**
  * send_lphb_config_hbenable_cmd_tlv() - enable command of LPHB configuration
  * @wmi_handle: wmi handle
- * @params: LPHB configuration info
+ * @lphb_conf_req: configuration info
  *
- * Return: QDF status
+ * Return: CDF status
  */
 static QDF_STATUS send_lphb_config_hbenable_cmd_tlv(wmi_unified_t wmi_handle,
 				wmi_hb_set_enable_cmd_fixed_param *params)
@@ -1297,7 +1256,7 @@ static QDF_STATUS send_lphb_config_hbenable_cmd_tlv(wmi_unified_t wmi_handle,
  * @wmi_handle: wmi handle
  * @lphb_conf_req: lphb config request
  *
- * Return: QDF status
+ * Return: CDF status
  */
 static QDF_STATUS send_lphb_config_tcp_params_cmd_tlv(wmi_unified_t wmi_handle,
 	    wmi_hb_set_tcp_params_cmd_fixed_param *lphb_conf_req)
@@ -1349,9 +1308,9 @@ static QDF_STATUS send_lphb_config_tcp_params_cmd_tlv(wmi_unified_t wmi_handle,
 /**
  * send_lphb_config_tcp_pkt_filter_cmd_tlv() - configure tcp packet filter cmd
  * @wmi_handle: wmi handle
- * @g_hb_tcp_filter_fp: tcp packet filter params
+ * @lphb_conf_req: lphb config request
  *
- * Return: QDF status
+ * Return: CDF status
  */
 static
 QDF_STATUS send_lphb_config_tcp_pkt_filter_cmd_tlv(wmi_unified_t wmi_handle,
@@ -1402,7 +1361,7 @@ QDF_STATUS send_lphb_config_tcp_pkt_filter_cmd_tlv(wmi_unified_t wmi_handle,
  * @wmi_handle: wmi handle
  * @lphb_conf_req: lphb config request
  *
- * Return: QDF status
+ * Return: CDF status
  */
 static QDF_STATUS send_lphb_config_udp_params_cmd_tlv(wmi_unified_t wmi_handle,
 		   wmi_hb_set_udp_params_cmd_fixed_param *lphb_conf_req)
@@ -1455,7 +1414,7 @@ static QDF_STATUS send_lphb_config_udp_params_cmd_tlv(wmi_unified_t wmi_handle,
  * @wmi_handle: wmi handle
  * @lphb_conf_req: lphb config request
  *
- * Return: QDF status
+ * Return: CDF status
  */
 static
 QDF_STATUS send_lphb_config_udp_pkt_filter_cmd_tlv(wmi_unified_t wmi_handle,
@@ -1663,7 +1622,7 @@ void wmi_packet_filtering_attach_tlv(struct wmi_unified *wmi_handle)
  * @ptrn_id: pattern id
  * @vdev_id: vdev id
  *
- * Return: QDF status
+ * Return: CDF status
  */
 static QDF_STATUS send_wow_delete_pattern_cmd_tlv(wmi_unified_t wmi_handle,
 						  uint8_t ptrn_id,
@@ -1732,7 +1691,7 @@ QDF_STATUS wmi_unified_cmd_send_chk(struct wmi_unified *wmi_handle,
  * Sends host wakeup indication to FW. On receiving this indication,
  * FW will come out of WOW.
  *
- * Return: QDF status
+ * Return: CDF status
  */
 static QDF_STATUS send_host_wakeup_ind_to_fw_cmd_tlv(wmi_unified_t wmi_handle,
 						     bool tx_pending_ind)
@@ -1915,7 +1874,7 @@ static QDF_STATUS send_enable_ext_wow_cmd_tlv(wmi_unified_t wmi_handle,
  * @wmi_handle: wmi handle
  * @appType2Params: app type2 params
  *
- * Return: QDF status
+ * Return: CDF status
  */
 static QDF_STATUS send_set_app_type2_params_in_fw_cmd_tlv(wmi_unified_t wmi_handle,
 			  struct app_type2_params *appType2Params)
@@ -1997,7 +1956,7 @@ static QDF_STATUS send_set_app_type2_params_in_fw_cmd_tlv(wmi_unified_t wmi_hand
  * @wmi_handle: wmi handle
  * @app_type1_params: app type1 params
  *
- * Return: QDF status
+ * Return: CDF status
  */
 static QDF_STATUS send_app_type1_params_in_fw_cmd_tlv(wmi_unified_t wmi_handle,
 				   struct app_type1_params *app_type1_params)

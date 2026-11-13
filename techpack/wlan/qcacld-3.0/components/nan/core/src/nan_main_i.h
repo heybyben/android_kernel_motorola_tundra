@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -31,7 +31,6 @@
 #include "nan_public_structs.h"
 #include "wlan_objmgr_cmn.h"
 #include "cfg_nan.h"
-#include "sir_mac_prot_def.h"
 
 struct wlan_objmgr_vdev;
 struct wlan_objmgr_psoc;
@@ -60,17 +59,6 @@ struct scheduler_msg;
 	QDF_TRACE_INFO_NO_FL(QDF_MODULE_ID_NAN, params)
 #define nan_nofl_debug(params...) \
 	QDF_TRACE_DEBUG_NO_FL(QDF_MODULE_ID_NAN, params)
-
-#define nan_alert_rl(params...) \
-	QDF_TRACE_FATAL_RL(QDF_MODULE_ID_NAN, params)
-#define nan_err_rl(params...) \
-	QDF_TRACE_ERROR_RL(QDF_MODULE_ID_NAN, params)
-#define nan_warn_rl(params...) \
-	QDF_TRACE_WARN_RL(QDF_MODULE_ID_NAN, params)
-#define nan_info_rl(params...) \
-	QDF_TRACE_INFO_RL(QDF_MODULE_ID_NAN, params)
-#define nan_debug_rl(params...) \
-	QDF_TRACE_DEBUG_RL(QDF_MODULE_ID_NAN, params)
 
 /**
  * enum nan_disc_state - NAN Discovery states
@@ -101,9 +89,8 @@ enum nan_disc_state {
  * @max_ndi: max number of ndi host supports
  * @nan_feature_config: Bitmap to enable/disable a particular NAN feature
  *                      configuration in firmware. It's sent to firmware through
- *                      wmi_vdev_param_enable_disable_nan_config_features
+ *                      WMI_VDEV_PARAM_ENABLE_DISABLE_NAN_CONFIG_FEATURES
  * @disable_6g_nan: Disable NAN in 6GHz frequency band
- * @enable_nan_eht_cap: Enable(1)/Disable(0) NAN EHT capability
  */
 struct nan_cfg_params {
 	bool enable;
@@ -117,13 +104,12 @@ struct nan_cfg_params {
 	uint32_t max_ndi;
 	uint32_t nan_feature_config;
 	bool disable_6g_nan;
-	bool enable_nan_eht_cap;
 };
 
 /**
  * struct nan_psoc_priv_obj - nan private psoc obj
  * @lock: lock to be acquired before reading or writing to object
- * @cb_obj: struct containing callback pointers
+ * @cb_obj: struct contaning callback pointers
  * @cfg_param: NAN Config parameters in INI
  * @nan_caps: NAN Target capabilities
  * @tx_ops: Tx ops registered with Target IF interface
@@ -277,12 +263,10 @@ enum nan_disc_state nan_get_discovery_state(struct wlan_objmgr_psoc *psoc);
  * nan_is_enable_allowed: Queries whether NAN Discovery is allowed
  * @psoc: PSOC object
  * @nan_ch_freq: Possible primary social channel for NAN Discovery
- * @vdev_id: Vdev Id
  *
  * Return: True if NAN Enable is allowed on given channel, False otherwise
  */
-bool nan_is_enable_allowed(struct wlan_objmgr_psoc *psoc, uint32_t nan_ch_freq,
-			   uint8_t vdev_id);
+bool nan_is_enable_allowed(struct wlan_objmgr_psoc *psoc, uint32_t nan_ch_freq);
 
 /*
  * nan_is_disc_active: Queries whether NAN Discovery is active
@@ -304,27 +288,5 @@ QDF_STATUS
 nan_get_connection_info(struct wlan_objmgr_psoc *psoc, uint8_t *chan,
 			uint8_t *mac_id);
 
-/**
- * nan_get_vdev_id_from_bssid() -get NAN vdev_id for NAN BSSID
- * @pdev: PDEV object
- * @bssid: BSSID present in mgmt frame
- * @dbg_id: Object Manager ref debug id
- *
- * API to get NAN vdev_id for only NAN BSSID.
- *
- * Return: NAN vdev_id
- */
-uint8_t nan_get_vdev_id_from_bssid(struct wlan_objmgr_pdev *pdev,
-				   tSirMacAddr bssid,
-				   wlan_objmgr_ref_dbgid dbg_id);
-
-/*
- * nan_is_sta_sta_concurrency_present: Queries whether STA + STA concurrency
- * present
- * @psoc: PSOC object
- *
- * Return: True if concurrency is present, False otherwise
- */
-bool nan_is_sta_sta_concurrency_present(struct wlan_objmgr_psoc *psoc);
 #endif /* _WLAN_NAN_MAIN_I_H_ */
 #endif /* WLAN_FEATURE_NAN */

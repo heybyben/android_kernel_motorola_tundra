@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -28,25 +27,12 @@
 #include <wmi_unified_api.h>
 
 /**
- *  wmi_unified_peer_filter_set_tx_cmd_send() - WMI set tx peer filter function
- *  @wmi_handle: handle to WMI.
- *  @macaddr: MAC address
- *  @param: pointer to hold peer filter parameter
- *
- *  Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
- */
-QDF_STATUS
-wmi_unified_peer_filter_set_tx_cmd_send(struct wmi_unified *wmi_handle,
-					uint8_t macaddr[],
-					struct set_tx_peer_filter *param);
-
-/**
  *  wmi_unified_vdev_set_neighbour_rx_cmd_send() - WMI set neighbour rx function
- *  @wmi_handle: handle to WMI.
- *  @macaddr: MAC address
- *  @param: pointer to hold neighbour rx parameter
+ *  @param wmi_handle: handle to WMI.
+ *  @param macaddr: MAC address
+ *  @param param: pointer to hold neighbour rx parameter
  *
- *  Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ *  @return QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
  */
 QDF_STATUS wmi_unified_vdev_set_neighbour_rx_cmd_send(
 				struct wmi_unified *wmi_handle,
@@ -55,10 +41,10 @@ QDF_STATUS wmi_unified_vdev_set_neighbour_rx_cmd_send(
 
 /**
  *  wmi_unified_vdev_config_ratemask_cmd_send() - WMI config ratemask function
- *  @wmi_handle: handle to WMI.
- *  @param: pointer to hold config ratemask param
+ *  @param wmi_handle: handle to WMI.
+ *  @param param: pointer to hold config ratemask param
  *
- *  Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ *  @return QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
  */
 QDF_STATUS
 wmi_unified_vdev_config_ratemask_cmd_send(struct wmi_unified *wmi_handle,
@@ -93,8 +79,9 @@ QDF_STATUS wmi_unified_send_multiple_vdev_set_param_cmd(
 
 /**
  *  wmi_unified_beacon_send_cmd() - WMI beacon send function
- *  @wmi_handle: handle to WMI.
- *  @param: pointer to hold beacon send cmd parameter
+ *  @param wmi_handle: handle to WMI.
+ *  @param macaddr: MAC address
+ *  @param param: pointer to hold beacon send cmd parameter
  *
  *  Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
  */
@@ -104,8 +91,8 @@ QDF_STATUS wmi_unified_beacon_send_cmd(struct wmi_unified *wmi_handle,
 /**
  * wmi_extract_vdev_start_resp() - extract vdev start response
  * @wmi_handle: wmi handle
- * @evt_buf: pointer to event buffer
- * @vdev_rsp: Pointer to hold vdev response
+ * @param evt_buf: pointer to event buffer
+ * @param vdev_rsp: Pointer to hold vdev response
  *
  * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
  */
@@ -116,8 +103,8 @@ wmi_extract_vdev_start_resp(struct wmi_unified *wmi_handle, void *evt_buf,
 /**
  * wmi_extract_vdev_stopped_param() - extract vdev stop param from event
  * @wmi_handle: wmi handle
- * @evt_buf: pointer to event buffer
- * @vdev_id: Pointer to hold vdev identifier
+ * @param evt_buf: pointer to event buffer
+ * @param vdev_id: Pointer to hold vdev identifier
  *
  * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
  */
@@ -126,21 +113,10 @@ wmi_extract_vdev_stopped_param(struct wmi_unified *wmi_handle, void *evt_buf,
 			       uint32_t *vdev_id);
 
 /**
- * wmi_send_peer_vlan_config() - send peer vlan configuration
- * @wmi_handle: wmi handle
- * @mac_addr: mac address of the peer
- * @param: vlan parameter
- */
-QDF_STATUS
-wmi_send_peer_vlan_config(struct wmi_unified *wmi_handle,
-			  uint8_t *mac_addr,
-			  struct peer_vlan_config_param param);
-
-/**
  * wmi_extract_vdev_delete_resp() - extract vdev delete response
  * @wmi_handle: wmi handle
- * @evt_buf: pointer to event buffer
- * @vdev_del_resp: Pointer to hold vdev delete response
+ * @param evt_buf: pointer to event buffer
+ * @param delete_rsp: Pointer to hold vdev delete response
  *
  * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
  */
@@ -152,8 +128,8 @@ wmi_extract_vdev_delete_resp(struct wmi_unified *wmi_handle, void *evt_buf,
  * wmi_extract_vdev_peer_delete_all_response_event() - extract peer delete all
  * response
  * @wmi_handle: wmi handle
- * @evt_buf: pointer to event buffer
- * @delete_rsp: Pointer to hold peer delete all response
+ * @param evt_buf: pointer to event buffer
+ * @param delete_rsp: Pointer to hold peer delete all response
  *
  * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
  */
@@ -165,8 +141,8 @@ QDF_STATUS wmi_extract_vdev_peer_delete_all_response_event(
 /**
  * wmi_extract_ext_tbttoffset_num_vdevs() - extract ext tbtt offset num vdev
  * @wmi_handle: wmi handle
- * @evt_buf: pointer to event buffer
- * @num_vdevs: Pointer to hold num vdev
+ * @param evt_buf: pointer to event buffer
+ * @param vdev_map: Pointer to hold num vdev
  *
  * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
  */
@@ -177,8 +153,8 @@ wmi_extract_ext_tbttoffset_num_vdevs(struct wmi_unified *wmi_handle,
 /**
  * wmi_extract_tbttoffset_num_vdevs() - extract tbtt offset num vdev
  * @wmi_handle: wmi handle
- * @evt_buf: pointer to event buffer
- * @num_vdevs: Pointer to hold num vdev
+ * @param evt_buf: pointer to event buffer
+ * @param vdev_map: Pointer to hold num vdev
  *
  * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
  */
@@ -210,24 +186,4 @@ QDF_STATUS wmi_extract_multi_vdev_restart_resp_event(
 QDF_STATUS
 wmi_unified_multisoc_tbtt_sync_cmd(wmi_unified_t wmi_handle,
 				   struct rnr_tbtt_multisoc_sync_param *param);
-
-#ifdef WLAN_FEATURE_SR
-/**
- * wmi_unified_vdev_param_sr_prohibit_send() - send vdev SR prohibit command
- * @wmi_hdl: wmi handle
- * @srp_param: SR Prohibit parameters
- *
- * Return: QDF_STATUS_SUCCESS for success or error code
- */
-QDF_STATUS
-wmi_unified_vdev_param_sr_prohibit_send(wmi_unified_t wmi_hdl,
-					struct sr_prohibit_param *srp_param);
-#else
-static inline QDF_STATUS
-wmi_unified_vdev_param_sr_prohibit_send(wmi_unified_t wmi_hdl,
-					struct sr_prohibit_param *srp_param)
-{
-	return QDF_STATUS_SUCCESS;
-}
-#endif
 #endif

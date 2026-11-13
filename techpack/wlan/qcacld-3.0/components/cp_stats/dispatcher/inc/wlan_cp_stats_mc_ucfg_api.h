@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -47,7 +47,7 @@
  * If dialog_id is TWT_GET_ALL_PEER_PARAMS_DIALOG_ID retrieves twt session
  * parameters of all peers with valid twt session
  * @psoc_obj: psoc object
- * @param: array pointer to store peer twt session parameters, should contain
+ * @params: array pointer to store peer twt session parameters, should contain
  * mac_addr and dialog id of a peer for which twt session stats to be retrieved
  *
  * Return: total number of valid twt session
@@ -99,11 +99,10 @@ QDF_STATUS ucfg_mc_cp_stats_inc_wake_lock_stats_by_protocol(
 					enum qdf_proto_subtype protocol);
 
 /**
- * ucfg_mc_cp_stats_inc_wake_lock_stats_by_dst_addr() : API to increment wake
- * lock stats given destination of packet that was received.
+ * ucfg_mc_cp_stats_inc_wake_lock_stats_by_protocol() : API to increment wake
+ * lock stats given destnation of packet that was received.
  * @psoc: pointer to psoc object
- * @vdev_id: vdev_id for which the packet was received
- * @dest_mac: destination mac address of packet that was received
+ * @dest_mac: destinamtion mac address of packet that was received
  *
  * Return : status of operation
  */
@@ -138,17 +137,16 @@ QDF_STATUS ucfg_mc_cp_stats_write_wow_stats(
 				char *buffer, uint16_t max_len, int *ret);
 
 /**
- * ucfg_mc_cp_stats_send_stats_request() - API to send stats request to lmac
+ * ucfg_mc_cp_stats_send_tx_power_request() - API to send tx_power request to
+ * lmac
  * @vdev: pointer to vdev object
  * @type: request type
- * @info: specific request information
  *
  * Return: status of operation
  */
 QDF_STATUS ucfg_mc_cp_stats_send_stats_request(struct wlan_objmgr_vdev *vdev,
 					       enum stats_req_type type,
 					       struct request_info *info);
-
 /**
  * wlan_cfg80211_mc_twt_clear_infra_cp_stats() - send request to reset
  * control path statistics
@@ -269,12 +267,12 @@ QDF_STATUS ucfg_mc_cp_stats_cca_stats_get(struct wlan_objmgr_vdev *vdev,
 /**
  * ucfg_mc_cp_stats_set_rate_flags() - API to set rate flags
  * @vdev: pointer to vdev object
- * @flags: value to set
+ * @flags: value to set (enum tx_rate_info)
  *
  * Return: status of operation
  */
 QDF_STATUS ucfg_mc_cp_stats_set_rate_flags(struct wlan_objmgr_vdev *vdev,
-					   uint32_t flags);
+					   enum tx_rate_info flags);
 
 /**
  * ucfg_mc_cp_stats_register_lost_link_info_cb() - API to register lost link
@@ -315,7 +313,6 @@ QDF_STATUS ucfg_send_big_data_stats_request(struct wlan_objmgr_vdev *vdev,
 /**
  * ucfg_mc_cp_set_big_data_fw_support() - set big data fw support
  * @psoc: PSOC object
- * @enable: Set true if firmware supports big data, otherwise false
  *
  * API to set fw supports big data feature or not
  *
@@ -328,7 +325,6 @@ ucfg_mc_cp_set_big_data_fw_support(struct wlan_objmgr_psoc *psoc,
 /**
  * ucfg_mc_cp_get_big_data_fw_support() - get big data fw support
  * @psoc: PSOC object
- * @enable: Set true if firmware supports big data, otherwise false
  *
  * API to get fw supports big data feature or not
  *
@@ -382,47 +378,6 @@ wlan_cfg80211_mc_bmiss_get_infra_cp_stats(
 }
 #endif /* CONFIG_WLAN_BMISS */
 
-/**
- * wlan_cp_stats_update_chan_info() - API to update chan stats
- * @psoc: pointer to psoc
- * @chan_stat: channel stats
- * @vdev_id: vdev id
- *
- * Return: None
- */
-void wlan_cp_stats_update_chan_info(struct wlan_objmgr_psoc *psoc,
-				    struct channel_status *chan_stat,
-				    uint8_t vdev_id);
-
-/**
- * wlan_cp_stats_get_rx_clear_count() - API to get rx clear count for a channel
- * @psoc: pointer to psoc
- * @vdev_id: vdev id
- * @req_freq: freq for which rx clear count require
- *
- * Return: channel load
- */
-uint8_t wlan_cp_stats_get_rx_clear_count(struct wlan_objmgr_psoc *psoc,
-					 uint8_t vdev_id, qdf_freq_t req_freq);
-
-/**
- * ucfg_mc_cp_stats_clear_channel_status() - API to clear chan stats
- * @pdev: pointer to pdev object
- *
- * Return: None
- */
-void ucfg_mc_cp_stats_clear_channel_status(struct wlan_objmgr_pdev *pdev);
-
-/**
- * ucfg_mc_cp_stats_get_channel_status() - API to get chan stats
- * @pdev: pointer to pdev object
- * @chan_freq: channel freq of which stats are needed
- *
- * Return: channel status
- */
-struct channel_status *
-ucfg_mc_cp_stats_get_channel_status(struct wlan_objmgr_pdev *pdev,
-				    uint32_t chan_freq);
 #else /* QCA_SUPPORT_CP_STATS */
 
 void static inline ucfg_mc_cp_stats_register_pmo_handler(void) { };
@@ -436,7 +391,7 @@ static inline QDF_STATUS ucfg_mc_cp_stats_send_stats_request(
 
 static inline QDF_STATUS ucfg_mc_cp_stats_set_rate_flags(
 				struct wlan_objmgr_vdev *vdev,
-				uint32_t flags)
+				enum tx_rate_info flags)
 {
 	return QDF_STATUS_SUCCESS;
 }
@@ -501,36 +456,6 @@ wlan_cfg80211_mc_bmiss_get_infra_cp_stats(
 				struct wlan_objmgr_vdev *vdev,
 				uint8_t bmiss_peer_mac[QDF_MAC_ADDR_SIZE],
 				int *errno)
-{
-	return NULL;
-}
-
-static inline void
-ucfg_mc_cp_stats_get_tx_power(struct wlan_objmgr_vdev *vdev,
-			      int *dbm)
-{}
-
-static inline
-void wlan_cp_stats_update_chan_info(struct wlan_objmgr_psoc *psoc,
-				    struct channel_status *chan_stat,
-				    uint8_t vdev_id)
-{
-}
-
-static inline
-uint8_t wlan_cp_stats_get_rx_clear_count(struct wlan_objmgr_psoc *psoc,
-					 uint8_t vdev_id, qdf_freq_t req_freq)
-{
-}
-
-static inline
-void ucfg_mc_cp_stats_clear_channel_status(struct wlan_objmgr_pdev *pdev)
-{
-}
-
-static inline struct channel_status *
-ucfg_mc_cp_stats_get_channel_status(struct wlan_objmgr_pdev *pdev,
-				    uint32_t chan_freq)
 {
 	return NULL;
 }

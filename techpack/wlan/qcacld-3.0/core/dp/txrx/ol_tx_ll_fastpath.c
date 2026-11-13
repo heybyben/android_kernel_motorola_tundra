@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2011-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -83,10 +82,36 @@ ol_tx_ll_wrapper(ol_txrx_vdev_handle vdev, qdf_nbuf_t msdu_list)
 		       hif_is_fastpath_mode_enabled(hif_device))) {
 		msdu_list = ol_tx_ll_fast(vdev, msdu_list);
 	} else {
-		qdf_print("Fast path is disabled");
+		qdf_print("Fast path is disabled\n");
 		QDF_BUG(0);
 	}
 	return msdu_list;
+}
+
+/**
+ * ol_tx_trace_pkt() - Trace TX packet at OL layer
+ *
+ * @skb: skb to be traced
+ * @msdu_id: msdu_id of the packet
+ * @vdev_id: vdev_id of the packet
+ *
+ * Return: None
+ */
+static inline void ol_tx_trace_pkt(qdf_nbuf_t skb, uint16_t msdu_id,
+				   uint8_t vdev_id)
+{
+	DPTRACE(qdf_dp_trace_ptr(skb,
+				 QDF_DP_TRACE_TXRX_FAST_PACKET_PTR_RECORD,
+				 QDF_TRACE_DEFAULT_PDEV_ID,
+				 qdf_nbuf_data_addr(skb),
+				 sizeof(qdf_nbuf_data(skb)),
+				 msdu_id, vdev_id, 0));
+
+	qdf_dp_trace_log_pkt(vdev_id, skb, QDF_TX, QDF_TRACE_DEFAULT_PDEV_ID);
+
+	DPTRACE(qdf_dp_trace_data_pkt(skb, QDF_TRACE_DEFAULT_PDEV_ID,
+				      QDF_DP_TRACE_TX_PACKET_RECORD,
+				      msdu_id, QDF_TX));
 }
 
 /**
@@ -132,7 +157,7 @@ ol_tx_tso_adjust_pkt_dnld_len(qdf_nbuf_t msdu,
  * ol_tx_prepare_ll_fast() Alloc and prepare Tx descriptor
  *
  * Allocate and prepare Tx descriptor with msdu and fragment descritor
- * information.
+ * inforamtion.
  *
  * @pdev: pointer to ol pdev handle
  * @vdev: pointer to ol vdev handle
@@ -334,7 +359,7 @@ ol_tx_ll_fast(ol_txrx_vdev_handle vdev, qdf_nbuf_t msdu_list)
 		msdu_info.peer = NULL;
 
 		if (qdf_unlikely(ol_tx_prepare_tso(vdev, msdu, &msdu_info))) {
-			ol_txrx_err("ol_tx_prepare_tso failed");
+			ol_txrx_err("ol_tx_prepare_tso failed\n");
 			TXRX_STATS_MSDU_LIST_INCR(vdev->pdev,
 						  tx.dropped.host_reject,
 						  msdu);
@@ -358,6 +383,14 @@ ol_tx_ll_fast(ol_txrx_vdev_handle vdev, qdf_nbuf_t msdu_list)
 		 * pointer before the ce_send call.
 		 */
 		next = qdf_nbuf_next(msdu);
+		/*
+		 * Increment the skb->users count here, for this SKB, to make
+		 * sure it will be freed only after receiving Tx completion
+		 * of the last segment.
+		 * Decrement skb->users count before sending last segment
+		 */
+		if (qdf_nbuf_is_tso(msdu) && segments)
+			qdf_nbuf_inc_users(msdu);
 
 		/* init the current segment to the 1st segment in the list */
 		while (segments) {
@@ -398,9 +431,19 @@ ol_tx_ll_fast(ol_txrx_vdev_handle vdev, qdf_nbuf_t msdu_list)
 			if (qdf_likely(tx_desc)) {
 				struct qdf_tso_seg_elem_t *next_seg;
 
+				/*
+				 * if this is a jumbo nbuf, then increment the
+				 * number of nbuf users for each additional
+				 * segment of the msdu. This will ensure that
+				 * the skb is freed only after receiving tx
+				 * completion for all segments of an nbuf.
+				 */
+				if (segments !=
+					(msdu_info.tso_info.num_segs - 1))
+					qdf_nbuf_inc_users(msdu);
+
 				ol_tx_trace_pkt(msdu, tx_desc->id,
-						vdev->vdev_id,
-						vdev->qdf_opmode);
+						vdev->vdev_id);
 				/*
 				 * If debug display is enabled, show the meta
 				 * data being downloaded to the target via the
@@ -414,18 +457,16 @@ ol_tx_ll_fast(ol_txrx_vdev_handle vdev, qdf_nbuf_t msdu_list)
 						sent_to_target = 1;
 					next_seg = msdu_info.tso_info.
 						curr_seg->next;
-					/*
-					 * If this is a jumbo nbuf, then increment the
-					 * number of nbuf users for each additional
-					 * segment of the msdu. This will ensure that
-					 * the skb is freed only after receiving tx
-					 * completion for all segments of an nbuf
-					 */
-					if (next_seg)
-						qdf_nbuf_inc_users(msdu);
 				} else {
 					next_seg = NULL;
 				}
+
+				/* Decrement the skb-users count if segment
+				 * is the last segment or the only segment
+				 */
+				if (tx_desc->pkt_type == OL_TX_FRM_TSO &&
+				    segments == 0)
+					qdf_nbuf_tx_free(msdu, 0);
 
 				if ((ce_send_fast(pdev->ce_tx_hdl, msdu,
 						  ep_id,
@@ -441,12 +482,9 @@ ol_tx_ll_fast(ol_txrx_vdev_handle vdev, qdf_nbuf_t msdu_list)
 						tso_info->curr_seg = next_seg;
 						ol_free_remaining_tso_segs(vdev,
 							&msdu_info, true);
-						/*
-						 * Revert the nbuf users
-						 * increment done for the
-						 * current segment
-						 */
-						if (next_seg)
+						if (segments ==
+						    (msdu_info.tso_info.num_segs
+						     - 1))
 							qdf_nbuf_tx_free(
 							msdu,
 							QDF_NBUF_PKT_ERROR);
@@ -476,9 +514,14 @@ ol_tx_ll_fast(ol_txrx_vdev_handle vdev, qdf_nbuf_t msdu_list)
 				 * If TSO packet, free associated
 				 * remaining TSO segment descriptors
 				 */
-				if (qdf_nbuf_is_tso(msdu))
+				if (qdf_nbuf_is_tso(msdu)) {
 					ol_free_remaining_tso_segs(vdev,
 							&msdu_info, true);
+					if (segments ==
+					    (msdu_info.tso_info.num_segs - 1))
+						qdf_nbuf_tx_free(msdu,
+							 QDF_NBUF_PKT_ERROR);
+				}
 				TXRX_STATS_MSDU_LIST_INCR(
 					pdev, tx.dropped.host_reject, msdu);
 				/* the list of unaccepted MSDUs */
@@ -550,10 +593,7 @@ ol_tx_ll_fast(ol_txrx_vdev_handle vdev, qdf_nbuf_t msdu_list)
 				QDF_TRACE_DEFAULT_PDEV_ID,
 				qdf_nbuf_data_addr(msdu),
 				sizeof(qdf_nbuf_data(msdu)), tx_desc->id,
-				vdev->vdev_id, 0, vdev->qdf_opmode));
-
-			ol_tx_trace_pkt(msdu, tx_desc->id, vdev->vdev_id,
-					vdev->qdf_opmode);
+				vdev->vdev_id, 0));
 			/*
 			 * If debug display is enabled, show the meta-data being
 			 * downloaded to the target via the HTT tx descriptor.

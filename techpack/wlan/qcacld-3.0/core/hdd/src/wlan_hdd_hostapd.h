@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -45,20 +45,6 @@ enum csr_akm_type
 hdd_translate_rsn_to_csr_auth_type(uint8_t auth_suite[4]);
 
 /**
- * hdd_filter_ft_info() -
- * This function to filter fast BSS transition related IE
- * @frame: pointer to the input frame.
- * @len: input frame length.
- * @ft_info_len: store the total length of FT related IE.
- *
- * Return: pointer to a buffer which stored the FT related IE
- * This is a malloced memory that must be freed by the caller
- */
-
-void *hdd_filter_ft_info(const uint8_t *frame,
-			 size_t len, uint32_t *ft_info_len);
-
-/**
  * hdd_softap_set_channel_change() -
  * This function to support SAP channel change with CSA IE
  * set in the beacons.
@@ -77,9 +63,10 @@ int hdd_softap_set_channel_change(struct net_device *dev,
 					bool forced);
 /**
  * hdd_stop_sap_set_tx_power() - Function to set tx power
- * for unsafe channel if restriction bit mask is set else stop the SAP.
+ * for unsafe chanel if restriction bit mask is set else stop the SAP.
+ *
  * @psoc: PSOC object information
- * @adapter: AP/SAP adapter
+ * @vdev_id: vdev id
  *
  * This function set tx power/stop the SAP interface
  *
@@ -87,12 +74,12 @@ int hdd_softap_set_channel_change(struct net_device *dev,
  *
  */
 void hdd_stop_sap_set_tx_power(struct wlan_objmgr_psoc *psoc,
-			       struct hdd_adapter *adapter);
+			       struct hdd_adapter *adapte);
 
 #ifdef FEATURE_WLAN_MCC_TO_SCC_SWITCH
 /**
  * hdd_sap_restart_with_channel_switch() - SAP channel change with E/CSA
- * @psoc: psoc common object
+ * @wlan_objmgr_psoc: psoc common object
  * @ap_adapter: HDD adapter
  * @target_chan_freq: Channel frequency to which switch must happen
  * @target_bw: Bandwidth of the target channel
@@ -100,46 +87,30 @@ void hdd_stop_sap_set_tx_power(struct wlan_objmgr_psoc *psoc,
  *
  * Invokes the necessary API to perform channel switch for the SAP or GO
  *
- * Return: QDF_STATUS_SUCCESS if successfully
+ * Return: None
  */
-QDF_STATUS hdd_sap_restart_with_channel_switch(struct wlan_objmgr_psoc *psoc,
-					       struct hdd_adapter *ap_adapter,
-					       uint32_t target_chan_freq,
-					       uint32_t target_bw,
-					       bool forced);
-
+void hdd_sap_restart_with_channel_switch(struct wlan_objmgr_psoc *psoc,
+					 struct hdd_adapter *adapter,
+					 uint32_t target_chan_freq,
+					 uint32_t target_bw,
+					 bool forced);
 /**
  * hdd_sap_restart_chan_switch_cb() - Function to restart SAP with
  * a different channel
  * @psoc: PSOC object information
  * @vdev_id: vdev id
  * @ch_freq: channel to switch
- * @channel_bw: channel bandwidth
  * @forced: Force to switch channel, ignore SCC/MCC check
  *
  * This function restarts SAP with a different channel
  *
- * Return: QDF_STATUS_SUCCESS if successfully
+ * Return: None
  *
  */
-QDF_STATUS hdd_sap_restart_chan_switch_cb(struct wlan_objmgr_psoc *psoc,
-					  uint8_t vdev_id, uint32_t ch_freq,
-					  uint32_t channel_bw, bool forced);
-
-/**
- * wlan_hdd_check_cc_intf_cb() - Check force SCC for vdev interface.
- * @psoc: PSOC object information
- * @vdev_id: vdev id
- * @ch_freq: channel frequency to switch to
- *
- * This function will return a channel frequency to avoid MCC for SAP/GO.
- *
- * Return: QDF_STATUS_SUCCESS if successfully
- *
- */
-QDF_STATUS wlan_hdd_check_cc_intf_cb(struct wlan_objmgr_psoc *psoc,
-				     uint8_t vdev_id, uint32_t *ch_freq);
-
+void hdd_sap_restart_chan_switch_cb(struct wlan_objmgr_psoc *psoc,
+				    uint8_t vdev_id, uint32_t ch_freq,
+				    uint32_t channel_bw,
+				    bool forced);
 /**
  * wlan_hdd_get_channel_for_sap_restart() - Function to get
  * suitable channel and restart SAP
@@ -180,7 +151,7 @@ wlan_get_sap_acs_band(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id,
  * @ch_params: output channel parameters
  *
  * This function is used to get prefer sap target channel bw during sap force
- * scc CSA. The new bw will not exceed the original bw during start ap
+ * scc CSA. The new bw will not exceed the orginal bw during start ap
  * request.
  *
  * Return: QDF_STATUS_SUCCESS if successfully
@@ -241,27 +212,25 @@ QDF_STATUS hdd_hostapd_sap_event_cb(struct sap_event *sap_event,
 /**
  * hdd_init_ap_mode() - to init the AP adaptor
  * @adapter: SAP/GO adapter
- * @reinit: true if re-init, otherwise initial init
- * @rtnl_held: true if rtnl lock is taken, otherwise false
+ * @rtnl_held: flag to indicate if RTNL lock needs to be acquired
  *
  * This API can be called to open the SAP session as well as
  * to create and store the vdev object. It also initializes necessary
  * SAP adapter related params.
  */
-QDF_STATUS hdd_init_ap_mode(struct hdd_adapter *adapter,
-			    bool reinit,
-			    bool rtnl_held);
-
+QDF_STATUS hdd_init_ap_mode(struct hdd_adapter *adapter, bool reinit);
 /**
  * hdd_deinit_ap_mode() - to deinit the AP adaptor
- * @link_info: Link info pointer in HDD adapter
+ * @hdd_ctx: pointer to hdd_ctx
+ * @adapter: SAP/GO adapter
+ * @rtnl_held: flag to indicate if RTNL lock needs to be acquired
  *
  * This API can be called to close the SAP session as well as
  * release the vdev object completely. It also deinitializes necessary
  * SAP adapter related params.
  */
-void hdd_deinit_ap_mode(struct wlan_hdd_link_info *link_info);
-
+void hdd_deinit_ap_mode(struct hdd_context *hdd_ctx,
+			struct hdd_adapter *adapter, bool rtnl_held);
 void hdd_set_ap_ops(struct net_device *dev);
 /**
  * hdd_sap_create_ctx() - Wrapper API to create SAP context
@@ -275,17 +244,17 @@ void hdd_set_ap_ops(struct net_device *dev);
 bool hdd_sap_create_ctx(struct hdd_adapter *adapter);
 /**
  * hdd_sap_destroy_ctx() - Wrapper API to destroy SAP context
- * @link_info: Pointer of link_info in adapter
+ * @adapter: pointer to adapter
  *
  * This wrapper API can be called to destroy the sap context. It will
  * eventually calls SAP API to destroy the sap context
  *
  * Return: true or false based on overall success or failure
  */
-bool hdd_sap_destroy_ctx(struct wlan_hdd_link_info *link_info);
+bool hdd_sap_destroy_ctx(struct hdd_adapter *adapter);
 /**
  * hdd_sap_destroy_ctx_all() - Wrapper API to destroy all SAP context
- * @hdd_ctx: pointer to HDD context
+ * @adapter: pointer to adapter
  * @is_ssr: true if SSR is in progress
  *
  * This wrapper API can be called to destroy all the sap context.
@@ -343,7 +312,7 @@ static inline QDF_STATUS hdd_get_sap_ht2040_mode(
  * wlan_hdd_cfg80211_stop_ap() - stop sap
  * @wiphy: Pointer to wiphy
  * @dev: Pointer to netdev
- * @link_id: Link id for which this stop_ap is received.
+ * @link_id: Link id for which this stop_ap is recevied.
  *
  * Return: zero for success non-zero for failure
  */
@@ -357,15 +326,11 @@ int wlan_hdd_cfg80211_stop_ap(struct wiphy *wiphy,
 int wlan_hdd_cfg80211_start_ap(struct wiphy *wiphy,
 			       struct net_device *dev,
 			       struct cfg80211_ap_settings *params);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 7, 0)
-int wlan_hdd_cfg80211_change_beacon(struct wiphy *wiphy,
-				    struct net_device *dev,
-				    struct cfg80211_ap_update *params);
-#else
+
 int wlan_hdd_cfg80211_change_beacon(struct wiphy *wiphy,
 				    struct net_device *dev,
 				    struct cfg80211_beacon_data *params);
-#endif
+
 /**
  * hdd_is_peer_associated - is peer connected to softap
  * @adapter: pointer to softap adapter
@@ -385,26 +350,6 @@ QDF_STATUS wlan_hdd_config_acs(struct hdd_context *hdd_ctx,
 			       struct hdd_adapter *adapter);
 
 void hdd_sap_indicate_disconnect_for_sta(struct hdd_adapter *adapter);
-
-/**
- * hdd_handle_acs_2g_preferred_sap_conc() - Handle 2G pereferred SAP
- * concurrency with GO
- * @psoc: soc object
- * @adapter: HDD adapter context
- * @sap_config: sap config
- *
- * In SAP+GO concurrency, if GO is started on 2G and SAP is
- * doing ACS with 2G preferred channel list, then we will
- * move GO to 5G band. The purpose is to have more choice
- * in SAP ACS instead of starting on GO home channel for SCC.
- * This API is to check such condition and move GO to 5G.
- *
- * Return: void
- */
-void
-hdd_handle_acs_2g_preferred_sap_conc(struct wlan_objmgr_psoc *psoc,
-				     struct hdd_adapter *adapter,
-				     struct sap_config *sap_config);
 
 /**
  * wlan_hdd_disable_channels() - Cache the channels
@@ -464,145 +409,22 @@ void hdd_stop_sap_due_to_invalid_channel(struct work_struct *work);
 /**
  * hdd_is_any_sta_connecting() - check if any sta is connecting
  * @hdd_ctx: hdd context
- * @op_mode: adapter mode
  *
  * Return: true if any sta is connecting
  */
-bool hdd_is_any_sta_connecting(struct hdd_context *hdd_ctx,
-			       enum QDF_OPMODE op_mode);
+bool hdd_is_any_sta_connecting(struct hdd_context *hdd_ctx);
 
-/**
- * wlan_hdd_configure_twt_responder() - configure twt responder in sap_config
- * @hdd_ctx: Pointer to hdd context
- * @twt_responder: twt responder configure value
- *
- * Return: none
- */
-void
-wlan_hdd_configure_twt_responder(struct hdd_context *hdd_ctx,
-				 bool twt_responder);
 #ifdef WLAN_FEATURE_11BE_MLO
 /**
  * wlan_hdd_mlo_reset() - reset mlo configuration if start bss fails
- * @link_info: Pointer to link_info in hostapd adapter
+ * @adapter: Pointer to hostapd adapter
  *
  * Return: void
  */
-void wlan_hdd_mlo_reset(struct wlan_hdd_link_info *link_info);
+void wlan_hdd_mlo_reset(struct hdd_adapter *adapter);
 #else
-static inline void wlan_hdd_mlo_reset(struct wlan_hdd_link_info *link_info)
+static inline void wlan_hdd_mlo_reset(struct hdd_adapter *adapter)
 {
 }
 #endif /* end WLAN_FEATURE_11BE_MLO */
-
-#ifdef WLAN_FEATURE_SAP_ACS_OPTIMIZE
-/**
- * hdd_sap_is_acs_in_progress() - API to return if ACS is in progress
- * @vdev: pointer t vdev object
- *
- * Return: bool
- */
-bool hdd_sap_is_acs_in_progress(struct wlan_objmgr_vdev *vdev);
-#else
-static inline
-bool hdd_sap_is_acs_in_progress(struct wlan_objmgr_vdev *vdev)
-{
-	return false;
-}
-#endif
-
-#ifdef WLAN_CHIPSET_STATS
-/*
- * hdd_cp_stats_cstats_sap_go_start_event() - chipset stats for sap/go start
- * event
- *
- * @link_info: pointer to link_info object
- * @sap_event: pointer to sap_event object
- *
- * Return : void
- */
-void
-hdd_cp_stats_cstats_sap_go_start_event(struct wlan_hdd_link_info *link_info,
-				       struct sap_event *sap_event);
-
-/**
- * hdd_cp_stats_cstats_sap_go_stop_event() - chipset stats for sap/go stop event
- *
- * @link_info: pointer to link_info object
- * @sap_event: pointer to sap_event object
- *
- * Return : void
- */
-void
-hdd_cp_stats_cstats_sap_go_stop_event(struct wlan_hdd_link_info *link_info,
-				      struct sap_event *sap_event);
-
-/**
- * hdd_cp_stats_cstats_log_sap_go_sta_disassoc_event() - chipset stats for
- * sap/go STA disconnect event
- *
- * @li: pointer to link_info object
- * @sap_evt: pointer to sap_event object
- *
- * Return : void
- */
-void
-hdd_cp_stats_cstats_log_sap_go_sta_disassoc_event(struct wlan_hdd_link_info *li,
-						  struct sap_event *sap_evt);
-
-/**
- * hdd_cp_stats_cstats_log_sap_go_sta_assoc_reassoc_event() - chipset stats for
- * sap/go STA assoc event
- *
- * @li: pointer to link_info object
- * @sap_evt: pointer to sap_event object
- *
- * Return : void
- */
-void
-hdd_cp_stats_cstats_log_sap_go_sta_assoc_reassoc_event
-		     (struct wlan_hdd_link_info *li, struct sap_event *sap_evt);
-
-/**
- * hdd_cp_stats_cstats_log_sap_go_dfs_event() - chipset stats for
- * sap/go dfs event
- *
- * @li: pointer to link_info object
- * @event_id: eSapHddEvent event
- *
- * Return : void
- */
-void hdd_cp_stats_cstats_log_sap_go_dfs_event(struct wlan_hdd_link_info *li,
-					      eSapHddEvent event_id);
-#else
-static inline void
-hdd_cp_stats_cstats_sap_go_start_event(struct wlan_hdd_link_info *link_info,
-				       struct sap_event *sap_event)
-{
-}
-
-static inline void
-hdd_cp_stats_cstats_sap_go_stop_event(struct wlan_hdd_link_info *link_info,
-				      struct sap_event *sap_event)
-{
-}
-
-static inline void
-hdd_cp_stats_cstats_log_sap_go_sta_disassoc_event(struct wlan_hdd_link_info *li,
-						  struct sap_event *sap_evt)
-{
-}
-
-static inline void
-hdd_cp_stats_cstats_log_sap_go_sta_assoc_reassoc_event
-		     (struct wlan_hdd_link_info *li, struct sap_event *sap_evt)
-{
-}
-
-static inline void
-hdd_cp_stats_cstats_log_sap_go_dfs_event(struct wlan_hdd_link_info *li,
-					 eSapHddEvent event_id)
-{
-}
-#endif /* WLAN_CHIPSET_STATS */
 #endif /* end #if !defined(WLAN_HDD_HOSTAPD_H) */

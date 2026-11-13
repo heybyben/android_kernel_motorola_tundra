@@ -51,11 +51,8 @@
 
 /**
  * enum wlan_fwol_southbound_event - fw offload south bound event type
- * @WLAN_FWOL_EVT_INVALID: invalid/unknown value
  * @WLAN_FWOL_EVT_GET_ELNA_BYPASS_RESPONSE: get eLNA bypass response
  * @WLAN_FWOL_EVT_GET_THERMAL_STATS_RESPONSE: get Thermal Stats response
- * @WLAN_FWOL_EVT_LAST: internal use
- * @WLAN_FWOL_EVT_MAX: value of last valid enumerator
  */
 enum wlan_fwol_southbound_event {
 	WLAN_FWOL_EVT_INVALID = 0,
@@ -79,7 +76,7 @@ enum wlan_fwol_southbound_event {
  * @bt_interference_high_ll: Lower limit of high level BT interference
  * @bt_interference_high_ul: Upper limit of high level BT interference
  * @btc_mpta_helper_enable: Enable/Disable tri-radio MPTA helper
- * @bt_sco_allow_wlan_2g_scan: Enable/Disable wlan 2g scan when
+ * @bt_sco_allow_wlan_2g_scan: Enable/Disble wlan 2g scan when
  *                             BT SCO connection is on
  * @btc_three_way_coex_config_legacy_enable: Enable/Disable tri-radio coex
  *                             config legacy feature
@@ -113,9 +110,9 @@ struct wlan_fwol_coex_config {
 #endif
 };
 
-#define FWOL_THERMAL_LEVEL_MAX 6
+#define FWOL_THERMAL_LEVEL_MAX 4
 #define FWOL_THERMAL_THROTTLE_LEVEL_MAX 6
-/**
+/*
  * struct wlan_fwol_thermal_temp - Thermal temperature config items
  * @thermal_temp_min_level: Array of temperature minimum levels
  * @thermal_temp_max_level: Array of temperature maximum levels
@@ -146,8 +143,8 @@ struct wlan_fwol_thermal_temp {
 };
 
 /**
- * struct wlan_fwol_ie_allowlist - Probe request IE allowlist config items
- * @ie_allowlist: IE allowlist flag
+ * struct wlan_fwol_ie_whitelist - Probe request IE whitelist config items
+ * @ie_whitelist: IE whitelist flag
  * @ie_bitmap_0: IE bitmap 0
  * @ie_bitmap_1: IE bitmap 1
  * @ie_bitmap_2: IE bitmap 2
@@ -159,8 +156,8 @@ struct wlan_fwol_thermal_temp {
  * @no_of_probe_req_ouis: Total number of ouis present in probe req
  * @probe_req_voui: Stores oui values after parsing probe req ouis
  */
-struct wlan_fwol_ie_allowlist {
-	bool ie_allowlist;
+struct wlan_fwol_ie_whitelist {
+	bool ie_whitelist;
 	uint32_t ie_bitmap_0;
 	uint32_t ie_bitmap_1;
 	uint32_t ie_bitmap_2;
@@ -195,33 +192,13 @@ struct wlan_fwol_neighbor_report_cfg {
 	uint32_t max_req_cap;
 };
 
-#ifdef WLAN_FEATURE_TSF_ACCURACY
-/**
- * struct wlan_fwol_tsf_accuracy_configs - TSF Accuracy feature config params
- * @enable: Flag to Enable/Disable TSF Accuracy Feature
- * @sync_gpio: GPIO to indicate TSF sync is done. The GPIO pin is toggled at
- *             every TSF sync done.
- * @periodic_pulse_gpio: GPIO to indicate TSF time completes a cycle of given
- *                       interval. The GPIO pin gets pulse of 1msec for every
- *                       TSF cycle complete.
- * @pulse_interval_ms: Periodicy of TSF pulse in milli seconds.
- */
-struct wlan_fwol_tsf_accuracy_configs {
-	bool enable;
-	uint32_t sync_gpio;
-	uint32_t periodic_pulse_gpio;
-	uint32_t pulse_interval_ms;
-};
-#endif
-
 /**
  * struct wlan_fwol_cfg - fwol config items
  * @coex_config: coex config items
  * @thermal_temp_cfg: Thermal temperature related config items
- * @ie_allowlist_cfg: IE Allowlist related config items
+ * @ie_whitelist_cfg: IE Whitelist related config items
  * @neighbor_report_cfg: 11K neighbor report config
  * @ani_enabled: ANI enable/disable
- * @pcie_config: to control pcie gen and lane params
  * @enable_rts_sifsbursting: Enable RTS SIFS Bursting
  * @enable_sifs_burst: Enable SIFS burst
  * @max_mpdus_inampdu: Max number of MPDUS
@@ -245,7 +222,6 @@ struct wlan_fwol_tsf_accuracy_configs {
  * @tsf_sync_host_gpio_pin: TSF Sync GPIO Pin config
  * @tsf_ptp_options: TSF Plus feature options config
  * @tsf_sync_enable: TSF sync feature enable/disable
- * @tsf_accuracy_configs: TSF Accuracy feature config parameters
  * @sae_enable: SAE feature enable config
  * @gcmp_enable: GCMP feature enable config
  * @enable_tx_sch_delay: Enable TX SCH delay value config
@@ -262,10 +238,9 @@ struct wlan_fwol_cfg {
 	/* Add CFG and INI items here */
 	struct wlan_fwol_coex_config coex_config;
 	struct wlan_fwol_thermal_temp thermal_temp_cfg;
-	struct wlan_fwol_ie_allowlist ie_allowlist_cfg;
+	struct wlan_fwol_ie_whitelist ie_whitelist_cfg;
 	struct wlan_fwol_neighbor_report_cfg neighbor_report_cfg;
 	bool ani_enabled;
-	uint8_t pcie_config;
 	bool enable_rts_sifsbursting;
 	uint8_t enable_sifs_burst;
 	uint8_t max_mpdus_inampdu;
@@ -291,9 +266,6 @@ struct wlan_fwol_cfg {
 #ifdef WLAN_FEATURE_TSF_PLUS
 	uint32_t tsf_ptp_options;
 	bool tsf_sync_enable;
-#ifdef WLAN_FEATURE_TSF_ACCURACY
-	struct wlan_fwol_tsf_accuracy_configs tsf_accuracy_configs;
-#endif
 #ifdef WLAN_FEATURE_TSF_PLUS_EXT_GPIO_IRQ
 	uint32_t tsf_irq_host_gpio_pin;
 #endif
@@ -334,7 +306,7 @@ struct wlan_fwol_thermal_throttle_info {
 /**
  * struct wlan_fwol_capability_info - FW offload capability component
  * @fw_thermal_stats_cap: Thermal Stats Fw capability
- */
+ **/
 struct wlan_fwol_capability_info {
 #ifdef THERMAL_STATS_SUPPORT
 	bool fw_thermal_stats_cap;
@@ -384,14 +356,14 @@ struct wlan_fwol_rx_event {
 };
 
 /**
- * fwol_get_psoc_obj() - private API to get fwol object from psoc
+ * wlan_psoc_get_fwol_obj() - private API to get fwol object from psoc
  * @psoc: psoc object
  *
  * Return: fwol object
  */
 struct wlan_fwol_psoc_obj *fwol_get_psoc_obj(struct wlan_objmgr_psoc *psoc);
 
-/**
+/*
  * fwol_cfg_on_psoc_enable() - Populate FWOL structure from CFG and INI
  * @psoc: pointer to the psoc object
  *
@@ -401,7 +373,7 @@ struct wlan_fwol_psoc_obj *fwol_get_psoc_obj(struct wlan_objmgr_psoc *psoc);
  */
 QDF_STATUS fwol_cfg_on_psoc_enable(struct wlan_objmgr_psoc *psoc);
 
-/**
+/*
  * fwol_cfg_on_psoc_disable() - Clear the CFG structure on psoc disable
  * @psoc: pointer to the psoc object
  *
@@ -419,7 +391,7 @@ QDF_STATUS fwol_cfg_on_psoc_disable(struct wlan_objmgr_psoc *psoc);
  */
 QDF_STATUS fwol_process_event(struct scheduler_msg *msg);
 
-/**
+/*
  * fwol_release_rx_event() - Release fw offload RX event
  * @event: fw offload RX event
  *
@@ -427,7 +399,7 @@ QDF_STATUS fwol_process_event(struct scheduler_msg *msg);
  */
 void fwol_release_rx_event(struct wlan_fwol_rx_event *event);
 
-/**
+/*
  * fwol_init_neighbor_report_cfg() - Populate default neighbor report CFG values
  * @psoc: pointer to the psoc object
  * @fwol_neighbor_report_cfg: Pointer to Neighbor report config data structure
@@ -439,7 +411,7 @@ QDF_STATUS fwol_init_neighbor_report_cfg(struct wlan_objmgr_psoc *psoc,
 					 *fwol_neighbor_report_cfg);
 
 /**
- * fwol_init_adapt_dwelltime_in_cfg() - initialize adaptive dwell time params
+ * wlan_fwol_init_adapt_dwelltime_in_cfg - initialize adaptive dwell time params
  * @psoc: Pointer to struct wlan_objmgr_psoc context
  * @dwelltime_params: Pointer to dwell time params
  *
@@ -453,9 +425,9 @@ fwol_init_adapt_dwelltime_in_cfg(
 			struct adaptive_dwelltime_params *dwelltime_params);
 
 /**
- * fwol_set_adaptive_dwelltime_config() - API to set adaptive dwell params
- *                                        config
- * @dwelltime_params: adaptive_dwelltime_params structure
+ * fwol_set_adaptive_dwelltime_config - API to set adaptive dwell params config
+ *
+ * @adaptive_dwelltime_params: adaptive_dwelltime_params structure
  *
  * Return: QDF Status
  */
@@ -489,28 +461,11 @@ QDF_STATUS fwol_set_sap_sho(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id,
 /**
  * fwol_configure_hw_assist() - API to configure HW assist feature in FW
  * @pdev: pointer to the pdev object
- * @disable_hw_assist: Flag to enable/disable HW assist feature
+ * @disable_he_assist: Flag to enable/disable HW assist feature
  *
  * Return: QDF_STATUS
  */
 QDF_STATUS fwol_configure_hw_assist(struct wlan_objmgr_pdev *pdev,
 				    bool disable_hw_assist);
 
-/**
- * fwol_set_sap_wds_config() - API to configure WDS mode on SAP vdev
- * @psoc: pointer to the psoc object
- * @vdev_id: vdev id
- *
- * Return: QDF_STATUS
- */
-#ifdef FEATURE_WDS
-QDF_STATUS
-fwol_set_sap_wds_config(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id);
-#else
-static inline QDF_STATUS
-fwol_set_sap_wds_config(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id)
-{
-	return QDF_STATUS_SUCCESS;
-}
-#endif
 #endif

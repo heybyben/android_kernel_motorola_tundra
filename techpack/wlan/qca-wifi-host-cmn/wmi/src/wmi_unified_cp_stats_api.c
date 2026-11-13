@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021,2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -22,8 +22,7 @@
 #include "wmi_unified_param.h"
 #include "wmi_unified_cp_stats_api.h"
 
-#if defined(WLAN_SUPPORT_INFRA_CTRL_PATH_STATS) || \
-	defined(WLAN_CONFIG_TELEMETRY_AGENT)
+#ifdef WLAN_SUPPORT_INFRA_CTRL_PATH_STATS
 QDF_STATUS
 wmi_unified_infra_cp_stats_request_send(wmi_unified_t wmi_handle,
 					struct infra_cp_stats_cmd_info *param)

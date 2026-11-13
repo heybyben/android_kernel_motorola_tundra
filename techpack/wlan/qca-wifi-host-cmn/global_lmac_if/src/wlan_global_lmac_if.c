@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -38,6 +38,12 @@ QDF_STATUS (*wlan_global_lmac_if_tx_ops_register[MAX_DEV_TYPE])
  * and MCL
  */
 #ifdef WLAN_CONV_SPECTRAL_ENABLE
+/**
+ * wlan_spectral_register_rx_ops() - Register spectral component RX OPS
+ * @rx_ops: lmac if receive ops
+ *
+ * Return: None
+ */
 #ifdef SPECTRAL_MODULIZED_ENABLE
 /* Function pointer for spectral rx_ops registration function */
 void (*wlan_lmac_if_sptrl_rx_ops)(struct wlan_lmac_if_rx_ops *rx_ops);
@@ -52,12 +58,6 @@ QDF_STATUS wlan_lmac_if_sptrl_set_rx_ops_register_cb(void (*handler)
 
 qdf_export_symbol(wlan_lmac_if_sptrl_set_rx_ops_register_cb);
 
-/**
- * wlan_spectral_register_rx_ops() - Register spectral component RX OPS
- * @rx_ops: lmac if receive ops
- *
- * Return: None
- */
 static void wlan_spectral_register_rx_ops(struct wlan_lmac_if_rx_ops *rx_ops)
 {
 	wlan_lmac_if_sptrl_rx_ops(rx_ops);
@@ -108,7 +108,6 @@ static void wlan_iot_sim_register_rx_ops(struct wlan_lmac_if_rx_ops *rx_ops)
 }
 #endif
 
-#if defined(QCA_SUPPORT_SON) || defined(WLAN_FEATURE_SON)
 /* Function pointer for son rx_ops registration function */
 void (*wlan_lmac_if_son_rx_ops)(struct wlan_lmac_if_rx_ops *rx_ops);
 
@@ -129,16 +128,6 @@ static void wlan_son_register_rx_ops(struct wlan_lmac_if_rx_ops *rx_ops)
 	else
 		qdf_info("\n***** SON MODULE NOT LOADED *****\n");
 }
-
-void wlan_lmac_if_son_mod_register_rx_ops(struct wlan_lmac_if_rx_ops *rx_ops)
-{
-	wlan_son_register_rx_ops(rx_ops);
-}
-#else
-static void wlan_son_register_rx_ops(struct wlan_lmac_if_rx_ops *rx_ops)
-{
-}
-#endif
 
 /**
  * wlan_global_lmac_if_rx_ops_register() - Global lmac_if
@@ -161,7 +150,7 @@ wlan_global_lmac_if_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 		qdf_err("lmac if rx ops pointer is NULL");
 		return QDF_STATUS_E_INVAL;
 	}
-	/* Registration for UMAC components */
+	/* Registeration for UMAC componets */
 	wlan_lmac_if_umac_rx_ops_register(rx_ops);
 
 	/* spectral rx_ops registration*/

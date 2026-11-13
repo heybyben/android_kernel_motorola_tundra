@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -36,53 +36,38 @@ struct module_name {
 static const struct module_name g_dbr_module_name[DBR_MODULE_MAX] = {
 	[DBR_MODULE_SPECTRAL] = {"SPECTRAL"},
 	[DBR_MODULE_CFR]      = {"CFR"},
-	[DBR_MODULE_CBF]      = {"CBF"},
 };
 
-static void populate_target_support_flag(struct wlan_objmgr_pdev *pdev)
+static uint8_t get_num_dbr_modules_per_pdev(struct wlan_objmgr_pdev *pdev)
 {
 	struct wlan_objmgr_psoc *psoc;
 	struct wlan_psoc_host_dbr_ring_caps *dbr_ring_cap;
-	uint8_t num_dbr_ring_caps, cap_idx, pdev_id, srng_idx, mod_id;
+	uint8_t num_dbr_ring_caps, cap_idx, pdev_id, num_modules;
 	struct target_psoc_info *tgt_psoc_info;
-	struct direct_buf_rx_pdev_obj *dbr_pdev_obj;
 
 	psoc = wlan_pdev_get_psoc(pdev);
 
 	if (!psoc) {
 		direct_buf_rx_err("psoc is null");
-		return;
+		return 0;
 	}
 
 	tgt_psoc_info = wlan_psoc_get_tgt_if_handle(psoc);
 	if (!tgt_psoc_info) {
 		direct_buf_rx_err("target_psoc_info is null");
-		return;
+		return 0;
 	}
-
-	dbr_pdev_obj = wlan_objmgr_pdev_get_comp_private_obj
-				(pdev, WLAN_TARGET_IF_COMP_DIRECT_BUF_RX);
-	if (!dbr_pdev_obj) {
-		direct_buf_rx_err("failed to get dbr pdev obj");
-		return;
-	}
-
 	num_dbr_ring_caps = target_psoc_get_num_dbr_ring_caps(tgt_psoc_info);
 	dbr_ring_cap = target_psoc_get_dbr_ring_caps(tgt_psoc_info);
-	if (!dbr_ring_cap) {
-		direct_buf_rx_err("NULL dbr_ring_cap");
-		return;
-	}
-
 	pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
+	num_modules = 0;
 
 	for (cap_idx = 0; cap_idx < num_dbr_ring_caps; cap_idx++) {
-		if (dbr_ring_cap[cap_idx].pdev_id == pdev_id) {
-			mod_id = dbr_ring_cap[cap_idx].mod_id;
-			for (srng_idx = 0; srng_idx < DBR_SRNG_NUM; srng_idx++)
-				dbr_pdev_obj->dbr_mod_param[mod_id][srng_idx].target_support = true;
-		}
+		if (dbr_ring_cap[cap_idx].pdev_id == pdev_id)
+			num_modules++;
 	}
+
+	return num_modules;
 }
 
 static QDF_STATUS populate_dbr_cap_mod_param(struct wlan_objmgr_pdev *pdev,
@@ -135,15 +120,6 @@ static QDF_STATUS populate_dbr_cap_mod_param(struct wlan_objmgr_pdev *pdev,
 
 	return QDF_STATUS_SUCCESS;
 }
-
-/* caller should ensure to check mod_id and dbr_mod_param validness */
-static inline bool
-check_target_support(struct direct_buf_rx_pdev_obj *dbr_pdev_obj,
-		     uint8_t mod_id)
-{
-	return dbr_pdev_obj->dbr_mod_param[mod_id][0].target_support;
-}
-
 #ifdef DIRECT_BUF_RX_DEBUG
 static inline struct direct_buf_rx_module_debug *
 target_if_get_dbr_mod_debug_from_dbr_pdev_obj(
@@ -165,7 +141,7 @@ target_if_get_dbr_mod_debug_from_dbr_pdev_obj(
 		return NULL;
 	}
 
-	if (!check_target_support(dbr_pdev_obj, mod_id)) {
+	if (mod_id >= dbr_pdev_obj->num_modules) {
 		direct_buf_rx_err("Module %d not supported in target", mod_id);
 		return NULL;
 	}
@@ -206,7 +182,6 @@ g_dbr_ring_debug_event[DBR_RING_DEBUG_EVENT_MAX][RING_DEBUG_EVENT_NAME_SIZE] = {
  * @print_priv: The private data to be consumed by @print
  * @dbr_pdev_obj: Pdev object of the DBR module
  * @mod_id: Module ID
- * @srng_id: ring id
  *
  * Print ring debug entries of the ring identified by @dbr_pdev_obj and @mod_id
  * using the  given print adapter function
@@ -252,7 +227,7 @@ static QDF_STATUS target_if_dbr_print_ring_debug_entries(
 
 /**
  * target_if_dbr_qdf_err_printer() - QDF error level printer for DBR module
- * @priv: The private data
+ * @print_priv: The private data
  * @fmt: Format string
  *
  * This function should be passed in place of the 'print' argument to
@@ -382,6 +357,7 @@ QDF_STATUS target_if_direct_buf_rx_pdev_create_handler(
 	struct direct_buf_rx_pdev_obj *dbr_pdev_obj;
 	struct direct_buf_rx_psoc_obj *dbr_psoc_obj;
 	struct wlan_objmgr_psoc *psoc;
+	uint8_t num_modules;
 	QDF_STATUS status;
 
 	direct_buf_rx_enter();
@@ -426,10 +402,19 @@ QDF_STATUS target_if_direct_buf_rx_pdev_create_handler(
 	dbr_psoc_obj->dbr_pdev_obj[wlan_objmgr_pdev_get_pdev_id(pdev)] =
 								dbr_pdev_obj;
 
-	dbr_pdev_obj->num_modules = DBR_MODULE_MAX;
+	num_modules = get_num_dbr_modules_per_pdev(pdev);
+	direct_buf_rx_debug("Number of modules = %d pdev %d DBR pdev obj %pK",
+			    num_modules, wlan_objmgr_pdev_get_pdev_id(pdev),
+			    dbr_pdev_obj);
+	dbr_pdev_obj->num_modules = num_modules;
+
+	if (!dbr_pdev_obj->num_modules) {
+		direct_buf_rx_info("Number of modules = %d", num_modules);
+		return QDF_STATUS_SUCCESS;
+	}
 
 	direct_buf_rx_debug("sring number = %d", DBR_SRNG_NUM);
-	dbr_pdev_obj->dbr_mod_param = qdf_mem_malloc(DBR_MODULE_MAX *
+	dbr_pdev_obj->dbr_mod_param = qdf_mem_malloc(num_modules *
 				DBR_SRNG_NUM *
 				sizeof(struct direct_buf_rx_module_param));
 
@@ -437,8 +422,6 @@ QDF_STATUS target_if_direct_buf_rx_pdev_create_handler(
 		direct_buf_rx_err("alloc dbr mod param fail");
 		goto dbr_mod_param_fail;
 	}
-
-	populate_target_support_flag(pdev);
 
 	if (target_if_direct_buf_rx_alloc_mod_debug(dbr_pdev_obj) !=
 		QDF_STATUS_SUCCESS)
@@ -482,9 +465,6 @@ QDF_STATUS target_if_direct_buf_rx_pdev_destroy_handler(
 
 	num_modules = dbr_pdev_obj->num_modules;
 	for (mod_idx = 0; mod_idx < num_modules; mod_idx++) {
-		if (!check_target_support(dbr_pdev_obj, mod_idx))
-			continue;
-
 		/*
 		 * If the module didn't stop the ring debug by this time,
 		 * it will result in memory leak of its ring debug entries.
@@ -842,8 +822,6 @@ QDF_STATUS target_if_direct_buf_rx_psoc_create_handler(
 				  status);
 		goto attach_error;
 	}
-
-	dbr_psoc_obj->handler_ctx = WMI_RX_UMAC_CTX;
 
 	return status;
 
@@ -1403,8 +1381,7 @@ static QDF_STATUS target_if_dbr_replenish_ring(struct wlan_objmgr_pdev *pdev,
 }
 
 static QDF_STATUS target_if_dbr_fill_ring(struct wlan_objmgr_pdev *pdev,
-			  struct direct_buf_rx_module_param *mod_param,
-			  struct direct_buf_rx_psoc_obj *dbr_psoc_obj)
+			  struct direct_buf_rx_module_param *mod_param)
 {
 	uint32_t idx;
 	struct direct_buf_rx_ring_cfg *dbr_ring_cfg;
@@ -1412,7 +1389,7 @@ static QDF_STATUS target_if_dbr_fill_ring(struct wlan_objmgr_pdev *pdev,
 	struct direct_buf_rx_buf_info *dbr_buf_pool;
 	void *buf_vaddr_unaligned, *buf_vaddr_aligned;
 	QDF_STATUS status;
-	uint8_t offset = 0;
+	uint8_t offset;
 
 	direct_buf_rx_enter();
 
@@ -1428,8 +1405,7 @@ static QDF_STATUS target_if_dbr_fill_ring(struct wlan_objmgr_pdev *pdev,
 					      mod_param->mod_id);
 		if (!buf_vaddr_unaligned) {
 			direct_buf_rx_err("dir buf rx ring alloc failed");
-			status = QDF_STATUS_E_NOMEM;
-			goto cleanup;
+			return QDF_STATUS_E_NOMEM;
 		}
 
 		dbr_buf_pool[idx].vaddr = buf_vaddr_unaligned;
@@ -1445,32 +1421,13 @@ static QDF_STATUS target_if_dbr_fill_ring(struct wlan_objmgr_pdev *pdev,
 					      buf_vaddr_unaligned, offset,
 					      dbr_ring_cap->min_buf_align,
 					      mod_param->mod_id);
-			goto cleanup;
+			return QDF_STATUS_E_FAILURE;
 		}
 	}
 
 	direct_buf_rx_exit();
 
 	return QDF_STATUS_SUCCESS;
-
-cleanup:
-	while (idx > 0) {
-		idx--;
-		if (dbr_buf_pool[idx].paddr) {
-			qdf_mem_unmap_nbytes_single(
-				dbr_psoc_obj->osdev,
-				(qdf_dma_addr_t)dbr_buf_pool[idx].paddr,
-				QDF_DMA_FROM_DEVICE,
-				dbr_ring_cap->min_buf_size);
-		}
-		target_if_dbr_mem_put(pdev, dbr_ring_cap->min_buf_size,
-				      dbr_buf_pool[idx].vaddr,
-				      dbr_buf_pool[idx].offset,
-				      dbr_ring_cap->min_buf_align,
-				      mod_param->mod_id);
-	}
-
-	return status;
 }
 
 static QDF_STATUS target_if_dbr_init_ring(struct wlan_objmgr_pdev *pdev,
@@ -1560,7 +1517,7 @@ static QDF_STATUS target_if_dbr_init_ring(struct wlan_objmgr_pdev *pdev,
 	ring_params.num_entries = num_entries;
 	srng = hal_srng_setup(dbr_psoc_obj->hal_soc, DIR_BUF_RX_DMA_SRC,
 			      mod_param->mod_id,
-			      mod_param->pdev_id, &ring_params, 0);
+			      mod_param->pdev_id, &ring_params);
 
 	if (!srng) {
 		direct_buf_rx_err("srng setup failed");
@@ -1579,18 +1536,7 @@ static QDF_STATUS target_if_dbr_init_ring(struct wlan_objmgr_pdev *pdev,
 		hal_srng_get_hp_addr(dbr_psoc_obj->hal_soc, srng);
 	dbr_ring_cfg->buf_size = dbr_ring_cap->min_buf_size;
 
-	status  = target_if_dbr_fill_ring(pdev, mod_param, dbr_psoc_obj);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		direct_buf_rx_err("target if dbr fill ring failed");
-		qdf_mem_free(mod_param->dbr_buf_pool);
-		qdf_mem_free_consistent(dbr_psoc_obj->osdev,
-					dbr_psoc_obj->osdev->dev,
-					ring_alloc_size,
-					dbr_ring_cfg->base_vaddr_unaligned,
-			(qdf_dma_addr_t)dbr_ring_cfg->base_paddr_unaligned, 0);
-	}
-
-	return status;
+	return target_if_dbr_fill_ring(pdev, mod_param);
 }
 
 static QDF_STATUS target_if_dbr_init_srng(struct wlan_objmgr_pdev *pdev,
@@ -1736,8 +1682,6 @@ static QDF_STATUS target_if_init_dbr_ring(struct wlan_objmgr_pdev *pdev,
 		return status;
 	}
 
-	mod_param->srng_initialized = true;
-
 	/* Send CFG request command to firmware */
 	status = target_if_dbr_cfg_tgt(pdev, mod_param);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -1795,9 +1739,9 @@ QDF_STATUS target_if_direct_buf_rx_module_register(
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	if (!check_target_support(dbr_pdev_obj, mod_id)) {
+	if (mod_id >= dbr_pdev_obj->num_modules) {
 		direct_buf_rx_err("Module %d not supported in target", mod_id);
-		return QDF_STATUS_E_NOSUPPORT;
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	for (srng_id = 0; srng_id < DBR_SRNG_NUM; srng_id++) {
@@ -1850,9 +1794,9 @@ QDF_STATUS target_if_direct_buf_rx_module_unregister(
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	if (!check_target_support(dbr_pdev_obj, mod_id)) {
+	if (mod_id >= dbr_pdev_obj->num_modules) {
 		direct_buf_rx_err("Module %d not supported in target", mod_id);
-		return QDF_STATUS_E_NOSUPPORT;
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	for (srng_id = 0; srng_id < DBR_SRNG_NUM; srng_id++) {
@@ -2065,7 +2009,6 @@ dbr_get_pdev_and_srng_id(struct wlan_objmgr_psoc *psoc, uint8_t pdev_id,
  * @pdev: pointer to pdev object
  * @mod_id: Module ID
  * @event: ring debug event
- * @srng_id: ring id
  *
  * Log the given event, head and tail pointers of DBR ring of the given module
  * into its ring debug data structure.
@@ -2217,13 +2160,6 @@ static int target_if_direct_buf_rx_rsp_event_handler(ol_scn_t scn,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	if (!check_target_support(dbr_pdev_obj, dbr_rsp.mod_id)) {
-		direct_buf_rx_err("no target support for mod_id %d",
-				  dbr_rsp.mod_id);
-		wlan_objmgr_pdev_release_ref(pdev, dbr_mod_id);
-		return QDF_STATUS_E_NOSUPPORT;
-	}
-
 	dbr_buf_pool = mod_param->dbr_buf_pool;
 	dbr_rsp.dbr_entries = qdf_mem_malloc(dbr_rsp.num_buf_release_entry *
 					sizeof(struct direct_buf_rx_entry));
@@ -2235,33 +2171,10 @@ static int target_if_direct_buf_rx_rsp_event_handler(ol_scn_t scn,
 
 	if (dbr_rsp.num_meta_data_entry > dbr_rsp.num_buf_release_entry) {
 		direct_buf_rx_err("More than expected number of metadata");
-		direct_buf_rx_err("meta_data_entry:%d cv_meta_data_entry:%d buf_release_entry:%d",
-				  dbr_rsp.num_meta_data_entry,
-				  dbr_rsp.num_cv_meta_data_entry,
-				  dbr_rsp.num_buf_release_entry);
 		wlan_objmgr_pdev_release_ref(pdev, dbr_mod_id);
 		return QDF_STATUS_E_FAILURE;
 	}
-	if (dbr_rsp.num_cv_meta_data_entry > dbr_rsp.num_buf_release_entry) {
-		direct_buf_rx_err("More than expected number of cv metadata");
-		direct_buf_rx_err("meta_data_entry:%d cv_meta_data_entry:%d buf_release_entry:%d",
-				  dbr_rsp.num_meta_data_entry,
-				  dbr_rsp.num_cv_meta_data_entry,
-				  dbr_rsp.num_buf_release_entry);
-		wlan_objmgr_pdev_release_ref(pdev, dbr_mod_id);
-		return QDF_STATUS_E_FAILURE;
-	}
-	if (dbr_rsp.num_cqi_meta_data_entry > dbr_rsp.num_buf_release_entry) {
-		direct_buf_rx_err("More than expected number of cqi metadata");
-		direct_buf_rx_err("meta_data_entry:%d cqi_meta_data_entry:%d buf_release_entry:%d",
-				  dbr_rsp.num_meta_data_entry,
-				  dbr_rsp.num_cqi_meta_data_entry,
-				  dbr_rsp.num_buf_release_entry);
-		wlan_objmgr_pdev_release_ref(pdev, dbr_mod_id);
-		return QDF_STATUS_E_FAILURE;
-	}
-	QDF_ASSERT(!(dbr_rsp.num_cv_meta_data_entry &&
-		     dbr_rsp.num_meta_data_entry));
+
 	for (i = 0; i < dbr_rsp.num_buf_release_entry; i++) {
 		if (wmi_extract_dbr_buf_release_entry(
 			wmi_handle, data_buf, i,
@@ -2288,22 +2201,6 @@ static int target_if_direct_buf_rx_rsp_event_handler(ol_scn_t scn,
 				wmi_handle, data_buf, i,
 				&dbr_data.meta_data) == QDF_STATUS_SUCCESS)
 				dbr_data.meta_data_valid = true;
-		}
-
-		dbr_data.cv_meta_data_valid = false;
-		if (i < dbr_rsp.num_cv_meta_data_entry) {
-			if (wmi_extract_dbr_buf_cv_metadata(
-				wmi_handle, data_buf, i,
-				&dbr_data.cv_meta_data) == QDF_STATUS_SUCCESS)
-				dbr_data.cv_meta_data_valid = true;
-		}
-
-		dbr_data.cqi_meta_data_valid = false;
-		if (i < dbr_rsp.num_cqi_meta_data_entry) {
-			if (wmi_extract_dbr_buf_cqi_metadata(
-				wmi_handle, data_buf, i,
-				&dbr_data.cqi_meta_data) == QDF_STATUS_SUCCESS)
-				dbr_data.cqi_meta_data_valid = true;
 		}
 
 		target_if_dbr_add_ring_debug_entry(pdev, dbr_rsp.mod_id,
@@ -2392,7 +2289,7 @@ static QDF_STATUS target_if_dbr_deinit_ring(struct wlan_objmgr_pdev *pdev,
 	dbr_ring_cfg = mod_param->dbr_ring_cfg;
 	if (dbr_ring_cfg) {
 		target_if_dbr_empty_ring(pdev, dbr_psoc_obj, mod_param);
-		hal_srng_cleanup(dbr_psoc_obj->hal_soc, dbr_ring_cfg->srng, 0);
+		hal_srng_cleanup(dbr_psoc_obj->hal_soc, dbr_ring_cfg->srng);
 		qdf_mem_free_consistent(dbr_psoc_obj->osdev,
 					dbr_psoc_obj->osdev->dev,
 					dbr_ring_cfg->ring_alloc_size,
@@ -2435,13 +2332,6 @@ QDF_STATUS target_if_deinit_dbr_ring(struct wlan_objmgr_pdev *pdev,
 	}
 	direct_buf_rx_debug("mod_param %pK, dbr_ring_cap %pK",
 			    mod_param, mod_param->dbr_ring_cap);
-
-	if (!mod_param->srng_initialized) {
-		direct_buf_rx_err("module(%d) srng(%d) was not initialized",
-				  mod_id, srng_id);
-		return QDF_STATUS_SUCCESS;
-	}
-
 	target_if_dbr_deinit_srng(pdev, mod_param);
 	if (mod_param->dbr_ring_cap)
 		qdf_mem_free(mod_param->dbr_ring_cap);
@@ -2450,8 +2340,6 @@ QDF_STATUS target_if_deinit_dbr_ring(struct wlan_objmgr_pdev *pdev,
 		qdf_mem_free(mod_param->dbr_ring_cfg);
 	mod_param->dbr_ring_cfg = NULL;
 
-	mod_param->srng_initialized = false;
-
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -2459,28 +2347,18 @@ QDF_STATUS target_if_direct_buf_rx_register_events(
 				struct wlan_objmgr_psoc *psoc)
 {
 	QDF_STATUS ret;
-	struct direct_buf_rx_psoc_obj *dbr_psoc_obj;
 
 	if (!psoc || !GET_WMI_HDL_FROM_PSOC(psoc)) {
 		direct_buf_rx_err("psoc or psoc->tgt_if_handle is null");
 		return QDF_STATUS_E_INVAL;
-	}
-	dbr_psoc_obj = wlan_objmgr_psoc_get_comp_private_obj(
-			psoc,
-			WLAN_TARGET_IF_COMP_DIRECT_BUF_RX);
-
-	if (!dbr_psoc_obj) {
-		direct_buf_rx_err("dir buf rx psoc object is null");
-		return QDF_STATUS_E_FAILURE;
 	}
 
 	ret = wmi_unified_register_event_handler(
 			get_wmi_unified_hdl_from_psoc(psoc),
 			wmi_dma_buf_release_event_id,
 			target_if_direct_buf_rx_rsp_event_handler,
-			dbr_psoc_obj->handler_ctx);
+			WMI_RX_UMAC_CTX);
 
-	direct_buf_rx_info("DBR Handler Context %d", dbr_psoc_obj->handler_ctx);
 	if (QDF_IS_STATUS_ERROR(ret))
 		direct_buf_rx_debug("event handler not supported, ret=%d", ret);
 
@@ -2531,9 +2409,6 @@ QDF_STATUS target_if_direct_buf_rx_print_ring_stat(
 	direct_buf_rx_debug("| Module ID |    Module    | Head Idx | Tail Idx |");
 	direct_buf_rx_debug("--------------------------------------------------");
 	for (mod_idx = 0; mod_idx < num_modules; mod_idx++) {
-		if (!check_target_support(dbr_pdev_obj, mod_idx))
-			continue;
-
 		for (srng_id = 0; srng_id < DBR_SRNG_NUM; srng_id++) {
 			mod_param =
 				&dbr_pdev_obj->dbr_mod_param[mod_idx][srng_id];

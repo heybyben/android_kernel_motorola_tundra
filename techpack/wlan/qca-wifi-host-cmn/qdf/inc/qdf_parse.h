@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2018 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -59,43 +58,6 @@ typedef QDF_STATUS (*qdf_ini_item_cb)(void *context,
 QDF_STATUS
 qdf_ini_parse(const char *ini_path, void *context,
 	      qdf_ini_item_cb item_cb, qdf_ini_section_cb section_cb);
-
-/**
- * qdf_ini_section_parse() - parse a section from ini file
- * @ini_path: The full file path of the ini file to parse
- * @context: The caller supplied context to pass into callbacks
- * @item_cb: Ini item (key/value pair) handler callback function
- *	Return QDF_STATUS_SUCCESS to continue parsing, else to abort
- * @section_name: Ini section name to be parsed from file
- *	Return QDF_STATUS_SUCCESS to continue parsing, else to abort
- *
- * The *.ini file format is a simple format consisting of a list of key/value
- * pairs (items), separated by an '=' character. Comments are initiated with
- * a '#' character. Sections are also supported, using '[' and ']' around the
- * section name. e.g.
- *
- *	# comments are started with a '#' character
- *	# items are key/value string pairs, separated by the '=' character
- *	someKey1=someValue1
- *	someKey2=someValue2 # this is also a comment
- *
- *	# section headers are enclosed in square brackets
- *	[some section header] # new section begins
- *	someKey3=someValue3
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS qdf_ini_section_parse(const char *ini_path, void *context,
-				 qdf_ini_item_cb item_cb,
-				 const char *section_name);
-
-/**
- * qdf_valid_ini_check() - check ini file for invalid characters
- * @path: path to ini file
- *
- * Return: true if no invalid character found, false otherwise
- */
-bool qdf_valid_ini_check(const char *path);
 
 #endif /* __QDF_PARSE_H */
 

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -22,8 +22,6 @@
  *  This file contains mgmt txrx public API definitions for
  *  southbound interface.
  */
-
-#include <wmi_unified_param.h>
 
 #include "wlan_mgmt_txrx_tgt_api.h"
 #include "wlan_mgmt_txrx_utils_api.h"
@@ -387,9 +385,6 @@ mgmt_get_pdpa_action_subtype(uint8_t action_code)
 	enum mgmt_frame_type frm_type;
 
 	switch (action_code) {
-	case PDPA_ACTION_VENDOR_SPECIFIC:
-		frm_type = MGMT_ACTION_VENDOR_SPECIFIC;
-		break;
 	case PDPA_GAS_INIT_REQ:
 		frm_type = MGMT_ACTION_PDPA_GAS_INIT_REQ;
 		break;
@@ -476,7 +471,7 @@ mgmt_get_wnm_action_subtype(uint8_t action_code)
 }
 
 /**
- * mgmt_get_tdls_action_subtype() - gets tdls action subtype
+ * mgmt_get_wnm_action_subtype() - gets tdls action subtype
  * @action_code: action code
  *
  * This function returns the subtype for tdls action
@@ -803,54 +798,6 @@ mgmt_get_twt_action_subtype(uint8_t action_code)
 	return frm_type;
 }
 
-#ifdef WLAN_FEATURE_11BE
-/**
- * mgmt_get_protected_eht_action_subtype() - gets protected EHT action subtype
- * @action_code: action code
- *
- * This function returns the subtype for protected EHT action category.
- *
- * Return: mgmt frame type
- */
-static enum mgmt_frame_type
-mgmt_get_protected_eht_action_subtype(uint8_t action_code)
-{
-	enum mgmt_frame_type frm_type;
-
-	switch (action_code) {
-	case EHT_T2LM_REQUEST:
-		frm_type = MGMT_ACTION_EHT_T2LM_REQUEST;
-		break;
-	case EHT_T2LM_RESPONSE:
-		frm_type = MGMT_ACTION_EHT_T2LM_RESPONSE;
-		break;
-	case EHT_T2LM_TEARDOWN:
-		frm_type = MGMT_ACTION_EHT_T2LM_TEARDOWN;
-		break;
-	case EHT_EPCS_REQUEST:
-		frm_type = MGMT_ACTION_EHT_EPCS_REQUEST;
-		break;
-	case EHT_EPCS_RESPONSE:
-		frm_type = MGMT_ACTION_EHT_EPCS_RESPONSE;
-		break;
-	case EHT_EPCS_TEARDOWN:
-		frm_type = MGMT_ACTION_EHT_EPCS_TEARDOWN;
-		break;
-	default:
-		frm_type = MGMT_FRM_UNSPECIFIED;
-		break;
-	}
-
-	return frm_type;
-}
-#else
-static enum mgmt_frame_type
-mgmt_get_protected_eht_action_subtype(uint8_t action_code)
-{
-	return MGMT_FRM_UNSPECIFIED;
-}
-#endif /* WLAN_FEATURE_11BE */
-
 /**
  * mgmt_txrx_get_action_frm_subtype() - gets action frm subtype
  * @mpdu_data_ptr: pointer to mpdu data
@@ -941,10 +888,6 @@ mgmt_txrx_get_action_frm_subtype(uint8_t *mpdu_data_ptr)
 		frm_type =
 			mgmt_get_twt_action_subtype(action_hdr->action_code);
 		break;
-	case ACTION_CATEGORY_PROTECTED_EHT:
-		frm_type = mgmt_get_protected_eht_action_subtype(
-				action_hdr->action_code);
-		break;
 	default:
 		frm_type = MGMT_FRM_UNSPECIFIED;
 		break;
@@ -1014,182 +957,6 @@ mgmt_txrx_get_frm_type(uint8_t mgmt_subtype, uint8_t *mpdu_data_ptr)
 	return frm_type;
 }
 
-static uint8_t *mgmt_txrx_get_frm_type_string(enum mgmt_frame_type frm_type)
-{
-	switch (frm_type) {
-	CASE_RETURN_STRING(MGMT_ASSOC_REQ);
-	CASE_RETURN_STRING(MGMT_ASSOC_RESP);
-	CASE_RETURN_STRING(MGMT_REASSOC_REQ);
-	CASE_RETURN_STRING(MGMT_REASSOC_RESP);
-	CASE_RETURN_STRING(MGMT_PROBE_REQ);
-	CASE_RETURN_STRING(MGMT_PROBE_RESP);
-	CASE_RETURN_STRING(MGMT_BEACON);
-	CASE_RETURN_STRING(MGMT_ATIM);
-	CASE_RETURN_STRING(MGMT_DISASSOC);
-	CASE_RETURN_STRING(MGMT_AUTH);
-	CASE_RETURN_STRING(MGMT_DEAUTH);
-	CASE_RETURN_STRING(MGMT_ACTION_MEAS_REQUEST);
-	CASE_RETURN_STRING(MGMT_ACTION_MEAS_REPORT);
-	CASE_RETURN_STRING(MGMT_ACTION_TPC_REQUEST);
-	CASE_RETURN_STRING(MGMT_ACTION_TPC_REPORT);
-	CASE_RETURN_STRING(MGMT_ACTION_CHAN_SWITCH);
-	CASE_RETURN_STRING(MGMT_ACTION_QOS_ADD_TS_REQ);
-	CASE_RETURN_STRING(MGMT_ACTION_QOS_ADD_TS_RSP);
-	CASE_RETURN_STRING(MGMT_ACTION_QOS_DEL_TS_REQ);
-	CASE_RETURN_STRING(MGMT_ACTION_QOS_SCHEDULE);
-	CASE_RETURN_STRING(MGMT_ACTION_QOS_MAP_CONFIGURE);
-	CASE_RETURN_STRING(MGMT_ACTION_DLS_REQUEST);
-	CASE_RETURN_STRING(MGMT_ACTION_DLS_RESPONSE);
-	CASE_RETURN_STRING(MGMT_ACTION_DLS_TEARDOWN);
-	CASE_RETURN_STRING(MGMT_ACTION_BA_ADDBA_REQUEST);
-	CASE_RETURN_STRING(MGMT_ACTION_BA_ADDBA_RESPONSE);
-	CASE_RETURN_STRING(MGMT_ACTION_BA_DELBA);
-	CASE_RETURN_STRING(MGMT_ACTION_2040_BSS_COEXISTENCE);
-	CASE_RETURN_STRING(MGMT_ACTION_CATEGORY_VENDOR_SPECIFIC);
-	CASE_RETURN_STRING(MGMT_ACTION_CATEGORY_VENDOR_SPECIFIC_PROTECTED);
-	CASE_RETURN_STRING(MGMT_ACTION_EXT_CHANNEL_SWITCH_ID);
-	CASE_RETURN_STRING(MGMT_ACTION_VENDOR_SPECIFIC);
-	CASE_RETURN_STRING(MGMT_ACTION_TDLS_DISCRESP);
-	CASE_RETURN_STRING(MGMT_ACTION_RRM_RADIO_MEASURE_REQ);
-	CASE_RETURN_STRING(MGMT_ACTION_RRM_RADIO_MEASURE_RPT);
-	CASE_RETURN_STRING(MGMT_ACTION_RRM_LINK_MEASUREMENT_REQ);
-	CASE_RETURN_STRING(MGMT_ACTION_RRM_LINK_MEASUREMENT_RPT);
-	CASE_RETURN_STRING(MGMT_ACTION_RRM_NEIGHBOR_REQ);
-	CASE_RETURN_STRING(MGMT_ACTION_RRM_NEIGHBOR_RPT);
-	CASE_RETURN_STRING(MGMT_ACTION_FT_REQUEST);
-	CASE_RETURN_STRING(MGMT_ACTION_FT_RESPONSE);
-	CASE_RETURN_STRING(MGMT_ACTION_FT_CONFIRM);
-	CASE_RETURN_STRING(MGMT_ACTION_FT_ACK);
-	CASE_RETURN_STRING(MGMT_ACTION_HT_NOTIFY_CHANWIDTH);
-	CASE_RETURN_STRING(MGMT_ACTION_HT_SMPS);
-	CASE_RETURN_STRING(MGMT_ACTION_HT_PSMP);
-	CASE_RETURN_STRING(MGMT_ACTION_HT_PCO_PHASE);
-	CASE_RETURN_STRING(MGMT_ACTION_HT_CSI);
-	CASE_RETURN_STRING(MGMT_ACTION_HT_NONCOMPRESSED_BF);
-	CASE_RETURN_STRING(MGMT_ACTION_HT_COMPRESSED_BF);
-	CASE_RETURN_STRING(MGMT_ACTION_HT_ASEL_IDX_FEEDBACK);
-	CASE_RETURN_STRING(MGMT_ACTION_SA_QUERY_REQUEST);
-	CASE_RETURN_STRING(MGMT_ACTION_SA_QUERY_RESPONSE);
-	CASE_RETURN_STRING(MGMT_ACTION_PDPA_GAS_INIT_REQ);
-	CASE_RETURN_STRING(MGMT_ACTION_PDPA_GAS_INIT_RSP);
-	CASE_RETURN_STRING(MGMT_ACTION_PDPA_GAS_COMEBACK_REQ);
-	CASE_RETURN_STRING(MGMT_ACTION_PDPA_GAS_COMEBACK_RSP);
-	CASE_RETURN_STRING(MGMT_ACTION_WNM_BSS_TM_QUERY);
-	CASE_RETURN_STRING(MGMT_ACTION_WNM_BSS_TM_REQUEST);
-	CASE_RETURN_STRING(MGMT_ACTION_WNM_BSS_TM_RESPONSE);
-	CASE_RETURN_STRING(MGMT_ACTION_WNM_NOTIF_REQUEST);
-	CASE_RETURN_STRING(MGMT_ACTION_WNM_NOTIF_RESPONSE);
-	CASE_RETURN_STRING(MGMT_ACTION_WNM_FMS_REQ);
-	CASE_RETURN_STRING(MGMT_ACTION_WNM_FMS_RESP);
-	CASE_RETURN_STRING(MGMT_ACTION_WNM_TFS_REQ);
-	CASE_RETURN_STRING(MGMT_ACTION_WNM_TFS_RESP);
-	CASE_RETURN_STRING(MGMT_ACTION_WNM_TFS_NOTIFY);
-	CASE_RETURN_STRING(MGMT_ACTION_WNM_SLEEP_REQ);
-	CASE_RETURN_STRING(MGMT_ACTION_WNM_SLEEP_RESP);
-	CASE_RETURN_STRING(MGMT_ACTION_WNM_TIM_REQ);
-	CASE_RETURN_STRING(MGMT_ACTION_WNM_TIM_RESP);
-	CASE_RETURN_STRING(MGMT_ACTION_TDLS_SETUP_REQ);
-	CASE_RETURN_STRING(MGMT_ACTION_TDLS_SETUP_RSP);
-	CASE_RETURN_STRING(MGMT_ACTION_TDLS_SETUP_CNF);
-	CASE_RETURN_STRING(MGMT_ACTION_TDLS_TEARDOWN);
-	CASE_RETURN_STRING(MGMT_ACTION_TDLS_PEER_TRAFFIC_IND);
-	CASE_RETURN_STRING(MGMT_ACTION_TDLS_CH_SWITCH_REQ);
-	CASE_RETURN_STRING(MGMT_ACTION_TDLS_CH_SWITCH_RSP);
-	CASE_RETURN_STRING(MGMT_ACTION_TDLS_PEER_PSM_REQUEST);
-	CASE_RETURN_STRING(MGMT_ACTION_TDLS_PEER_PSM_RESPONSE);
-	CASE_RETURN_STRING(MGMT_ACTION_TDLS_PEER_TRAFFIC_RSP);
-	CASE_RETURN_STRING(MGMT_ACTION_TDLS_DIS_REQ);
-	CASE_RETURN_STRING(MGMT_ACTION_MESH_LINK_METRIC_REPORT);
-	CASE_RETURN_STRING(MGMT_ACTION_MESH_HWMP_PATH_SELECTION);
-	CASE_RETURN_STRING(MGMT_ACTION_MESH_GATE_ANNOUNCEMENT);
-	CASE_RETURN_STRING(MGMT_ACTION_MESH_CONGESTION_CONTROL_NOTIFICATION);
-	CASE_RETURN_STRING(MGMT_ACTION_MESH_MCCA_SETUP_REQUEST);
-	CASE_RETURN_STRING(MGMT_ACTION_MESH_MCCA_SETUP_REPLY);
-	CASE_RETURN_STRING(MGMT_ACTION_MESH_MCCA_ADVERTISEMENT_REQUEST);
-	CASE_RETURN_STRING(MGMT_ACTION_MESH_MCCA_ADVERTISEMENT);
-	CASE_RETURN_STRING(MGMT_ACTION_MESH_MCCA_TEARDOWN);
-	CASE_RETURN_STRING(MGMT_ACTION_MESH_TBTT_ADJUSTMENT_REQUEST);
-	CASE_RETURN_STRING(MGMT_ACTION_MESH_TBTT_ADJUSTMENT_RESPONSE);
-	CASE_RETURN_STRING(MGMT_ACTION_SP_MESH_PEERING_OPEN);
-	CASE_RETURN_STRING(MGMT_ACTION_SP_MESH_PEERING_CONFIRM);
-	CASE_RETURN_STRING(MGMT_ACTION_SP_MESH_PEERING_CLOSE);
-	CASE_RETURN_STRING(MGMT_ACTION_SP_MGK_INFORM);
-	CASE_RETURN_STRING(MGMT_ACTION_SP_MGK_ACK);
-	CASE_RETURN_STRING(MGMT_ACTION_WMM_QOS_SETUP_REQ);
-	CASE_RETURN_STRING(MGMT_ACTION_WMM_QOS_SETUP_RESP);
-	CASE_RETURN_STRING(MGMT_ACTION_WMM_QOS_TEARDOWN);
-	CASE_RETURN_STRING(MGMT_ACTION_VHT_COMPRESSED_BF);
-	CASE_RETURN_STRING(MGMT_ACTION_VHT_GID_NOTIF);
-	CASE_RETURN_STRING(MGMT_ACTION_VHT_OPMODE_NOTIF);
-	CASE_RETURN_STRING(MGMT_ACTION_GAS_INITIAL_REQUEST);
-	CASE_RETURN_STRING(MGMT_ACTION_GAS_INITIAL_RESPONSE);
-	CASE_RETURN_STRING(MGMT_ACTION_GAS_COMEBACK_REQUEST);
-	CASE_RETURN_STRING(MGMT_ACTION_GAS_COMEBACK_RESPONSE);
-	CASE_RETURN_STRING(MGMT_ACTION_FST_SETUP_REQ);
-	CASE_RETURN_STRING(MGMT_ACTION_FST_SETUP_RSP);
-	CASE_RETURN_STRING(MGMT_ACTION_FST_TEAR_DOWN);
-	CASE_RETURN_STRING(MGMT_ACTION_FST_ACK_REQ);
-	CASE_RETURN_STRING(MGMT_ACTION_FST_ACK_RSP);
-	CASE_RETURN_STRING(MGMT_ACTION_FST_ON_CHANNEL_TUNNEL);
-	CASE_RETURN_STRING(MGMT_ACTION_SCS_REQ);
-	CASE_RETURN_STRING(MGMT_ACTION_SCS_RSP);
-	CASE_RETURN_STRING(MGMT_ACTION_GROUP_MEMBERSHIP_REQ);
-	CASE_RETURN_STRING(MGMT_ACTION_GROUP_MEMBERSHIP_RSP);
-	CASE_RETURN_STRING(MGMT_ACTION_MCSC_REQ);
-	CASE_RETURN_STRING(MGMT_ACTION_MCSC_RSP);
-	CASE_RETURN_STRING(MGMT_FRAME_TYPE_ALL);
-	CASE_RETURN_STRING(MGMT_CTRL_FRAME);
-	CASE_RETURN_STRING(MGMT_ACTION_TWT_SETUP);
-	CASE_RETURN_STRING(MGMT_ACTION_TWT_TEARDOWN);
-	CASE_RETURN_STRING(MGMT_ACTION_TWT_INFORMATION);
-	CASE_RETURN_STRING(MGMT_ACTION_EHT_T2LM_REQUEST);
-	CASE_RETURN_STRING(MGMT_ACTION_EHT_T2LM_RESPONSE);
-	CASE_RETURN_STRING(MGMT_ACTION_EHT_T2LM_TEARDOWN);
-	CASE_RETURN_STRING(MGMT_ACTION_EHT_EPCS_REQUEST);
-	CASE_RETURN_STRING(MGMT_ACTION_EHT_EPCS_RESPONSE);
-	CASE_RETURN_STRING(MGMT_ACTION_EHT_EPCS_TEARDOWN);
-	CASE_RETURN_STRING(MGMT_ACTION_FTM_REQUEST);
-	CASE_RETURN_STRING(MGMT_ACTION_FTM_RESPONSE);
-	CASE_RETURN_STRING(MGMT_ACTION_FILS_DISCOVERY);
-	default:
-		break;
-	}
-
-	return (uint8_t *)"MGMT_UNKNOWN";
-}
-
-void mgmt_txrx_frame_hex_dump(void *frame_data, int frame_len, bool is_tx)
-{
-	struct ieee80211_frame *wh;
-	uint8_t mgmt_type, mgmt_subtype;
-	enum mgmt_frame_type frm_type;
-	uint8_t *mpdu_data_ptr = NULL;
-
-	if (frame_len < sizeof(struct ieee80211_frame)) {
-		mgmt_txrx_debug("frame len %d less than hdr size", frame_len);
-		return;
-	}
-	wh = (struct ieee80211_frame *)frame_data;
-	mgmt_type = (wh)->i_fc[0] & IEEE80211_FC0_TYPE_MASK;
-	mgmt_subtype = (wh)->i_fc[0] & IEEE80211_FC0_SUBTYPE_MASK;
-
-	if (mgmt_type != IEEE80211_FC0_TYPE_MGT) {
-		mgmt_txrx_debug("frame type %d not mgmt type", mgmt_type);
-		return;
-	}
-	/* mpdu_data_ptr is pointer to action header */
-	mpdu_data_ptr = (uint8_t *)frame_data + sizeof(struct ieee80211_frame);
-
-	frm_type = mgmt_txrx_get_frm_type(mgmt_subtype, mpdu_data_ptr);
-	mgmttxrx_nofl_debug("%s MGMT: %s(%d) seq %d len %d:",
-			    is_tx ? "TX" : "RX",
-			    mgmt_txrx_get_frm_type_string(frm_type), frm_type,
-			    le16toh(*(uint16_t *)wh->i_seq) >>
-			    WLAN_SEQ_SEQ_SHIFT, frame_len);
-	qdf_trace_hex_dump(QDF_MODULE_ID_MGMT_TXRX, QDF_TRACE_LEVEL_DEBUG,
-			   frame_data, frame_len);
-}
-
 #ifdef WLAN_IOT_SIM_SUPPORT
 static QDF_STATUS simulation_frame_update(struct wlan_objmgr_psoc *psoc,
 					  qdf_nbuf_t buf,
@@ -1248,49 +1015,6 @@ static QDF_STATUS simulation_frame_update(struct wlan_objmgr_psoc *psoc,
 	return QDF_STATUS_SUCCESS;
 }
 #endif
-
-/**
- * wlan_mgmt_rx_beacon_rate_limit() - rate limiting mgmt beacons
- * @psoc: pointer to psoc struct
- * @mgmt_rx_params: rx params
- *
- * This function will drop the beacons if the number of beacons
- * received is greater than the percentage of limit of beacons to max
- * count of beacons, when beacon rate limiting is enabled
- *
- * Return : QDF_STATUS if success, else QDF_STATUS_E_RESOURCES
- */
-static QDF_STATUS wlan_mgmt_rx_beacon_rate_limit(struct wlan_objmgr_psoc *psoc,
-						 struct mgmt_rx_event_params
-						 *mgmt_rx_params)
-{
-	struct wlan_objmgr_pdev *pdev = NULL;
-
-	pdev = wlan_objmgr_get_pdev_by_id(psoc, mgmt_rx_params->pdev_id,
-					  WLAN_MGMT_SB_ID);
-
-	if (pdev && pdev->pdev_objmgr.bcn.bcn_rate_limit) {
-		uint64_t b_limit = qdf_do_div(
-				(wlan_pdev_get_max_beacon_count(pdev) *
-				 wlan_pdev_get_max_beacon_limit(pdev)), 100);
-		wlan_pdev_incr_wlan_beacon_count(pdev);
-
-		if (wlan_pdev_get_wlan_beacon_count(pdev) >=
-					wlan_pdev_get_max_beacon_count(pdev))
-			wlan_pdev_set_wlan_beacon_count(pdev, 0);
-
-		if (wlan_pdev_get_wlan_beacon_count(pdev) >= b_limit) {
-			wlan_pdev_incr_dropped_beacon_count(pdev);
-			wlan_objmgr_pdev_release_ref(pdev, WLAN_MGMT_SB_ID);
-			return QDF_STATUS_E_RESOURCES;
-		}
-	}
-
-	if (pdev)
-		wlan_objmgr_pdev_release_ref(pdev, WLAN_MGMT_SB_ID);
-
-	return QDF_STATUS_SUCCESS;
-}
 
 /**
  * wlan_mgmt_txrx_rx_handler_list_copy() - copies rx handler list
@@ -1492,28 +1216,6 @@ QDF_STATUS tgt_mgmt_txrx_rx_frame_handler(
 				WLAN_SEQ_SEQ_SHIFT), mgmt_rx_params->rssi,
 				mgmt_rx_params->tsf_delta);
 
-	/* Print a hexdump of packet for host debug */
-	if (mgmt_type == IEEE80211_FC0_TYPE_MGT &&
-	    ((mgmt_rx_params->status & WMI_HOST_RXERR_PN) ||
-	     (mgmt_rx_params->status & WMI_HOST_RXERR_CRC) ||
-	     (mgmt_rx_params->status & WMI_HOST_RXERR_DECRYPT) ||
-	     (mgmt_rx_params->status & WMI_HOST_RXERR_MIC) ||
-	     (mgmt_rx_params->status & WMI_HOST_RXERR_KEY_CACHE_MISS))) {
-		uint64_t curr_pn, prev_pn;
-		uint8_t *pn = NULL;
-
-		pn = mgmt_rx_params->pn_params.curr_pn;
-		curr_pn = qdf_le64_to_cpu(*((uint64_t *)pn));
-
-		pn = mgmt_rx_params->pn_params.prev_pn;
-		prev_pn = qdf_le64_to_cpu(*((uint64_t *)pn));
-
-		mgmt_txrx_debug("Current PN=0x%llx Previous PN=0x%llx. Packet dumped below",
-				curr_pn, prev_pn);
-		qdf_trace_hex_dump(QDF_MODULE_ID_MGMT_TXRX,
-				   QDF_TRACE_LEVEL_DEBUG, data, buflen);
-	}
-
 	if (simulation_frame_update(psoc, buf, mgmt_rx_params))
 		return QDF_STATUS_E_FAILURE;
 
@@ -1556,15 +1258,6 @@ QDF_STATUS tgt_mgmt_txrx_rx_frame_handler(
 		return QDF_STATUS_E_FAILURE;
 	}
 	qdf_spin_unlock_bh(&mgmt_txrx_psoc_ctx->mgmt_txrx_psoc_ctx_lock);
-
-	if (mgmt_subtype == MGMT_SUBTYPE_BEACON &&
-	    mgmt_rx_params->is_conn_ap.is_conn_ap_frm == 0) {
-		status = wlan_mgmt_rx_beacon_rate_limit(psoc, mgmt_rx_params);
-		if (QDF_IS_STATUS_ERROR(status)) {
-			qdf_nbuf_free(buf);
-			goto rx_handler_mem_free;
-		}
-	}
 
 	mac_addr = (uint8_t *)wh->i_addr2;
 	/*

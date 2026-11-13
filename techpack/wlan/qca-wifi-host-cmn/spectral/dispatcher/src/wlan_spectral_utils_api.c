@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -497,7 +496,7 @@ QDF_STATUS spectral_pdev_open(struct wlan_objmgr_pdev *pdev)
 		tgt_set_spectral_dma_debug(pdev, SPECTRAL_DMA_BUFFER_DEBUG, 1);
 
 	status = spectral_register_dbr(pdev);
-	return status;
+	return QDF_STATUS_SUCCESS;
 }
 
 QDF_STATUS spectral_register_dbr(struct wlan_objmgr_pdev *pdev)

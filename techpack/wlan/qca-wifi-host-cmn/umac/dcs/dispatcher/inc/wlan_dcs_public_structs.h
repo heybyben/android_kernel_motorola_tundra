@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -16,7 +15,7 @@
  */
 
 /**
- * DOC: contains dcs structure definitions
+ * DOC: contains dcs structure definations
  */
 
 #ifndef _WLAN_DCS_PUBLIC_STRUCTS_H_
@@ -28,20 +27,18 @@
  * @WLAN_HOST_DCS_CWIM: continuous wave interference
  * @WLAN_HOST_DCS_WLANIM: wlan interference stats
  * @WLAN_HOST_DCS_AWGNIM: additive white Gaussian noise (awgn) interference
- * @WLAN_HOST_DCS_AFC: AFC data update 6 GHz SP channels
  */
 enum wlan_host_dcs_type {
 	WLAN_HOST_DCS_NONE   = 0,      /* 0x0 */
 	WLAN_HOST_DCS_CWIM   = BIT(0), /* 0x1 */
 	WLAN_HOST_DCS_WLANIM = BIT(1), /* 0x2 */
 	WLAN_HOST_DCS_AWGNIM = BIT(2), /* 0x4 */
-	WLAN_HOST_DCS_AFC    = BIT(3), /* 0x8 */
 };
 
 /**
  * struct wlan_host_dcs_interference_param - dcs interference parameters
  * @interference_type: type of DCS interference
- * @pdev_id: pdev id
+ * @uint32_t pdev_id: pdev id
  */
 struct wlan_host_dcs_interference_param {
 	uint32_t interference_type;
@@ -74,7 +71,7 @@ struct wlan_host_dcs_mib_stats {
  * struct wlan_host_dcs_im_tgt_stats - DCS IM target stats
  * @reg_tsf32: current running TSF from the TSF-1
  * @last_ack_rssi: known last frame rssi, in case of multiple stations, if
- *      and at different ranges, this would not guarantee that
+ *      and at different ranges, this would not gaurantee that
  *      this is the least rssi.
  * @tx_waste_time: sum of all the failed durations in the last
  *      one second interval.
@@ -104,7 +101,7 @@ struct wlan_host_dcs_im_tgt_stats {
  * struct wlan_host_dcs_ch_util_stats - DCS IM chan utilization stats
  * @rx_cu: rx channel utilization
  * @tx_cu: tx channel utilization
- * @obss_rx_cu: obss rx channel utilization
+ * @rx_obss_cu: obss rx channel utilization
  * @total_cu: total channel utilization
  * @chan_nf: Channel noise floor (units are in dBm)
  */

@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -74,9 +73,10 @@ extract_per_chain_rssi_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 
 /**
  * extract_peer_adv_stats_tlv() - extract adv peer stats from event
- * @wmi_handle: wmi handle
- * @evt_buf: pointer to event buffer
- * @peer_adv_stats: Pointer to hold adv peer stats
+ * @param wmi_handle: wmi handle
+ * @param evt_buf: pointer to event buffer
+ * @param index: Index into extended peer stats
+ * @param peer_adv_stats: Pointer to hold adv peer stats
  *
  * Return: QDF_STATUS_SUCCESS for success or error code
  */
@@ -115,8 +115,8 @@ static QDF_STATUS extract_peer_adv_stats_tlv(wmi_unified_t wmi_handle,
 /**
  * extract_mib_stats_tlv() - extract mib stats from event
  * @wmi_handle: wmi handle
- * @evt_buf: pointer to event buffer
- * @mib_stats: pointer to hold mib stats
+ * @param evt_buf: pointer to event buffer
+ * @param mib_stats: pointer to hold mib stats
  *
  * Return: QDF_STATUS_SUCCESS for success or error code
  */
@@ -371,96 +371,6 @@ static void dump_peer_stats_info(wmi_peer_stats_info *stats)
 }
 
 /**
- * extract_peer_tx_pkt_per_mcs_tlv() - extract peer tx packets per MCS
- * from event
- * @wmi_handle: wmi handle
- * @evt_buf: pointer to event buffer
- * @index: Index into vdev stats
- * @peer_stats_info: Pointer to hold peer stats info
- *
- * Return: QDF_STATUS_SUCCESS for success or error code
- */
-static QDF_STATUS
-extract_peer_tx_pkt_per_mcs_tlv(wmi_unified_t wmi_handle, void *evt_buf,
-				uint32_t index,
-				wmi_host_peer_stats_info *peer_stats_info)
-{
-	WMI_PEER_STATS_INFO_EVENTID_param_tlvs *param_buf;
-	int i, j;
-
-	param_buf = (WMI_PEER_STATS_INFO_EVENTID_param_tlvs *)evt_buf;
-
-	if (index + peer_stats_info->num_tx_rate_counts <=
-					param_buf->num_tx_rate_counts) {
-		peer_stats_info->tx_pkt_per_mcs =
-			qdf_mem_malloc(
-			peer_stats_info->num_tx_rate_counts * sizeof(uint32_t));
-
-		if (!peer_stats_info->tx_pkt_per_mcs)
-			return QDF_STATUS_E_NOMEM;
-		wmi_debug("Tx rate counts");
-		for (j = 0, i = index; j < peer_stats_info->num_tx_rate_counts;
-		     j++, i++) {
-			peer_stats_info->tx_pkt_per_mcs[j] =
-						param_buf->tx_rate_counts[i];
-			wmi_nofl_debug("MCS [%d] %d", j,
-				       peer_stats_info->tx_pkt_per_mcs[j]);
-		}
-	} else {
-		wmi_err("invalid idx %d curr peer tx_rate_counts %d total tx_rate_count %d",
-			index, peer_stats_info->num_tx_rate_counts,
-			param_buf->num_tx_rate_counts);
-		return QDF_STATUS_E_INVAL;
-	}
-	return QDF_STATUS_SUCCESS;
-}
-
-/**
- * extract_peer_rx_pkt_per_mcs_tlv() - extract peer rx rpackets per MCS
- * from event
- * @wmi_handle: wmi handle
- * @evt_buf: pointer to event buffer
- * @index: Index into vdev stats
- * @peer_stats_info: Pointer to hold peer stats info
- *
- * Return: QDF_STATUS_SUCCESS for success or error code
- */
-static QDF_STATUS
-extract_peer_rx_pkt_per_mcs_tlv(wmi_unified_t wmi_handle, void *evt_buf,
-				uint32_t index,
-				wmi_host_peer_stats_info *peer_stats_info)
-{
-	WMI_PEER_STATS_INFO_EVENTID_param_tlvs *param_buf;
-	int i, j;
-
-	param_buf = (WMI_PEER_STATS_INFO_EVENTID_param_tlvs *)evt_buf;
-
-	if (index + peer_stats_info->num_rx_rate_counts <=
-					param_buf->num_rx_rate_counts) {
-		peer_stats_info->rx_pkt_per_mcs =
-			qdf_mem_malloc(
-			peer_stats_info->num_rx_rate_counts * sizeof(uint32_t));
-
-		if (!peer_stats_info->rx_pkt_per_mcs)
-			return QDF_STATUS_E_NOMEM;
-		wmi_debug("Rx rate counts");
-		for (j = 0, i = index; j < peer_stats_info->num_rx_rate_counts;
-		     j++, i++) {
-			peer_stats_info->rx_pkt_per_mcs[j] =
-						param_buf->rx_rate_counts[i];
-			wmi_nofl_debug("MCS [%d] %d", j,
-				       peer_stats_info->rx_pkt_per_mcs[j]);
-		}
-	} else {
-		wmi_err("invalid idx %d curr peer rx_rate_counts %d total rx_rate_count %d",
-			index, peer_stats_info->num_rx_rate_counts,
-			param_buf->num_rx_rate_counts);
-		return QDF_STATUS_E_INVAL;
-	}
-	return QDF_STATUS_SUCCESS;
-}
-
-/**
  * extract_peer_stats_info_tlv() - extract peer stats info from event
  * @wmi_handle: wmi handle
  * @evt_buf: pointer to event buffer
@@ -509,8 +419,6 @@ extract_peer_stats_info_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 		for (i = 0; i < WMI_MAX_CHAINS; i++)
 			peer_stats_info->peer_rssi_per_chain[i] =
 						     ev->peer_rssi_per_chain[i];
-		peer_stats_info->num_tx_rate_counts = ev->num_tx_rate_counts;
-		peer_stats_info->num_rx_rate_counts = ev->num_rx_rate_counts;
 	}
 
 	return QDF_STATUS_SUCCESS;
@@ -519,9 +427,9 @@ extract_peer_stats_info_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 #ifdef WLAN_FEATURE_BIG_DATA_STATS
 /**
  * extract_big_data_stats_tlv() - extract big data from event
- * @wmi_handle: wmi handle
- * @evt_buf: pointer to event buffer
- * @stats: Pointer to hold big data stats
+ * @param wmi_handle: wmi handle
+ * @param evt_buf: pointer to event buffer
+ * @param stats_param: Pointer to hold big data stats
  *
  * Return: QDF_STATUS_SUCCESS for success or error code
  */
@@ -589,9 +497,5 @@ void wmi_mc_cp_stats_attach_tlv(wmi_unified_t wmi_handle)
 		send_request_peer_stats_info_cmd_tlv;
 	ops->extract_peer_stats_count = extract_peer_stats_count_tlv;
 	ops->extract_peer_stats_info = extract_peer_stats_info_tlv;
-	wmi_handle->ops->extract_peer_tx_pkt_per_mcs =
-					extract_peer_tx_pkt_per_mcs_tlv;
-	wmi_handle->ops->extract_peer_rx_pkt_per_mcs =
-					extract_peer_rx_pkt_per_mcs_tlv;
 	wmi_attach_big_data_stats_handler(ops);
 }

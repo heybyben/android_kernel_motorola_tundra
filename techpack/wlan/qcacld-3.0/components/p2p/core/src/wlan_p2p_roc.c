@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -23,7 +22,7 @@
 
 #include <wlan_mgmt_txrx_utils_api.h>
 #include <wlan_scan_public_structs.h>
-#include <wlan_scan_api.h>
+#include <wlan_scan_ucfg_api.h>
 #include <wlan_objmgr_psoc_obj.h>
 #include <wlan_objmgr_global_obj.h>
 #include <wlan_objmgr_pdev_obj.h>
@@ -86,7 +85,6 @@ static QDF_STATUS p2p_scan_start(struct p2p_roc_context *roc_ctx)
 	uint8_t ndp_num = 0, nan_disc_enabled_num = 0;
 	struct wlan_objmgr_pdev *pdev;
 	bool is_dbs;
-	enum QDF_OPMODE opmode;
 
 	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(
 			p2p_soc_obj->soc, roc_ctx->vdev_id,
@@ -96,15 +94,13 @@ static QDF_STATUS p2p_scan_start(struct p2p_roc_context *roc_ctx)
 		return QDF_STATUS_E_INVAL;
 	}
 
-	opmode = wlan_vdev_mlme_get_opmode(vdev);
-
 	req = qdf_mem_malloc(sizeof(*req));
 	if (!req) {
 		status = QDF_STATUS_E_NOMEM;
 		goto fail;
 	}
 
-	wlan_scan_init_default_params(vdev, req);
+	ucfg_scan_init_default_params(vdev, req);
 
 	if (!roc_ctx->duration) {
 		roc_ctx->duration = P2P_ROC_DEFAULT_DURATION;
@@ -113,7 +109,7 @@ static QDF_STATUS p2p_scan_start(struct p2p_roc_context *roc_ctx)
 	}
 
 	pdev = wlan_vdev_get_pdev(vdev);
-	roc_ctx->scan_id = wlan_scan_get_scan_id(p2p_soc_obj->soc);
+	roc_ctx->scan_id = ucfg_scan_get_scan_id(p2p_soc_obj->soc);
 	req->vdev = vdev;
 	req->scan_req.scan_id = roc_ctx->scan_id;
 	req->scan_req.scan_type = SCAN_TYPE_P2P_LISTEN;
@@ -139,32 +135,23 @@ static QDF_STATUS p2p_scan_start(struct p2p_roc_context *roc_ctx)
 			  go_num, ndp_num, nan_disc_enabled_num);
 
 		is_dbs = policy_mgr_is_hw_dbs_capable(p2p_soc_obj->soc);
-		/* Modify the ROC duration only for P2P modes */
-		if (opmode == QDF_P2P_DEVICE_MODE ||
-		    opmode == QDF_P2P_CLIENT_MODE ||
-		    opmode == QDF_P2P_GO_MODE) {
-			if (go_num)
-			/* Check any P2P GO is already present or not. If it's
-			 * present then add fixed ROC timer value by 300ms
-			 * instead of multiplying with const value which may
-			 * lead ROC timer to become 1.5sec. So, in this case fw
-			 * will advertize NOA for 1.5 secs and if supplicant
-			 * wants to cancel the ROC after 200 or 300ms then fw
-			 * can not cancel NOA as ROC is already set to 1.5sec.
-			 * And if supplicant sends the next ROC then it might
-			 * delay as firmware is already running the presvious
-			 * NOA. This may cause the P2P find issue because P2P GO
-			 * is already present.
-			 * To fix this, add fixed 300ms duration to ROC and
-			 * later check if max limit reaches to 600ms then set
-			 * max ROC duartion as 600ms only.
-			 */
-				req->scan_req.dwell_time_passive +=
+
+		if (go_num)
+		/* Add fixed 300ms extra ROC time instead of multiplying the
+		 * ROC duration by const value as this causes the ROC to be
+		 * upto 1.5 secs if GO is present. Firmware will advertize NOA
+		 * of 1.5 secs and if supplicant cancels ROC after 200 or 300ms
+		 * then firmware cannot cancel NOA. So when supplicant sends
+		 * next ROC it will be delayed as firmware already is running
+		 * previous NOA. This causes p2p find issues if GO is present.
+		 * So add fixed duration of 300ms and also cap max ROC to 600ms
+		 * when GO is present
+		 */
+			req->scan_req.dwell_time_passive +=
 					P2P_ROC_DURATION_MULTI_GO_PRESENT;
-			else
-				req->scan_req.dwell_time_passive *=
+		else
+			req->scan_req.dwell_time_passive *=
 					P2P_ROC_DURATION_MULTI_GO_ABSENT;
-		}
 		/* this is to protect too huge value if some customers
 		 * give a higher value from supplicant
 		 */
@@ -198,7 +185,7 @@ static QDF_STATUS p2p_scan_start(struct p2p_roc_context *roc_ctx)
 	p2p_debug("FW requested roc duration is:%d",
 		  req->scan_req.dwell_time_passive);
 
-	status = wlan_scan_start(req);
+	status = ucfg_scan_start(req);
 
 	p2p_debug("start scan, scan req id:%d, scan id:%d, status:%d",
 		p2p_soc_obj->scan_req_id, roc_ctx->scan_id, status);
@@ -346,7 +333,7 @@ static QDF_STATUS p2p_destroy_roc_ctx(struct p2p_roc_context *roc_ctx,
  * @roc_ctx: remain on channel request
  *
  * This function stop roc timer, abort scan and unregister mgmt rx
- * callback.
+ * callbak.
  *
  * Return: QDF_STATUS_SUCCESS - in case of success
  */
@@ -424,7 +411,7 @@ static void p2p_roc_timeout(void *pdata)
  * @roc_ctx: remain on channel request
  *
  * This function init roc timer, start scan and register mgmt rx
- * callback.
+ * callbak.
  *
  * Return: QDF_STATUS_SUCCESS - in case of success
  */
@@ -756,9 +743,9 @@ QDF_STATUS p2p_restart_roc_timer(struct p2p_roc_context *roc_ctx)
 	return status;
 }
 
-QDF_STATUS p2p_cleanup_roc(struct p2p_soc_priv_obj *p2p_soc_obj,
-			   struct wlan_objmgr_vdev *vdev,
-			   bool sync)
+QDF_STATUS p2p_cleanup_roc_sync(
+	struct p2p_soc_priv_obj *p2p_soc_obj,
+	struct wlan_objmgr_vdev *vdev)
 {
 	struct scheduler_msg msg = {0};
 	struct p2p_cleanup_param *param;
@@ -770,8 +757,7 @@ QDF_STATUS p2p_cleanup_roc(struct p2p_soc_priv_obj *p2p_soc_obj,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	p2p_debug("p2p_soc_obj:%pK, vdev:%pK, sync:%d", p2p_soc_obj, vdev,
-		  sync);
+	p2p_debug("p2p_soc_obj:%pK, vdev:%pK", p2p_soc_obj, vdev);
 	param = qdf_mem_malloc(sizeof(*param));
 	if (!param)
 		return QDF_STATUS_E_NOMEM;
@@ -793,9 +779,6 @@ QDF_STATUS p2p_cleanup_roc(struct p2p_soc_priv_obj *p2p_soc_obj,
 		qdf_mem_free(param);
 		return status;
 	}
-
-	if (!sync)
-		return status;
 
 	status = qdf_wait_single_event(
 			&p2p_soc_obj->cleanup_roc_done,

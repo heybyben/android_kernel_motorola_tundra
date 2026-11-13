@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2012, 2016-2017 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -47,7 +46,7 @@
 
 /*
  * Radar pulse summary
- * + TYPE=0xF8 (Radar pulse summary report)
+ * + TYPE=0xF8 (Radar pulse summary reprot)
  * + SIG=0xBB (baseband PHY generated TLV components)
  */
 

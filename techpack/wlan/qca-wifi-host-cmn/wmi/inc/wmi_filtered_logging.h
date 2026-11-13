@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2015-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -116,7 +115,7 @@ int debug_wmi_filtered_command_log_show(qdf_debugfs_file_t m, void *v);
 int debug_wmi_filtered_event_log_show(qdf_debugfs_file_t m, void *v);
 
 /**
- * debug_filtered_wmi_cmds_write() - debugfs write for filtered_wmi_cmds
+ * debug_wmi_filtered_wmi_cmds_write() - debugfs write for filtered_wmi_cmds
  *
  * @file: file handler to access wmi_handle
  * @buf: received data buffer
@@ -130,7 +129,7 @@ ssize_t debug_filtered_wmi_cmds_write(struct file *file,
 				      size_t count, loff_t *ppos);
 
 /**
- * debug_filtered_wmi_evts_write() - debugfs write for filtered_wmi_evts
+ * debug_wmi_filtered_wmi_evts_write() - debugfs write for filtered_wmi_evts
  *
  * @file: file handler to access wmi_handle
  * @buf: received data buffer

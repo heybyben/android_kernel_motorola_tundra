@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -62,7 +61,7 @@
 #define CFG_WLAN_CM_UTF_PARAM CFG(CFG_WLAN_CM_UTF)
 /**
  * enum wlan_cm_utf_test - CM UTF Test ID
- * @CM_UTF_ID_CONNECT_SUCCESS: Connect Success
+ * @CM_UTF_ID_CONNECT_SUCCESS: Connect Succes
  * @CM_UTF_ID_DISCONNECT_SUCCESS: Disconnect Success
  * @CM_UTF_ID_PEER_CREATE_FAILURE: Peer Create Failure
  * @CM_UTF_ID_PEER_CREATE_TIMEOUT: No Peer Create Response
@@ -76,7 +75,6 @@
  * @CM_UTF_ID_DISCONNECT_SER_TIMEOUT: Ser Active Cmd Timeout for Disconnect
  * @CM_UTF_ID_CONNECT_SER_FAILED: Serialization Cmd Queue Failure for Connect
  * @CM_UTF_ID_DISCONNECT_SER_FAILED: Ser Cmd Queue Failure for Disconnect
- * @CM_UTF_ID_MAX: Maximum enumeration
  */
 enum wlan_cm_utf_test {
 	CM_UTF_ID_CONNECT_SUCCESS,
@@ -113,8 +111,8 @@ enum wlan_cm_utf_evt {
 };
 
 /**
- * struct wlan_cm_utf_node - CM UTF node to hold CM req info
- * @evt_id: CM UTF event id
+ * struct wlan_cm_utf_node- CM UTF node to hold CM req info
+ * @wlan_cm_utf_evt: CM UTF Resp event
  * @peer_mac: Peer Mac
  * @conn_req: Connect Request
  * @disconn_req: Disconnect Request
@@ -127,8 +125,7 @@ struct wlan_cm_utf_node {
 };
 
 /**
- * struct wlan_cm_utf - CM UTF handle
- * @cm_utf_node: linked list node for linking entries
+ * struct wlan_cm_utf- CM UTF handle
  * @vdev: Vdev object
  * @debugfs_de: debugfs entry
  * @test_id: Test case Id
@@ -136,8 +133,6 @@ struct wlan_cm_utf_node {
  * @cm_utf_timer: CM UTF timer
  * @cm_utf_test_timer: CM UTF timer for each test
  * @utf_node: CM UTF node to hold CM req info
- * @last_cmd_id: last command id
- * @last_cmd_source: last command source
  * @cm_utf_work: CM UTF work queue for processing events
  */
 struct wlan_cm_utf {
@@ -168,6 +163,7 @@ int wlan_cm_utf_scan_db_update_show(qdf_debugfs_file_t m, void *v);
 
 /**
  * wlan_cm_utf_cm_test_id_write() - debugfs write to start CM UTF test
+ *
  * @file: file handler to access cm utf handle
  * @buf: received data buffer
  * @count: length of received buffer
@@ -181,6 +177,7 @@ ssize_t wlan_cm_utf_cm_test_id_write(struct file *file,
 
 /**
  * wlan_cm_utf_scan_db_update_write() - debugfs write to add manual scan entry
+ *
  * @file: file handler to access cm utf handle
  * @buf: received data buffer
  * @count: length of received buffer
@@ -193,7 +190,7 @@ ssize_t wlan_cm_utf_scan_db_update_write(struct file *file,
 					 size_t count, loff_t *ppos);
 
 /**
- * wlan_cm_utf_attach() - Connection manager UTF init API
+ * wlan_cm_utf_attach: Connection manager UTF init API
  * @vdev: Vdev object
  *
  * Return: QDF_STATUS
@@ -201,7 +198,7 @@ ssize_t wlan_cm_utf_scan_db_update_write(struct file *file,
 QDF_STATUS wlan_cm_utf_attach(struct wlan_objmgr_vdev *vdev);
 
 /**
- * wlan_cm_utf_detach() - Connection manager UTF deinit API
+ * wlan_cm_utf_detach: Connection manager UTF deinit API
  * @vdev: Vdev object
  *
  * Return: QDF_STATUS
@@ -209,7 +206,7 @@ QDF_STATUS wlan_cm_utf_attach(struct wlan_objmgr_vdev *vdev);
 void wlan_cm_utf_detach(struct wlan_objmgr_vdev *vdev);
 
 /**
- * wlan_cm_utf_bss_peer_create_req() - Connection manager UTF bss peer
+ * wlan_cm_utf_bss_peer_create_req: Connection manager UTF bss peer
  * create request handler
  * @vdev: VDEV object
  * @peer_mac: Peer mac address
@@ -220,7 +217,7 @@ QDF_STATUS wlan_cm_utf_bss_peer_create_req(struct wlan_objmgr_vdev *vdev,
 					   struct qdf_mac_addr *peer_mac);
 
 /**
- * wlan_cm_utf_connect_req_active() - Connection manager UTF handler when connect
+ * wlan_cm_utf_connect_req_active: Connection manager UTF handler when connect
  * request is activated
  * @vdev: VDEV object
  * @vdev_connect_req: Vdev connect request
@@ -232,7 +229,7 @@ QDF_STATUS wlan_cm_utf_connect_req_active(
 			struct wlan_cm_vdev_connect_req *vdev_connect_req);
 
 /**
- * wlan_cm_utf_connect_req() - Connection manager UTF connect request handler
+ * wlan_cm_utf_connect_req: Connection manager UTF connect request handler
  * @vdev: VDEV object
  * @vdev_connect_req: Vdev connect request
  *
@@ -243,10 +240,10 @@ QDF_STATUS wlan_cm_utf_connect_req(
 			struct wlan_cm_vdev_connect_req *vdev_connect_req);
 
 /**
- * wlan_cm_utf_disconnect_req() - Connection manager UTF disconnect
+ * wlan_cm_utf_disconnect_req: Connection manager UTF disconnect
  * request handler
  * @vdev: VDEV object
- * @vdev_disconnect_req: Vdev disconnect request
+ * @vdev_connect_req: Vdev connect request
  *
  * Return: QDF_STATUS
  */
@@ -255,7 +252,7 @@ QDF_STATUS wlan_cm_utf_disconnect_req(
 		struct wlan_cm_vdev_discon_req *vdev_disconnect_req);
 
 /**
- * wlan_cm_utf_bss_peer_delete_req() - Connection manager UTF bss peer
+ * wlan_cm_utf_bss_peer_delete_req: Connection manager UTF bss peer
  * delete request handler
  * @vdev: VDEV object
  *
@@ -264,7 +261,7 @@ QDF_STATUS wlan_cm_utf_disconnect_req(
 QDF_STATUS wlan_cm_utf_bss_peer_delete_req(struct wlan_objmgr_vdev *vdev);
 
 /**
- * wlan_cm_utf_vdev_down() - Connection manager UTF vdev down request handler
+ * wlan_cm_utf_vdev_down: Connection manager UTF vdev down request handler
  * @vdev: VDEV object
  *
  * Return: QDF_STATUS

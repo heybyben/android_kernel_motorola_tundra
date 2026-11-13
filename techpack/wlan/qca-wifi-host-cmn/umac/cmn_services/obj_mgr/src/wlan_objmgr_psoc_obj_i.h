@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2016-2018 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -63,8 +62,8 @@
 
 /**
  * wlan_objmgr_psoc_pdev_attach() - store pdev in psoc's pdev list
- * @psoc: PSOC object
- * @pdev: PDEV object
+ * @psoc - PSOC object
+ * @pdev - PDEV object
  *
  * Attaches PDEV to PSOC, allocates PDEV id
  *
@@ -76,8 +75,8 @@ QDF_STATUS wlan_objmgr_psoc_pdev_attach(struct wlan_objmgr_psoc *psoc,
 
 /**
  * wlan_objmgr_psoc_pdev_detach() - remove pdev from psoc's pdev list
- * @psoc: PSOC object
- * @pdev: PDEV object
+ * @psoc - PSOC object
+ * @pdev - PDEV object
  *
  * detaches PDEV to PSOC, frees PDEV id
  *
@@ -89,8 +88,8 @@ QDF_STATUS wlan_objmgr_psoc_pdev_detach(struct wlan_objmgr_psoc *psoc,
 
 /**
  * wlan_objmgr_psoc_vdev_attach() - store vdev in psoc's vdev list
- * @psoc: PSOC object
- * @vdev: VDEV object
+ * @psoc - PSOC object
+ * @vdev - VDEV object
  *
  * Attaches VDEV to PSOC, allocates VDEV id
  *
@@ -102,8 +101,8 @@ QDF_STATUS wlan_objmgr_psoc_vdev_attach(struct wlan_objmgr_psoc *psoc,
 
 /**
  * wlan_objmgr_psoc_vdev_detach() - remove vdev from psoc's vdev list
- * @psoc: PSOC object
- * @vdev: VDEV object
+ * @psoc - PSOC object
+ * @vdev - VDEV object
  *
  * detaches VDEV to PSOC, frees VDEV id
  *
@@ -115,8 +114,8 @@ QDF_STATUS wlan_objmgr_psoc_vdev_detach(struct wlan_objmgr_psoc *psoc,
 
 /**
  * wlan_objmgr_psoc_peer_attach() - store peer in psoc's peer table
- * @psoc: PSOC object
- * @peer: PEER object
+ * @psoc - PSOC object
+ * @peer - PEER object
  *
  * Attaches PEER to PSOC, derives the HASH, add peer to its peer list
  *
@@ -128,8 +127,8 @@ QDF_STATUS wlan_objmgr_psoc_peer_attach(struct wlan_objmgr_psoc *psoc,
 
 /**
  * wlan_objmgr_psoc_peer_detach() - remove peer from psoc's peer table
- * @psoc: PSOC object
- * @peer: PEER object
+ * @psoc - PSOC object
+ * @peer - PEER object
  *
  * detaches PEER to PSOC, removes the peer from the peer list
  *

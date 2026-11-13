@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -21,11 +21,10 @@
 #include "wlan_objmgr_psoc_obj.h"
 #include "wlan_objmgr_global_obj.h"
 #include "qdf_status.h"
-#include "wlan_policy_mgr_public_struct.h"
+
 
 /**
  * ucfg_policy_mgr_psoc_open() - This API sets CFGs to policy manager context
- * @psoc: pointer to psoc
  *
  * This API pulls policy manager's context from PSOC and initialize the CFG
  * structure of policy manager.
@@ -33,10 +32,8 @@
  * Return: QDF_STATUS_SUCCESS up on success and any other status for failure.
  */
 QDF_STATUS ucfg_policy_mgr_psoc_open(struct wlan_objmgr_psoc *psoc);
-
 /**
  * ucfg_policy_mgr_psoc_close() - This API resets CFGs for policy manager ctx
- * @psoc: pointer to psoc
  *
  * This API pulls policy manager's context from PSOC and resets the CFG
  * structure of policy manager.
@@ -65,25 +62,6 @@ QDF_STATUS ucfg_policy_mgr_get_mcc_scc_switch(struct wlan_objmgr_psoc *psoc,
 	return QDF_STATUS_SUCCESS;
 }
 #endif //FEATURE_WLAN_MCC_TO_SCC_SWITCH
-
-/**
- * ucfg_policy_mgr_get_radio_combinations() - Query the supported radio
- * combinations
- * @psoc: soc object
- * @comb: combination buffer
- * @comb_max: max combination number can be saved to comb buffer
- * @comb_num: returned combination number
- *
- * This function returns the radio combination information supported by target.
- *
- * Return: QDF_STATUS_SUCCESS if query successfully
- */
-QDF_STATUS
-ucfg_policy_mgr_get_radio_combinations(struct wlan_objmgr_psoc *psoc,
-				       struct radio_combination *comb,
-				       uint32_t comb_max,
-				       uint32_t *comb_num);
-
 /**
  * ucfg_policy_mgr_get_sys_pref() - to get system preference
  * @psoc: pointer to psoc
@@ -133,7 +111,7 @@ QDF_STATUS ucfg_policy_mgr_get_conc_rule2(struct wlan_objmgr_psoc *psoc,
 						uint8_t *conc_rule2);
 
 /**
- * ucfg_policy_mgr_get_chnl_select_plcy() - to get channel selection policy
+ * policy_mgr_get_chnl_select_plcy() - to get channel selection policy
  * @psoc: pointer to psoc
  * @chnl_select_plcy: value to be filled
  *
@@ -145,7 +123,7 @@ QDF_STATUS ucfg_policy_mgr_get_conc_rule2(struct wlan_objmgr_psoc *psoc,
 QDF_STATUS ucfg_policy_mgr_get_chnl_select_plcy(struct wlan_objmgr_psoc *psoc,
 						uint32_t *chnl_select_plcy);
 /**
- * ucfg_policy_mgr_get_mcc_adaptive_sch() - to get mcc adaptive scheduler
+ * policy_mgr_get_mcc_adaptive_sch() - to get mcc adaptive scheduler
  * @psoc: pointer to psoc
  * @enable_mcc_adaptive_sch: value to be filled
  *
@@ -225,19 +203,6 @@ ucfg_policy_mgr_get_allow_mcc_go_diff_bi(struct wlan_objmgr_psoc *psoc,
  */
 QDF_STATUS ucfg_policy_mgr_get_dual_mac_feature(struct wlan_objmgr_psoc *psoc,
 						uint8_t *dual_mac_feature);
-
-/**
- * ucfg_policy_mgr_get_dual_sta_feature() - to find out if DUAL STA feature is
- *					    enabled
- * @psoc: pointer to psoc
- *
- * This API is used to find out whether dual sta specific feature is enabled
- * or not.
- *
- * Return: true if feature is enabled, otherwise false.
- */
-bool ucfg_policy_mgr_get_dual_sta_feature(struct wlan_objmgr_psoc *psoc);
-
 /**
  * ucfg_policy_mgr_get_force_1x1() - to find out if 1x1 connection is enforced
  *
@@ -250,35 +215,6 @@ bool ucfg_policy_mgr_get_dual_sta_feature(struct wlan_objmgr_psoc *psoc);
  */
 QDF_STATUS ucfg_policy_mgr_get_force_1x1(struct wlan_objmgr_psoc *psoc,
 					 uint8_t *force_1x1);
-
-/**
- * ucfg_policy_mgr_get_max_conc_cxns() - to get configured max concurrent active
- * connection count
- *
- * @psoc: pointer to psoc
- *
- * This API is used to query the configured max concurrent active connection
- * count.
- *
- * Return: max active connection count
- */
-uint32_t ucfg_policy_mgr_get_max_conc_cxns(struct wlan_objmgr_psoc *psoc);
-
-/**
- * ucfg_policy_mgr_set_max_conc_cxns() - to set supported max concurrent active
- * connection count to policy mgr
- *
- * @psoc: pointer to psoc
- * @max_conc_cxns: max active connection count
- *
- * This API is used to update the max concurrent active connection
- * count to policy mgr
- *
- * Return: QDF_STATUS_SUCCESS if set successfully
- */
-QDF_STATUS ucfg_policy_mgr_set_max_conc_cxns(struct wlan_objmgr_psoc *psoc,
-					     uint32_t max_conc_cxns);
-
 /**
  * ucfg_policy_mgr_get_sta_sap_scc_on_dfs_chnl() - to find out if STA and SAP
  *						   SCC is allowed on DFS channel
@@ -379,6 +315,7 @@ ucfg_policy_mgr_get_indoor_chnl_marking(struct wlan_objmgr_psoc *psoc,
  * ucfg_policy_mgr_get_sta_sap_scc_on_indoor_chnl() - to get if
  * sta sap scc on indoor channel is allowed
  * @psoc: pointer to psoc
+ * @sap_scc_on_indoor: value to be filled
  *
  * This API is used to get the value of  sta+sap scc on indoor channel
  *
@@ -396,63 +333,6 @@ ucfg_policy_mgr_get_sta_sap_scc_on_indoor_chnl(struct wlan_objmgr_psoc *psoc);
  * Return: true if DBS is supported else false
  */
 bool ucfg_policy_mgr_is_fw_supports_dbs(struct wlan_objmgr_psoc *psoc);
-
-/**
- * ucfg_policy_mgr_get_connection_count() - Get number of connections
- * @psoc: pointer to psoc
- *
- * This API is used to get the count of current connections.
- *
- * Return: connection count
- */
-uint32_t ucfg_policy_mgr_get_connection_count(struct wlan_objmgr_psoc *psoc);
-
-/**
- * ucfg_policy_mgr_is_hw_sbs_capable() - Check if HW is SBS capable
- * @psoc: pointer to psoc
- *
- * This API is to check if the HW is SBS capable.
- *
- * Return: true if the HW is SBS capable
- */
-bool ucfg_policy_mgr_is_hw_sbs_capable(struct wlan_objmgr_psoc *psoc);
-
-/*
- * ucfg_policy_mgr_get_vdev_same_freq_new_conn() - Get vdev_id of the first
- *					           connection that has same
- *					           channel frequency as new_freq
- * @psoc: psoc object pointer
- * @new_freq: channel frequency for the new connection
- * @vdev_id: Output parameter to return vdev id of the first existing connection
- *	     that has same channel frequency as @new_freq
- *
- * This function is to return the first connection that has same
- * channel frequency as @new_freq.
- *
- * Return: true if connection that has same channel frequency as
- *	   @new_freq exists. Otherwise false.
- */
-bool ucfg_policy_mgr_get_vdev_same_freq_new_conn(struct wlan_objmgr_psoc *psoc,
-						 uint32_t new_freq,
-						 uint8_t *vdev_id);
-/*
- * ucfg_policy_mgr_get_vdev_diff_freq_new_conn() - Get vdev id of the first
- *						   connection that has different
- *						   channel freq from new_freq
- * @psoc: psoc object pointer
- * @new_freq: channel frequency for the new connection
- * @vdev_id: Output parameter to return vdev id of the first existing connection
- *	     that has different channel frequency from @new_freq
- *
- * This function is to return the first connection that has different
- * channel frequency from @new_freq.
- *
- * Return: true if connection that has different channel frequency from
- *	   @new_freq exists. Otherwise false.
- */
-bool ucfg_policy_mgr_get_vdev_diff_freq_new_conn(struct wlan_objmgr_psoc *psoc,
-						 uint32_t new_freq,
-						 uint8_t *vdev_id);
 
 /**
  * ucfg_policy_mgr_get_dbs_hw_modes() - to get the DBS HW modes

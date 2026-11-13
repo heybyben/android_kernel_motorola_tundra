@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2018 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -39,7 +38,7 @@ QDF_STATUS pmo_core_set_mc_filter_req(struct wlan_objmgr_vdev *vdev,
 	struct pmo_mc_addr_list *mc_list);
 
 /**
- * pmo_core_clear_mc_filter_req() -send mc filter clear request
+ * pmo_clear_mc_filter_req() -send mc filter clear request
  * @vdev: objmgr vdev
  * @mc_list: a list of mc addresses to clear in fwr
  *
@@ -50,7 +49,9 @@ QDF_STATUS pmo_core_clear_mc_filter_req(struct wlan_objmgr_vdev *vdev,
 
 /**
  * pmo_core_cache_mc_addr_list(): API to cache mc addr list in pmo vdev priv obj
- * @mc_list_config: Multicast list configuration
+ * @psoc: objmgr psoc handle
+ * @vdev_id: vdev id
+ * @gtk_req: pmo gtk req param
  *
  * Return QDF_STATUS_SUCCESS -in case of success else return error
  */
@@ -68,7 +69,7 @@ QDF_STATUS pmo_core_flush_mc_addr_list(struct wlan_objmgr_psoc *psoc,
 	uint8_t vdev_id);
 
 /**
- * pmo_core_enhanced_mc_filter_enable() - enable enhanced multicast filtering
+ * pmo_core_enhance_mc_filter_enable() - enable enhanced multicast filtering
  * @vdev: the vdev to enable enhanced multicast filtering for
  *
  * Return: QDF_STATUS
@@ -76,7 +77,7 @@ QDF_STATUS pmo_core_flush_mc_addr_list(struct wlan_objmgr_psoc *psoc,
 QDF_STATUS pmo_core_enhanced_mc_filter_enable(struct wlan_objmgr_vdev *vdev);
 
 /**
- * pmo_core_enhanced_mc_filter_disable() - disable enhanced multicast filtering
+ * pmo_core_enhance_mc_filter_disable() - disable enhanced multicast filtering
  * @vdev: the vdev to disable enhanced multicast filtering for
  *
  * Return: QDF_STATUS
@@ -87,7 +88,8 @@ QDF_STATUS pmo_core_enhanced_mc_filter_disable(struct wlan_objmgr_vdev *vdev);
  * pmo_core_enable_mc_addr_filtering_in_fwr(): Enable cached mc add list in fwr
  * @psoc: objmgr psoc handle
  * @vdev_id: vdev id
- * @trigger: pmo trigger reason
+ * @gtk_req: pmo gtk req param
+ * @action: true for enable els false
  *
  * API to enable cached mc add list in fwr
  *
@@ -102,7 +104,8 @@ QDF_STATUS pmo_core_enable_mc_addr_filtering_in_fwr(
  * pmo_core_disable_mc_addr_filtering_in_fwr(): Disable cached mc addr list
  * @psoc: objmgr psoc handle
  * @vdev_id: vdev id
- * @trigger: pmo trigger reason
+ * @gtk_req: pmo gtk req param
+ * @action: true for enable els false
  *
  * API to disable cached mc add list in fwr
  *
@@ -114,12 +117,11 @@ QDF_STATUS pmo_core_disable_mc_addr_filtering_in_fwr(
 		enum pmo_offload_trigger trigger);
 
 /**
- * pmo_core_set_mc_addr_list_count() - set  mc address count
+ * pmo_core_get_mc_addr_list_count() -set  mc address count
  * @psoc: objmgr psoc
  * @vdev_id: vdev id
- * @count: mc address count
  *
- * Return: void
+ * Return: set mc address count
  */
 void pmo_core_set_mc_addr_list_count(struct wlan_objmgr_psoc *psoc,
 		uint8_t vdev_id, uint8_t count);

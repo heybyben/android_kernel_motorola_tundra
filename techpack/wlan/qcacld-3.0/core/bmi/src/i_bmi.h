@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2014-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -127,13 +126,13 @@ enum ATH_BIN_FILE {
 
 /**
  * struct bmi_info - Structure to hold BMI Specific information
- * @bmi_cmd_buff: BMI Command Buffer
- * @bmi_rsp_buff: BMI Response Buffer
- * @bmi_cmd_da: BMI Command Physical address
- * @bmi_rsp_da: BMI Response Physical address
- * @bmi_done: Flag to check if BMI Phase is complete
- * @board_id: board ID
- * @fw_files: FW files
+ * @bmi_cmd_buff - BMI Command Buffer
+ * @bmi_rsp_buff - BMI Response Buffer
+ * @bmi_cmd_da - BMI Command Physical address
+ * @bmi_rsp_da - BMI Response Physical address
+ * @bmi_done - Flag to check if BMI Phase is complete
+ * @board_id - board ID
+ * @fw_files - FW files
  *
  */
 struct bmi_info {
@@ -149,13 +148,11 @@ struct bmi_info {
 /**
  * struct ol_context - Structure to hold OL context
  * @bmi: BMI info
- * @cfg_info: OL config info
  * @cal_in_flash: For Firmware Flash Download
  * @qdf_dev: QDF Device
- * @ramdump_work: Work for Ramdump collection
- * @fw_indication_work: Work for Fw indication
- * @fw_dl_wakelock: Firmware download wakelock
  * @scn: HIF Context
+ * @ramdump_work: Work for Ramdump collection
+ * @fw_indication_work: Work for Fw inciation
  * @tgt_def: Target Defnition pointer
  * @fw_crashed_cb: Callback for firmware crashed ind
  *
@@ -168,7 +165,6 @@ struct ol_context {
 	qdf_device_t qdf_dev;
 	qdf_work_t ramdump_work;
 	qdf_work_t fw_indication_work;
-	qdf_wake_lock_t fw_dl_wakelock;
 	struct hif_opaque_softc *scn;
 	struct targetdef_t {
 		struct targetdef_s *targetdef;

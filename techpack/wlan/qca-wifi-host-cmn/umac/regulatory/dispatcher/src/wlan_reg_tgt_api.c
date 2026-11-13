@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -20,7 +19,7 @@
 
  /**
  * @file wlan_req_tgt_api.c
- * @brief contains regulatory target interface definitions
+ * @brief contains regulatory target interface definations
  */
 
 #include <qdf_status.h>
@@ -147,42 +146,3 @@ tgt_reg_set_disable_upper_6g_edge_ch_supp(struct wlan_objmgr_psoc *psoc,
 	return reg_set_disable_upper_6g_edge_ch_supp(psoc, val);
 }
 #endif
-
-#ifdef CONFIG_AFC_SUPPORT
-QDF_STATUS tgt_reg_set_afc_dev_type(struct wlan_objmgr_psoc *psoc,
-				    enum reg_afc_dev_deploy_type
-				    reg_afc_dev_type)
-{
-	return reg_set_afc_soc_dev_type(psoc, reg_afc_dev_type);
-}
-
-QDF_STATUS tgt_reg_get_afc_dev_type(struct wlan_objmgr_psoc *psoc,
-				    enum reg_afc_dev_deploy_type
-				    *reg_afc_dev_type)
-{
-	return reg_get_afc_soc_dev_type(psoc, reg_afc_dev_type);
-}
-
-QDF_STATUS
-tgt_reg_set_eirp_preferred_support(struct wlan_objmgr_psoc *psoc,
-				   bool reg_is_eirp_support_preferred)
-{
-	return reg_set_eirp_preferred_support(psoc,
-					      reg_is_eirp_support_preferred);
-}
-
-QDF_STATUS
-tgt_reg_get_eirp_preferred_support(struct wlan_objmgr_psoc *psoc,
-				   bool *reg_is_eirp_support_preferred)
-{
-	return reg_get_eirp_preferred_support(psoc,
-					      reg_is_eirp_support_preferred);
-}
-#endif
-
-QDF_STATUS tgt_reg_process_r2p_table_update_response(
-						struct wlan_objmgr_psoc *psoc,
-						uint32_t pdev_id)
-{
-	return reg_process_r2p_table_update_response(psoc, pdev_id);
-}

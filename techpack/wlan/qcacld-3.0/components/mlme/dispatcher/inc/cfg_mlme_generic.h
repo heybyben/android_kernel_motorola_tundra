@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -31,8 +31,6 @@
  * enum monitor_mode_concurrency - Monitor mode concurrency
  * @MONITOR_MODE_CONC_NO_SUPPORT: No concurrency supported with monitor mode
  * @MONITOR_MODE_CONC_STA_SCAN_MON: STA + monitor mode concurrency is supported
- * @MONITOR_MODE_CONC_AFTER_LAST: last value in enum
- * @MONITOR_MODE_CONC_MAX: max value supported
  */
 enum monitor_mode_concurrency {
 	MONITOR_MODE_CONC_NO_SUPPORT,
@@ -42,11 +40,10 @@ enum monitor_mode_concurrency {
 };
 
 /**
- * enum wlan_wds_mode - wds mode
+ * enum wds_mode_type: wds mode
  * @WLAN_WDS_MODE_DISABLED: WDS is disabled
  * @WLAN_WDS_MODE_REPEATER: WDS repeater mode
- * @WLAN_WDS_MODE_LAST: last value in enum
- * @WLAN_WDS_MODE_MAX: max value supported
+ *
  * This is used for 'type' values in wds_mode
  */
 enum wlan_wds_mode {
@@ -55,141 +52,6 @@ enum wlan_wds_mode {
 	/* keep this last */
 	WLAN_WDS_MODE_LAST,
 	WLAN_WDS_MODE_MAX = WLAN_WDS_MODE_LAST - 1,
-};
-
-/**
- * enum wlan_eht_mode - EHT mode of operation
- * @WLAN_EHT_MODE_DISABLED: EHT is disabled
- * @WLAN_EHT_MODE_SLO: Single-link operation mode
- * @WLAN_EHT_MODE_MLSR: Multi-link Single-Radio mode
- * @WLAN_EHT_MODE_MLMR: Multi-link Multi-Radio mode
- * @WLAN_EHT_MODE_EMLSR: Enhanced Multi-link Single-Radio mode
- * @WLAN_EHT_MODE_LAST: last value in enum
- * @WLAN_EHT_MODE_MAX: max value supported
- *
- * This is used for 'type' values in eht_mode
- */
-enum wlan_eht_mode {
-	WLAN_EHT_MODE_DISABLED  = 0,
-	WLAN_EHT_MODE_SLO       = 1,
-	WLAN_EHT_MODE_MLSR      = 2,
-	WLAN_EHT_MODE_MLMR      = 3,
-	WLAN_EHT_MODE_EMLSR     = 4,
-	/* keep this last */
-	WLAN_EHT_MODE_LAST,
-	WLAN_EHT_MODE_MAX = WLAN_EHT_MODE_LAST - 1,
-};
-
-/**
- * enum wlan_emlsr_action_mode - EMLSR action mode
- * @WLAN_EMLSR_MODE_DISABLED: EMLSR is disabled
- * @WLAN_EMLSR_MODE_ENTER: Enter EMLSR operation mode
- * @WLAN_EMLSR_MODE_EXIT: Exit EMLSR operation mode
- * @WLAN_EMLSR_MODE_LAST: last value in enum
- * @WLAN_EMLSR_MODE_MAX: max value supported
- *
- * This is used for 'type' values in emlsr_mode
- */
-enum wlan_emlsr_action_mode {
-	WLAN_EMLSR_MODE_DISABLED = 0,
-	WLAN_EMLSR_MODE_ENTER    = 1,
-	WLAN_EMLSR_MODE_EXIT     = 2,
-	/* keep this last */
-	WLAN_EMLSR_MODE_LAST,
-	WLAN_EMLSR_MODE_MAX = WLAN_EMLSR_MODE_LAST - 1,
-};
-
-/**
- * enum wlan_t2lm_negotiation_support - TID-to-link mapping negotiation support
- * @WLAN_T2LM_DISABLE: T2LM support is disabled
- * @WLAN_T2LM_SAME_LINK_SET: Mapping of all TIDs to the same link set, both DL
- * and UL
- * @WLAN_T2LM_RESERVED: This value is Reserved
- * @WLAN_T2LM_SAME_DIFF_LINK_SET: Mapping of each TID to the same or different
- * link set
- * @WLAN_T2LM_SUPPORT_LAST: last value in enum
- * @WLAN_T2LM_SUPPORT_MAX: max value supported
- *
- * This is used for 'type' values in T2LM support
- */
-enum wlan_t2lm_negotiation_support {
-	WLAN_T2LM_DISABLE            = 0,
-	WLAN_T2LM_SAME_LINK_SET      = 1,
-	WLAN_T2LM_RESERVED           = 2,
-	WLAN_T2LM_SAME_DIFF_LINK_SET = 3,
-	/* keep this last */
-	WLAN_T2LM_SUPPORT_LAST,
-	WLAN_T2LM_SUPPORT_MAX = WLAN_T2LM_SUPPORT_LAST - 1,
-};
-
-/**
- * enum debug_packet_log_type - Debug packet log type
- * @DEBUG_PKTLOG_TYPE_NONE: Debug packet log is disabled
- * @DEBUG_PKTLOG_TYPE_MGMT: Management frames logging is enabled.
- * @DEBUG_PKTLOG_TYPE_EAPOL: EAPOL packets logging is enabled.
- * @DEBUG_PKTLOG_TYPE_DHCP: DHCP packets logging is enabled.
- * @DEBUG_PKTLOG_TYPE_ACTION: Action frames logging is enabled.
- * @DEBUG_PKTLOG_TYPE_ARP: ARP packets logging is enabled.
- */
-enum debug_packet_log_type {
-	DEBUG_PKTLOG_TYPE_NONE   = 0x0,
-	DEBUG_PKTLOG_TYPE_MGMT   = 0x1,
-	DEBUG_PKTLOG_TYPE_EAPOL  = 0x2,
-	DEBUG_PKTLOG_TYPE_DHCP   = 0x4,
-	DEBUG_PKTLOG_TYPE_ACTION = 0x8,
-	DEBUG_PKTLOG_TYPE_ARP    = 0x10,
-};
-
-/**
- * enum t2lm_negotiation_support: t2lm negotiation supported
- * @T2LM_NEGOTIATION_DISABLED: T2LM is disabled
- * @T2LM_NEGOTIATION_ALL_TIDS_TO_SUBSET_OF_LINKS: supports the mapping
- * of all TIDs to the same link set both DL and UL.
- * @T2LM_NEGOTIATION_RESERVED:
- * this mapping value is reserved.
- * @T2LM_NEGOTIATION_DISJOINT_MAPPING: supports the mapping of
- * each TID to the same or different link set.
- * @T2LM_NEGOTIATION_LAST: last value in enum
- * @T2LM_NEGOTIATION_MAX: max value supported
- */
-enum t2lm_negotiation_support {
-	T2LM_NEGOTIATION_DISABLED = 0,
-	T2LM_NEGOTIATION_ALL_TIDS_TO_SUBSET_OF_LINKS = 1,
-	T2LM_NEGOTIATION_RESERVED = 2,
-	T2LM_NEGOTIATION_DISJOINT_MAPPING  = 3,
-	T2LM_NEGOTIATION_LAST,
-	/* keep this last */
-	T2LM_NEGOTIATION_MAX = T2LM_NEGOTIATION_LAST - 1,
-};
-
-/**
- * enum wlan_epcs_capability - EPCS capability
- * @WLAN_EPCS_CAP_DISABLED: EPCS capability disable
- * @WLAN_EPCS_CAP_ENABLE: EPCS capability enable
- * @WLAN_EPCS_CAP_LAST: last value in enum
- * @WLAN_EPCS_CAP_MAX: max value supported
- */
-enum wlan_epcs_capability {
-	WLAN_EPCS_CAP_DISABLED  =  0,
-	WLAN_EPCS_CAP_ENABLE  =  1,
-	/* keep this last */
-	WLAN_EPCS_CAP_LAST,
-	WLAN_EPCS_CAP_MAX = WLAN_EPCS_CAP_LAST - 1,
-};
-
-/**
- * enum wlan_epcs_frame - EPCS frame type
- * @WLAN_EPCS_FRAME_TEARDOWN: EPCS teardown frame
- * @WLAN_EPCS_FRAME_REQUEST: EPCS request frame
- * @WLAN_EPCS_FRAME_LAST: last value in enum
- * @WLAN_EPCS_FRAME_MAX: max value supported
- */
-enum wlan_epcs_frame {
-	WLAN_EPCS_FRAME_TEARDOWN  =  0,
-	WLAN_EPCS_FRAME_REQUEST  =  1,
-	/* keep this last */
-	WLAN_EPCS_FRAME_LAST,
-	WLAN_EPCS_FRAME_MAX = WLAN_EPCS_FRAME_LAST - 1,
 };
 
 /*
@@ -233,32 +95,6 @@ enum wlan_epcs_frame {
 		200, \
 		CFG_VALUE_OR_DEFAULT, \
 		"PMF SA query retry interval for SAP")
-
-#ifdef WLAN_FEATURE_11BE
-/*
- * oem_eht_mlo_crypto_bitmap - OEM control to allow various EHT connection
- * options using bitmap based on following ENUM (Name of ENUM to be added)
- * @Min: 0x0
- * @Max: 0xFFFFFFFF
- * @Default: 0x20008 - To allow MLO WPA2-PMF cap APs and WPA3-SAE w/o H2E cap
- *
- * This INI is used to control the driver candidate selection and EHT
- * connection choice based on OEM configuration. The bitmap follows the
- * implementation from wlan_crypto_oem_eht_mlo_config enum
- */
-#define CFG_OEM_EHT_MLO_CRYPTO_BITMAP CFG_INI_UINT( \
-		"oem_eht_mlo_crypto_bitmap", \
-		0x0, \
-		0xFFFFFFFF, \
-		0x20008, \
-		CFG_VALUE_OR_DEFAULT, \
-		"OEM control to allow/disallow crypto to EHT configuration")
-
-#define CFG_OEM_EHT_MLO_CRYPTO_BITMAP_SUPPORTED \
-			CFG(CFG_OEM_EHT_MLO_CRYPTO_BITMAP)
-#else
-#define CFG_OEM_EHT_MLO_CRYPTO_BITMAP_SUPPORTED
-#endif
 
 /*
  * <ini>
@@ -346,29 +182,6 @@ enum wlan_epcs_frame {
 
 #ifdef CONFIG_BAND_6GHZ
 /*
- * disable_vlp_sta_conn_to_sp_ap - Disable VLP STA connection to SP AP
- * @Min: 0
- * @Max: 1
- * @Default: 0
- *
- * This cfg is used to disable connection when AP is operating in 6 GHz
- * SP mode but STA doesn't support SP mode and supports VLP mode.
- *
- * Related: None
- *
- * Supported Feature: STA
- */
-#define CFG_DISABLE_VLP_STA_CONN_TO_SP_AP CFG_BOOL( \
-		"disable_vlp_sta_conn_to_sp_ap", \
-		0, \
-		"disable vlp sta conn to sp ap")
-#define CFG_DIS_VLP_STA_CONN_TO_SP_AP	CFG(CFG_DISABLE_VLP_STA_CONN_TO_SP_AP)
-#else
-#define CFG_DIS_VLP_STA_CONN_TO_SP_AP
-#endif
-
-#ifdef CONFIG_BAND_6GHZ
-/*
  * standard_6ghz_connection_policy - Enable 6 GHz standard connection policy
  * @Min: 0
  * @Max: 1
@@ -388,30 +201,6 @@ enum wlan_epcs_frame {
 #define CFG_6GHZ_STD_CONN_POLICY	CFG(CFG_6GHZ_STANDARD_CONNECTION_POLICY)
 #else
 #define CFG_6GHZ_STD_CONN_POLICY
-#endif
-
-#ifdef WLAN_FEATURE_11BE_MLO
-/*
- * emlsr_mode_enable - Enable eMLSR mode support
- * @Min: 0
- * @Max: 1
- * @Default: 0
- *
- * This cfg is used to enable eMLSR mode
- * If 0 - MLMR mode (Default mode)
- * If 1 - eMLSR mode
- *
- * Related: None
- *
- * Supported Feature: STA
- */
-#define CFG_EMLSR_MODE_ENABLE CFG_BOOL( \
-		"emlsr_mode_enable", \
-		0, \
-		"eMLSR mode enable flag")
-#define CFG_EMLSR_MODE_ENABLED	CFG(CFG_EMLSR_MODE_ENABLE)
-#else
-#define CFG_EMLSR_MODE_ENABLED
 #endif
 
 /*
@@ -560,7 +349,7 @@ enum wlan_epcs_frame {
  * @Default: 0 (disabled)
  *
  * This INI item is used to control subsystem restart(SSR) test framework
- * Set it's value to 1 to enable APPS triggered SSR testing
+ * Set it's value to 1 to enable APPS trigerred SSR testing
  *
  * Related: None
  *
@@ -814,16 +603,15 @@ enum wlan_epcs_frame {
  * gEnableDebugLog - Enable/Disable the Connection related logs
  * @Min: 0
  * @Max: 0xFF
- * @Default: 0x01
+ * @Default: 0x0F
  *
  * This ini is used to enable/disable the connection related logs
- * 0x1  - Enable mgmt pkt logs (except probe req/rsp, beacons).
- * 0x2  - Enable EAPOL pkt logs.
- * 0x4  - Enable DHCP pkt logs.
- * 0x8  - Enable mgmt action frames logs.
- * 0x10 - Enable ARP pkt logs.
- * 0x0  - Disable all the above connection related logs.
- * The default value of 0x01 will enable all the mgmt logs
+ * 0x1 - Enable mgmt pkt logs (excpet probe req/rsp, beacons).
+ * 0x2 - Enable EAPOL pkt logs.
+ * 0x4 - Enable DHCP pkt logs.
+ * 0x8 - Enable mgmt action frames logs.
+ * 0x0 - Disable all the above connection related logs.
+ * The default value of 0x0F will enable all the above logs
  *
  * Related: None
  *
@@ -835,7 +623,7 @@ enum wlan_epcs_frame {
  */
 #define CFG_ENABLE_DEBUG_PACKET_LOG CFG_INI_UINT( \
 				"gEnableDebugLog", \
-				0, 0xFF, 0x01, \
+				0, 0xFF, 0x0F, \
 				CFG_VALUE_OR_DEFAULT, \
 				"Enable debug log")
 
@@ -1192,76 +980,10 @@ enum wlan_epcs_frame {
 		"", \
 		"Set mgmt action frame hw tx retry count")
 
-#if defined(WLAN_FEATURE_SR)
-/*
- * <ini>
- * sr_enable_modes - Modes for which SR(Spatial Reuse) feature can be enabled
- * @Min: 0x00
- * @Max: 0xf
- * @Default: 0x1
- *
- * This ini is used to check for which mode SR feature is enabled
- *
- * Bit 0: Enable/Disable SR feature for STA
- * Bit 1: Enable/Disable SR feature for SAP
- * Bit 2: Enable/Disable SR feature for P2P CLI
- * Bit 3: Enable/Disable SR feature for P2P GO
- *
- * Related: None
- *
- * Supported Feature: STA/SAP
- *
- * Usage: External
- *
- * </ini>
- */
-#define CFG_SR_ENABLE_MODES CFG_INI_UINT( \
-		"sr_enable_modes",\
-		0x0,\
-		0xf,\
-		0x1,\
-		CFG_VALUE_OR_DEFAULT, \
-		"To decide for which mode SR feature is enabled")
-#define CFG_SR_ENABLE_MODES_ALL CFG(CFG_SR_ENABLE_MODES)
-#else
-#define CFG_SR_ENABLE_MODES_ALL
-#endif
-
-#ifdef WLAN_FEATURE_11BE_MLO
-/*
- * t2lm_negotiation_support - T2LM negotiation support by STA
- * @Min: 0
- * @Max: 3
- * @Default: 1
- *
- * This cfg is used to define t2lm negotiation supported value by STA
- * If 0 - t2lm negotiation is not supported
- * If 1 - supports the mapping of all TIDs to the same link set both DL and UL.
- * If 2 - reserved
- * If 3 - supports the mapping of each TID to the same or different link set.
- *
- * Related: None
- *
- * Supported Feature: STA
- */
-#define CFG_T2LM_NEGOTIATION_SUPPORT CFG_INI_UINT( \
-					"t2lm_negotiation_supported", \
-					T2LM_NEGOTIATION_DISABLED, \
-					T2LM_NEGOTIATION_DISJOINT_MAPPING, \
-					T2LM_NEGOTIATION_ALL_TIDS_TO_SUBSET_OF_LINKS, \
-					CFG_VALUE_OR_DEFAULT, \
-					"T2LM negotiation supported value")
-
-#define CFG_T2LM_NEGOTIATION_SUPPORTED CFG(CFG_T2LM_NEGOTIATION_SUPPORT)
-#else
-#define CFG_T2LM_NEGOTIATION_SUPPORTED
-#endif
-
 #define CFG_GENERIC_ALL \
 	CFG(CFG_ENABLE_DEBUG_PACKET_LOG) \
 	CFG(CFG_PMF_SA_QUERY_MAX_RETRIES) \
 	CFG(CFG_PMF_SA_QUERY_RETRY_INTERVAL) \
-	CFG_OEM_EHT_MLO_CRYPTO_BITMAP_SUPPORTED \
 	CFG(CFG_ENABLE_RTT_MAC_RANDOMIZATION) \
 	CFG(CFG_RTT3_ENABLE) \
 	CFG(CFG_11H_SUPPORT_ENABLED) \
@@ -1295,10 +1017,6 @@ enum wlan_epcs_frame {
 	CFG(CFG_RF_TEST_MODE_SUPP_ENABLED) \
 	CFG_WDS_MODE_ALL \
 	CFG(CFG_TX_RETRY_MULTIPLIER) \
-	CFG(CFG_MGMT_FRAME_HW_TX_RETRY_COUNT) \
-	CFG_6GHZ_STD_CONN_POLICY \
-	CFG_EMLSR_MODE_ENABLED \
-	CFG_SR_ENABLE_MODES_ALL \
-	CFG_T2LM_NEGOTIATION_SUPPORTED\
-	CFG_DIS_VLP_STA_CONN_TO_SP_AP
+	CFG(CFG_MGMT_FRAME_HW_TX_RETRY_COUNT)\
+	CFG_6GHZ_STD_CONN_POLICY
 #endif /* __CFG_MLME_GENERIC_H */

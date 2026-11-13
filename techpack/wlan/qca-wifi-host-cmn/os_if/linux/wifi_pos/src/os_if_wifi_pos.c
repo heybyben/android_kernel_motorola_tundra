@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -33,7 +33,6 @@
 #include "wifi_pos_api.h"
 #include "wlan_cfg80211.h"
 #include "wlan_objmgr_psoc_obj.h"
-#include "wlan_osif_priv.h"
 #ifdef CNSS_GENL
 #ifdef CONFIG_CNSS_OUT_OF_TREE
 #include "cnss_nl.h"
@@ -573,11 +572,6 @@ static void os_if_send_nl_resp(uint32_t pid, uint8_t *buf,
 
 /**
  * os_if_wifi_pos_send_rsp() - send oem registration response
- * @psoc: soc object
- * @pid: registering process ID
- * @cmd: OEM command
- * @buf_len: length of the OEM message in @buf
- * @buf: OEM message
  *
  * This function sends oem message to registered application process
  *
@@ -807,7 +801,7 @@ static int wifi_pos_parse_req(struct sk_buff *skb, struct wifi_pos_req_msg *req,
 	}
 
 	if (nlh->nlmsg_len < NLMSG_LENGTH(sizeof(*msg_hdr))) {
-		osif_err("nlmsg_len(%d) and msg_hdr_size(%zu) mismatch",
+		osif_err("nlmsg_len(%d) and msg_hdr_size(%zu) mis-match",
 			 nlh->nlmsg_len, sizeof(*msg_hdr));
 		return OEM_ERR_INVALID_MESSAGE_LENGTH;
 	}
@@ -819,7 +813,7 @@ static int wifi_pos_parse_req(struct sk_buff *skb, struct wifi_pos_req_msg *req,
 	}
 
 	if (nlh->nlmsg_len < NLMSG_LENGTH(sizeof(*msg_hdr) + msg_hdr->length)) {
-		osif_err("nlmsg_len(%d) and animsg_len(%d) mismatch",
+		osif_err("nlmsg_len(%d) and animsg_len(%d) mis-match",
 			 nlh->nlmsg_len, msg_hdr->length);
 		return OEM_ERR_INVALID_MESSAGE_LENGTH;
 	}
@@ -889,17 +883,14 @@ static int wifi_pos_parse_req(struct sk_buff *skb, struct wifi_pos_req_msg *req,
 }
 #endif
 
-#ifdef CNSS_GENL
 /**
  * __os_if_wifi_pos_callback() - callback registered with NL service socket to
  * process wifi pos request
- * @data: request message buffer
- * @data_len: length of @data
- * @ctx: context registered with the dispatcher (unused)
- * @pid: caller process ID
+ * @skb: request message sk_buff
  *
  * Return: status of operation
  */
+#ifdef CNSS_GENL
 static void __os_if_wifi_pos_callback(const void *data, int data_len,
 				      void *ctx, int pid)
 {
@@ -944,13 +935,6 @@ static void os_if_wifi_pos_callback(const void *data, int data_len,
 	qdf_op_unprotect(op_sync);
 }
 #else
-/**
- * __os_if_wifi_pos_callback() - callback registered with NL service socket to
- * process wifi pos request
- * @skb: request message sk_buff
- *
- * Return: status of operation
- */
 static int __os_if_wifi_pos_callback(struct sk_buff *skb)
 {
 	uint8_t err;
@@ -1099,107 +1083,3 @@ int os_if_wifi_pos_populate_caps(struct wlan_objmgr_psoc *psoc,
 
 	return qdf_status_to_os_return(wifi_pos_populate_caps(psoc, caps));
 }
-
-#if defined(WIFI_POS_CONVERGED) && defined(WLAN_FEATURE_RTT_11AZ_SUPPORT)
-QDF_STATUS
-os_if_wifi_pos_initiate_pasn_auth(struct wlan_objmgr_vdev *vdev,
-				  struct wlan_pasn_request *pasn_peer,
-				  uint8_t num_pasn_peers,
-				  bool is_initiate_pasn)
-{
-	struct net_device *netdev;
-	struct vdev_osif_priv *osif_priv;
-	struct sk_buff *skb;
-	struct nlattr *attr, *nest_attr;
-	enum qca_wlan_vendor_pasn_action action;
-	int i;
-	int index = QCA_NL80211_VENDOR_SUBCMD_PASN_AUTH_STATUS_INDEX;
-	uint16_t record_size;
-	uint32_t len;
-	QDF_STATUS status = QDF_STATUS_SUCCESS;
-
-	osif_priv  = wlan_vdev_get_ospriv(vdev);
-	if (!osif_priv) {
-		osif_err("OSIF priv is NULL");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	netdev = osif_priv->wdev->netdev;
-
-	len = NLMSG_HDRLEN;
-	/* QCA_WLAN_VENDOR_ATTR_PASN_ACTION */
-	len += nla_total_size(sizeof(u32));
-
-	/*
-	 * size of nest containing
-	 * QCA_WLAN_VENDOR_ATTR_PASN_PEER_MAC_ADDR
-	 * QCA_WLAN_VENDOR_ATTR_PASN_PEER_SRC_ADDR
-	 */
-	record_size = nla_total_size(2 * nla_total_size(ETH_ALEN));
-
-	/* QCA_WLAN_VENDOR_ATTR_PASN_PEERS nest */
-	len += nla_total_size(num_pasn_peers * record_size);
-
-	skb = wlan_cfg80211_vendor_event_alloc(osif_priv->wdev->wiphy,
-					       osif_priv->wdev, len,
-					       index, GFP_ATOMIC);
-	if (!skb)
-		return QDF_STATUS_E_NOMEM;
-
-	action = is_initiate_pasn ?
-		 QCA_WLAN_VENDOR_PASN_ACTION_AUTH :
-		 QCA_WLAN_VENDOR_PASN_ACTION_DELETE_SECURE_RANGING_CONTEXT;
-	if (nla_put_u32(skb, QCA_WLAN_VENDOR_ATTR_PASN_ACTION, action)) {
-		osif_err("NLA put failed");
-		goto nla_put_failure;
-	}
-
-	attr = nla_nest_start(skb, QCA_WLAN_VENDOR_ATTR_PASN_PEERS);
-	if (!attr) {
-		osif_err("NLA nest failed");
-		status = QDF_STATUS_E_FAILURE;
-		goto nla_put_failure;
-	}
-
-	for (i = 0; i < num_pasn_peers; i++) {
-		osif_debug("PASN peer_mac[%d]: " QDF_MAC_ADDR_FMT " src_mac: " QDF_MAC_ADDR_FMT,
-			   i, QDF_MAC_ADDR_REF(pasn_peer[i].peer_mac.bytes),
-			   QDF_MAC_ADDR_REF(pasn_peer[i].self_mac.bytes));
-		nest_attr = nla_nest_start(skb, i);
-		if (!nest_attr) {
-			osif_err("NLA nest failed for iter:%d", i);
-			status = QDF_STATUS_E_FAILURE;
-			goto nla_put_failure;
-		}
-
-		if (nla_put(skb, QCA_WLAN_VENDOR_ATTR_PASN_PEER_MAC_ADDR,
-			    ETH_ALEN, pasn_peer[i].peer_mac.bytes)) {
-			osif_err("NLA put failed");
-			status = QDF_STATUS_E_FAILURE;
-			goto nla_put_failure;
-		}
-
-		if (!qdf_is_macaddr_zero(&pasn_peer[i].self_mac) &&
-		    nla_put(skb, QCA_WLAN_VENDOR_ATTR_PASN_PEER_SRC_ADDR,
-			    ETH_ALEN, pasn_peer[i].self_mac.bytes)) {
-			osif_err("NLA put failed");
-			status = QDF_STATUS_E_FAILURE;
-			goto nla_put_failure;
-		}
-
-		nla_nest_end(skb, nest_attr);
-	}
-	nla_nest_end(skb, attr);
-
-	osif_debug("action:%d num_pasn_peers:%d", action, num_pasn_peers);
-
-	wlan_cfg80211_vendor_event(skb, GFP_ATOMIC);
-
-	return status;
-
-nla_put_failure:
-	wlan_cfg80211_vendor_free_skb(skb);
-
-	return status;
-}
-#endif /* WIFI_POS_CONVERGED && WLAN_FEATURE_RTT_11AZ_SUPPORT */

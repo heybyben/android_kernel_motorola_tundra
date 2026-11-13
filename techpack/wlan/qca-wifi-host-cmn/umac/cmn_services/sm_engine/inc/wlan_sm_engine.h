@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2018 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -100,9 +99,9 @@
  * @initial_substate:  Initial sub state of this state
  * @has_substates:     flag to specify, whether it has sub states
  * @name:              Name of the state
- * @wlan_sm_entry:    State entry callback pointer
- * @wlan_sm_exit:     State exit callback pointer
- * @wlan_sm_event:    State event callback pointer
+ * @wlan_sm_entry:    State entry callback poitner
+ * @wlan_sm_exit:     State exit callback poitner
+ * @wlan_sm_event:    State event callback poitner
  */
 struct wlan_sm_state_info {
 	uint8_t state;
@@ -161,11 +160,11 @@ struct wlan_sm {
  * @ctx: caller pointer, used on invoking callbacks
  * @init_state: Default state of the SM
  * @state_info: States' definitions
- * @num_states: Number of states
+ * @num_state: Number of states
  * @event_names: Event name table
  * @num_event_names: Number of events
  *
- * Creates SM object, initializes with init_state, stores the name and owner
+ * Creates SM object, intializes with init_state, stores the name and owner
  * module pointer, states definition table, and event name table
  *
  * Return: Handle to struct wlan_sm on successful creation,

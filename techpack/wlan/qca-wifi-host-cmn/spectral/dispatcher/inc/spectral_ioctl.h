@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2011, 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -70,7 +69,6 @@
 enum spectral_params {
 	SPECTRAL_PARAM_FFT_PERIOD,
 	SPECTRAL_PARAM_SCAN_PERIOD,
-	SPECTRAL_PARAM_FFT_RECAPTURE,
 	SPECTRAL_PARAM_SCAN_COUNT,
 	SPECTRAL_PARAM_SHORT_REPORT,
 	SPECTRAL_PARAM_SPECT_PRI,
@@ -218,7 +216,7 @@ struct spectral_ioctl_params {
 };
 
 /**
- * enum spectral_cap_hw_gen - Definitions for the Spectral hardware generation.
+ * spectral_cap_hw_gen: Definitions for the Spectral hardware generation.
  * This corresponds to definitions in qca_wlan_vendor_spectral_scan_cap_hw_gen.
  * @SPECTRAL_CAP_HW_GEN_1: Generation 1
  * @SPECTRAL_CAP_HW_GEN_2: Generation 2
@@ -249,7 +247,6 @@ struct spectral_config_frequency {
  * struct spectral_config - spectral config parameters
  * @ss_fft_period:        Skip interval for FFT reports
  * @ss_period:            Spectral scan period
- * @ss_recapture:         Set this to allow FFT recapture if scan period > 52us
  * @ss_count:             # of reports to return from ss_active
  * @ss_short_report:      Set to report only 1 set of FFT results
  * @radar_bin_thresh_sel: Select threshold to classify strong bin for FFT
@@ -317,7 +314,7 @@ struct spectral_config_frequency {
  *                          applicable only for Agile Spectral scan request in
  *                          80+80 MHz mode. For 80+80 mode it represents  the
  *                          center frequency (in MHz) of the secondary 80 MHz
- *                          span of interest or center frequency (in MHz) of
+*                           span of interest or center frequency (in MHz) of
  *                          any WLAN channel in the secondary 80 MHz span of
  *                          interest.
  * @ss_bandwidth: Spectral scan bandwidth
@@ -325,7 +322,6 @@ struct spectral_config_frequency {
 struct spectral_config {
 	uint16_t ss_fft_period;
 	uint16_t ss_period;
-	uint16_t ss_recapture;
 	uint16_t ss_count;
 	uint16_t ss_short_report;
 	uint8_t radar_bin_thresh_sel;
@@ -414,8 +410,6 @@ struct spectral_caps {
 #define MAX_NUM_DETECTORS             (2)
 #define MAX_SPECTRAL_PAYLOAD          (3028)
 
-#define SPECTRAL_RECAPTURE_SCAN_PERIOD_THRESHOLD   (52)
-
 /**
  * enum dcs_int_type - Interference type indicated by DCS
  * @SPECTRAL_DCS_INT_NONE:  No interference
@@ -495,7 +489,7 @@ struct samp_edge_extra_bin_info {
 } __packed;
 
 /* Compile time assert to check struct size is divisible by 4 Bytes */
-SPECTRAL_COMPILE_TIME_ASSERT(struct_samp_edge_extra_bin_size_4byte_assertion,
+SPECTRAL_COMPILE_TIME_ASSERT(struct_size_4byte_assertion,
 			     (sizeof(struct samp_edge_extra_bin_info) % 4)
 			     == 0);
 
@@ -523,8 +517,6 @@ SPECTRAL_COMPILE_TIME_ASSERT(struct_samp_edge_extra_bin_size_4byte_assertion,
  * @max_magnitude: Indicates the maximum magnitude
  * @noise_floor: Indicates the current noise floor
  * @rssi: Indicates RSSI
- * @agc_total_gain:
- * @gainchange:
  * @pri80ind: Indication from hardware that the sample was received on the
  * primary 80 MHz segment. If this is set for smode = SPECTRAL_SCAN_MODE_AGILE,
  * it indicates that Spectral scan was carried out on pri80 instead of the
@@ -533,11 +525,6 @@ SPECTRAL_COMPILE_TIME_ASSERT(struct_samp_edge_extra_bin_size_4byte_assertion,
  * @is_sec80: Indicates whether the frequency span corresponds to pri80 or
  * sec80 (only applicable for 160/80p80 operating_bw for
  * smode SPECTRAL_SCAN_MODE_NORMAL)
- * @blanking_status: Indicates whether scan blanking was enabled during this
- * spectral report capture. This field is applicable only when scan blanking
- * feature is enabled. When scan blanking feature is disabled, this field
- * will be set to zero.
- * @padding_detector_info: padding bytes
  */
 struct samp_detector_info {
 	uint32_t start_frequency;
@@ -560,13 +547,12 @@ struct samp_detector_info {
 	uint8_t gainchange;
 	uint8_t pri80ind;
 	uint8_t is_sec80;
-	uint8_t blanking_status;
 	/* Padding bits to make struct size multiple of 4 bytes */
-	uint8_t padding_detector_info[];
+	uint8_t padding_detector_info[1];
 } __packed;
 
 /* Compile time assert to check struct size is divisible by 4 Bytes */
-SPECTRAL_COMPILE_TIME_ASSERT(struct_samp_detector_info_size_4byte_assertion,
+SPECTRAL_COMPILE_TIME_ASSERT(struct_size_4byte_assertion,
 			     (sizeof(struct samp_detector_info) % 4) == 0);
 
 /**
@@ -575,7 +561,6 @@ SPECTRAL_COMPILE_TIME_ASSERT(struct_samp_detector_info_size_4byte_assertion,
  * Spectral scan and interference detection is carried out.
  * @detector_info: Per-detector Spectral information
  * @num_detectors: Number of detectors per span
- * @padding_span_info: padding bytes
  */
 struct samp_freq_span_info {
 	struct samp_detector_info detector_info[MAX_NUM_DETECTORS];
@@ -585,7 +570,7 @@ struct samp_freq_span_info {
 } __packed;
 
 /* Compile time assert to check struct size is divisible by 4 Bytes */
-SPECTRAL_COMPILE_TIME_ASSERT(struct_samp_freq_span_info_size_4byte_assertion,
+SPECTRAL_COMPILE_TIME_ASSERT(struct_size_4byte_assertion,
 			     (sizeof(struct samp_freq_span_info) % 4) == 0);
 
 /**
@@ -641,7 +626,7 @@ struct spectral_samp_msg {
 	uint8_t dcs_enabled;
 	uint8_t int_type;
 	uint8_t num_freq_spans;
-	uint8_t bin_pwr[];  /*This should be the last item in the structure*/
+	uint8_t bin_pwr[0];  /*This should be the last item in the structure*/
 } __packed;
 
 #else
@@ -680,15 +665,11 @@ struct spectral_samp_msg {
  * @bin_pwr:                  Contains FFT magnitudes
  * @bin_pwr_sec80:            Contains FFT magnitudes for the secondary 80
  *                            segment
- * @interf_list:              List of interference sources
+ * @interf_list:              List of interfernce sources
  * @noise_floor:              Indicates the current noise floor
  * @noise_floor_sec80:        Indicates the current noise floor for secondary 80
  *                            segment
  * @ch_width:                 Channel width 20/40/80/160 MHz
- * @spectral_agc_total_gain:
- * @spectral_agc_total_gain_sec80:
- * @spectral_gainchange:
- * @spectral_gainchange_sec80:
  * @spectral_mode:            Spectral scan mode
  * @spectral_pri80ind:        Indication from hardware that the sample was
  *                            received on the primary 80 MHz segment. If this
@@ -720,7 +701,6 @@ struct spectral_samp_msg {
  *                            via direct DMA framework.
  * @target_reset_count:       Indicates the number of times target went through
  *                            reset routine after spectral was enabled.
- * @agile_ch_width:
  * @bin_pwr_count_5mhz:       Indicates the number of FFT bins in the extra
  *                            5 MHz for 165 MHz/ Restricted 80p80 mode
  * @bin_pwr_5mhz:             Contains FFT magnitudes corresponding to the extra

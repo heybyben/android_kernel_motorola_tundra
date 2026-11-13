@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -55,6 +55,15 @@ wlan_serialization_is_non_scan_pending_queue_empty(
 error:
 	return status;
 }
+
+/**
+ * wlan_serialization_is_active_nonscan_cmd_allowed() - find if cmd allowed
+ * @pdev: pointer to pdev object
+ *
+ * This API will be called to find out if non scan cmd is allowed.
+ *
+ * Return: true or false
+ */
 
 bool
 wlan_serialization_is_active_non_scan_cmd_allowed(
@@ -224,7 +233,7 @@ wlan_ser_move_non_scan_pending_to_active(
 	struct wlan_serialization_command cmd_to_remove;
 	enum wlan_serialization_status status = WLAN_SER_CMD_DENIED_UNSPECIFIED;
 	struct wlan_serialization_pdev_queue *pdev_queue;
-	struct wlan_serialization_vdev_queue *vdev_queue = NULL;
+	struct wlan_serialization_vdev_queue *vdev_queue;
 
 	struct wlan_ser_vdev_obj *ser_vdev_obj;
 
@@ -245,22 +254,20 @@ wlan_ser_move_non_scan_pending_to_active(
 
 	pdev_queue = &ser_pdev_obj->pdev_q[SER_PDEV_QUEUE_COMP_NON_SCAN];
 
-	if (vdev) {
-		ser_vdev_obj = wlan_serialization_get_vdev_obj(vdev);
-		if (!ser_vdev_obj) {
-			ser_err("Can't find ser_vdev_obj");
-			goto error;
-		}
+	ser_vdev_obj = wlan_serialization_get_vdev_obj(vdev);
 
-		vdev_queue =
-			&ser_vdev_obj->vdev_q[SER_VDEV_QUEUE_COMP_NON_SCAN];
+	if (!ser_vdev_obj) {
+		ser_err("Can't find ser_vdev_obj");
+		goto error;
 	}
+
+	vdev_queue = &ser_vdev_obj->vdev_q[SER_VDEV_QUEUE_COMP_NON_SCAN];
 
 	wlan_serialization_acquire_lock(&pdev_queue->pdev_queue_lock);
 
 	blocking_cmd_waiting = pdev_queue->blocking_cmd_waiting;
 
-	if (!blocking_cmd_removed && !blocking_cmd_waiting && vdev_queue) {
+	if (!blocking_cmd_removed && !blocking_cmd_waiting) {
 		pending_queue = &vdev_queue->pending_list;
 		vdev_queue_lookup = true;
 	} else {
@@ -696,8 +703,8 @@ wlan_ser_cancel_non_scan_cmd(
 		 */
 		if (cmd_bkup.cmd_cb) {
 			/* caller should now do necessary clean up */
-			ser_debug("Cancel command: type %d id %d vdev %d and Release memory",
-				  cmd_bkup.cmd_type, cmd_bkup.cmd_id, vdev_id);
+			ser_debug("Cancel command: type %d id %d and Release memory",
+				  cmd_bkup.cmd_type, cmd_bkup.cmd_id);
 			cmd_bkup.cmd_cb(&cmd_bkup, WLAN_SER_CB_CANCEL_CMD);
 			/* caller should release the memory */
 			cmd_bkup.cmd_cb(&cmd_bkup, WLAN_SER_CB_RELEASE_MEM_CMD);
@@ -730,40 +737,5 @@ wlan_ser_cancel_non_scan_cmd(
 
 	wlan_serialization_release_lock(&pdev_q->pdev_queue_lock);
 
-	if (is_active_queue && wlan_serialization_list_empty(pdev_queue) &&
-	    !wlan_serialization_any_vdev_cmd_active(pdev_q)) {
-		/*
-		 * Try to do reactive pdev pending list command to active list
-		 * since all active list commands are already canceled and no
-		 * active vdev commands.
-		 */
-		wlan_ser_move_non_scan_pending_to_active(ser_pdev_obj,
-							 NULL, false);
-	}
-
 	return status;
-}
-
-bool
-wlan_serialization_is_blocking_non_scan_cmd_waiting(
-				struct wlan_objmgr_pdev *pdev)
-{
-	struct wlan_serialization_pdev_queue *pdev_queue;
-	struct wlan_ser_pdev_obj *ser_pdev_obj;
-	bool blocking_cmd_active = 0;
-	uint8_t blocking_cmd_waiting = 0;
-
-	ser_pdev_obj = wlan_serialization_get_pdev_obj(pdev);
-
-	pdev_queue = wlan_serialization_get_pdev_queue_obj(
-					ser_pdev_obj,
-					WLAN_SER_CMD_NONSCAN);
-
-	blocking_cmd_active = pdev_queue->blocking_cmd_active;
-	blocking_cmd_waiting = pdev_queue->blocking_cmd_waiting;
-
-	if (blocking_cmd_active || blocking_cmd_waiting)
-		return true;
-
-	return false;
 }

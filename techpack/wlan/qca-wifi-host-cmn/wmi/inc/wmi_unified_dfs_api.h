@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2019, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -30,7 +29,7 @@
 /**
  * wmi_extract_dfs_cac_complete_event() - function to handle cac complete event
  * @wmi_handle: wmi handle
- * @evt_buf: event buffer
+ * @event_buf: event buffer
  * @vdev_id: vdev id
  * @len: length of buffer
  *
@@ -46,7 +45,7 @@ QDF_STATUS wmi_extract_dfs_cac_complete_event(
  * wmi_extract_dfs_ocac_complete_event() - function to handle off channel
  *						CAC complete event
  * @wmi_handle: wmi handle
- * @evt_buf: event buffer
+ * @event_buf: event buffer
  * @param: off channel cac  complete params
  *
  * Return: 0 for success or error code
@@ -58,7 +57,7 @@ wmi_extract_dfs_ocac_complete_event(wmi_unified_t wmi_handle, uint8_t *evt_buf,
 /**
  * wmi_extract_dfs_radar_detection_event() - function to handle radar event
  * @wmi_handle: wmi handle
- * @evt_buf: event buffer
+ * @event_buf: event buffer
  * @radar_found: radar found event info
  * @len: length of buffer
  *

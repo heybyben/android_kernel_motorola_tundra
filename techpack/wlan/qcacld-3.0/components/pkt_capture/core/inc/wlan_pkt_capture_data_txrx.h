@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -46,7 +46,7 @@
 #define HAL_TX_PKT_TYPE_11B 1
 
 /**
- * enum pkt_capture_data_process_type - data pkt types to process
+ * pkt_capture_data_process_type - data pkt types to process
  * for packet capture mode
  * @TXRX_PROCESS_TYPE_DATA_RX: process RX packets (normal rx + offloaded rx)
  * @TXRX_PROCESS_TYPE_DATA_TX: process TX packets (ofloaded tx)
@@ -83,7 +83,7 @@ void pkt_capture_datapkt_process(
 			uint8_t vdev_id,
 			qdf_nbuf_t mon_buf_list,
 			enum pkt_capture_data_process_type type,
-			uint8_t tid, uint8_t status, bool pkt_format,
+			uint8_t tid, uint8_t status, bool pktformat,
 			uint8_t *bssid, void *pdev,
 			uint8_t tx_retry_cnt);
 
@@ -94,7 +94,6 @@ void pkt_capture_datapkt_process(
  * @head_msdu: pointer to head msdu
  * @vdev_id: vdev_id
  * @pdev: pdev handle
- * @status: capture status
  *
  * Return: none
  */
@@ -157,7 +156,7 @@ void pkt_capture_offload_deliver_indication_handler(
 #endif
 
 /**
- * struct pkt_capture_tx_hdr_elem_t - tx packets header structure to
+ * pkt_capture_tx_hdr_elem_t - tx packets header struture to
  * be used to update radiotap header for packet capture mode
  * @timestamp: timestamp
  * @preamble: preamble
@@ -165,7 +164,7 @@ void pkt_capture_offload_deliver_indication_handler(
  * @rate: rate
  * @rssi_comb: rssi in dBm
  * @nss: if nss 1 means 1ss and 2 means 2ss
- * @bw: BW (0=>20 MHz, 1=>40 MHz, 2=>80 MHz, 3=>160 MHz)
+ * @bw: BW (0=>20MHz, 1=>40MHz, 2=>80MHz, 3=>160MHz)
  * @stbc: STBC
  * @sgi: SGI
  * @ldpc: LDPC
@@ -173,8 +172,6 @@ void pkt_capture_offload_deliver_indication_handler(
  * @dir: direction rx: 0 and tx: 1
  * @status: tx status
  * @tx_retry_cnt: tx retry count
- * @framectrl: frame control
- * @seqno: sequence number
  * @ppdu_id: ppdu_id of msdu
  */
 struct pkt_capture_tx_hdr_elem_t {
@@ -189,8 +186,8 @@ struct pkt_capture_tx_hdr_elem_t {
 	bool sgi;
 	bool ldpc;
 	bool beamformed;
-	bool dir;
-	uint8_t status;
+	bool dir; /* rx:0 , tx:1 */
+	uint8_t status; /* tx status */
 	uint8_t tx_retry_cnt;
 	uint16_t framectrl;
 	uint16_t seqno;
@@ -198,7 +195,7 @@ struct pkt_capture_tx_hdr_elem_t {
 };
 
 /**
- * struct pkt_capture_ppdu_stats_q_node - node structure to be enqueued
+ * pkt_capture_ppdu_stats_q_node - node structure to be enqueued
  * in ppdu_stats_q
  * @node: list node
  * @buf: buffer data received from ppdu_stats

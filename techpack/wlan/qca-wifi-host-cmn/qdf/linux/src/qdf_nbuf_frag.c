@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2020 The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -91,9 +90,9 @@ void __qdf_frag_mod_exit(void)
  * @p_frag: Pointer to frag
  * @alloc_func_name: Function where frag is allocated
  * @alloc_func_line: Allocation function line no.
- * @refcount: No. of references to the frag
+ * @refcount: No. of refereces to the frag
  * @last_func_name: Function where frag recently accessed
- * @last_func_line: Line number of last function
+ * @last_func_line_num: Line number of last function
  *
  **/
 struct qdf_frag_track_node_t {
@@ -119,7 +118,7 @@ typedef struct qdf_frag_tracking_list_t {
 
 typedef struct qdf_frag_track_node_t QDF_FRAG_TRACK;
 
-/*
+/**
  * Array of tracking list for maintaining
  * allocated debug frag nodes as per the calculated
  * hash value.
@@ -131,7 +130,7 @@ static struct kmem_cache *frag_tracking_cache;
 /* Tracking list for maintaining the free debug frag nodes */
 static qdf_frag_tracking_list qdf_frag_track_free_list;
 
-/*
+/**
  * Parameters for statistics
  * qdf_frag_track_free_list_count: No. of free nodes
  * qdf_frag_track_used_list_count : No. of nodes used
@@ -412,6 +411,13 @@ void qdf_frag_debug_init(void)
 
 qdf_export_symbol(qdf_frag_debug_init);
 
+/**
+ * qdf_frag_buf_debug_exit() - Exit network frag debug functionality
+ *
+ * Exit network frag tracking debug functionality and log frag memory leaks
+ *
+ * Return: none
+ */
 void qdf_frag_debug_exit(void)
 {
 	uint32_t index;
@@ -742,17 +748,15 @@ void qdf_frag_debug_update_addr(qdf_frag_t p_fragp, qdf_frag_t n_fragp,
 	}
 }
 
-qdf_frag_t qdf_frag_alloc_debug(qdf_frag_cache_t *pf_cache,
-				unsigned int frag_size,
-				const char *func_name,
+qdf_frag_t qdf_frag_alloc_debug(unsigned int frag_size, const char *func_name,
 				uint32_t line_num)
 {
 	qdf_frag_t p_frag;
 
 	if (is_initial_mem_debug_disabled)
-		return __qdf_frag_alloc(pf_cache, frag_size);
+		return __qdf_frag_alloc(frag_size);
 
-	p_frag =  __qdf_frag_alloc(pf_cache, frag_size);
+	p_frag =  __qdf_frag_alloc(frag_size);
 
 	/* Store frag in QDF Frag Tracking Table */
 	if (qdf_likely(p_frag))
@@ -823,37 +827,3 @@ void __qdf_mem_unmap_page(qdf_device_t osdev, qdf_dma_addr_t paddr,
 #endif
 
 qdf_export_symbol(__qdf_mem_unmap_page);
-
-#if defined(QDF_FRAG_CACHE_SUPPORT)
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0))
-void __qdf_frag_cache_drain(qdf_frag_cache_t *pf_cache)
-{
-	struct page *page;
-
-	if (!pf_cache->encoded_page)
-		return;
-
-	page  = virt_to_page((void *)pf_cache->encoded_page);
-	__page_frag_cache_drain(page, pf_cache->pagecnt_bias);
-	memset(pf_cache, 0, sizeof(*pf_cache));
-}
-#else
-void __qdf_frag_cache_drain(qdf_frag_cache_t *pf_cache)
-{
-	struct page *page;
-
-	if (!pf_cache->va)
-		return;
-
-	page  = virt_to_page(pf_cache->va);
-	__page_frag_cache_drain(page, pf_cache->pagecnt_bias);
-	memset(pf_cache, 0, sizeof(*pf_cache));
-}
-#endif
-#else
-void __qdf_frag_cache_drain(qdf_frag_cache_t *pf_cache)
-{
-}
-#endif
-
-qdf_export_symbol(__qdf_frag_cache_drain);

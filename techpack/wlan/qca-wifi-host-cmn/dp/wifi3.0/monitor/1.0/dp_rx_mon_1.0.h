@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -32,6 +32,30 @@
  */
 #define MON_DROP_REAP_LIMIT 64
 
+/*
+ * The maximum headroom reserved for monitor destination buffer to
+ * accomodate radiotap header and protocol flow tag
+ */
+#ifdef DP_RX_MON_MEM_FRAG
+/*
+ *  -------------------------------------------------
+ * |       Protocol & Flow TAG      | Radiotap header|
+ * |                                |  Length(128 B) |
+ * |  ((4* QDF_NBUF_MAX_FRAGS) * 2) |                |
+ *  -------------------------------------------------
+ */
+#define DP_RX_MON_MAX_RADIO_TAP_HDR (128)
+#define DP_RX_MON_PF_TAG_LEN_PER_FRAG (4)
+#define DP_RX_MON_TOT_PF_TAG_LEN \
+	((DP_RX_MON_PF_TAG_LEN_PER_FRAG) * (QDF_NBUF_MAX_FRAGS))
+#define DP_RX_MON_MAX_MONITOR_HEADER \
+	((DP_RX_MON_TOT_PF_TAG_LEN * 2) + (DP_RX_MON_MAX_RADIO_TAP_HDR))
+#endif
+
+/* l2 header pad byte in case of Raw frame is Zero and 2 in non raw */
+#define DP_RX_MON_RAW_L2_HDR_PAD_BYTE (0)
+#define DP_RX_MON_NONRAW_L2_HDR_PAD_BYTE (2)
+
 QDF_STATUS dp_rx_pdev_mon_status_buffers_alloc(struct dp_pdev *pdev,
 					       uint32_t mac_id);
 QDF_STATUS dp_rx_pdev_mon_status_desc_pool_alloc(struct dp_pdev *pdev,
@@ -54,9 +78,9 @@ void dp_rx_pdev_mon_desc_pool_free(struct dp_pdev *pdev);
 /**
  * dp_rx_mon_dest_process() - Brain of the Rx processing functionality
  *	Called from the bottom half (tasklet/NET_RX_SOFTIRQ)
- * @soc: core txrx main context
+ * @soc: core txrx main contex
  * @int_ctx: interrupt context
- * @mac_id: mac id
+ * @hal_ring: opaque pointer to the HAL Rx Ring, which will be serviced
  * @quota: No. of units (packets) that can be serviced in one shot.
  *
  * This function implements the core of Rx functionality. This is
@@ -113,33 +137,18 @@ dp_rx_pdev_mon_buf_desc_pool_init(struct dp_pdev *pdev, uint32_t mac_id)
  *  a given mac
  * @pdev: DP pdev
  * @mac_id: mac id
- * @force_flush: Force flush ring
- *
- * Return: None
- */
-uint32_t
-dp_mon_dest_srng_drop_for_mac(struct dp_pdev *pdev, uint32_t mac_id,
-			      bool force_flush);
-#else
-#ifdef QCA_SUPPORT_FULL_MON
-/**
- * dp_mon_dest_srng_drop_for_mac() - Drop the mon dest ring packets for
- *  a given mac
- * @pdev: DP pdev
- * @mac_id: mac id
  *
  * Return: None
  */
 uint32_t
 dp_mon_dest_srng_drop_for_mac(struct dp_pdev *pdev, uint32_t mac_id);
 #endif
-#endif
 
 /**
  * dp_rxdma_err_process() - RxDMA error processing functionality
- * @int_ctx: interrupt context
- * @soc: core txrx main context
- * @mac_id: mac id
+ * @soc: core txrx main contex
+ * @mac_id: mac id which is one of 3 mac_ids
+ * @hal_ring: opaque pointer to the HAL Rx Ring, which will be serviced
  * @quota: No. of units (packets) that can be serviced in one shot.
  *
  * Return: num of buffers processed
@@ -162,8 +171,6 @@ void dp_mon_buf_delayed_replenish(struct dp_pdev *pdev);
  *
  * @dp_pdev: core txrx pdev context
  * @buf_addr_info: void pointer to monitor link descriptor buf addr info
- * @mac_id: mac id which is one of 3 mac_ids
- *
  * Return: QDF_STATUS
  */
 QDF_STATUS
@@ -177,18 +184,6 @@ dp_rx_mon_link_desc_return(struct dp_pdev *dp_pdev,
 			   int mac_id)
 {
 	return QDF_STATUS_SUCCESS;
-}
-#endif
-
-#if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
-static inline uint16_t dp_rx_mon_get_rx_pkt_tlv_size(struct dp_soc *soc)
-{
-	return soc->curr_rx_pkt_tlv_size;
-}
-#else
-static inline uint16_t dp_rx_mon_get_rx_pkt_tlv_size(struct dp_soc *soc)
-{
-	return soc->rx_mon_pkt_tlv_size;
 }
 #endif
 
@@ -207,7 +202,7 @@ static inline void dp_mon_adjust_frag_len(struct dp_soc *soc,
 					  uint32_t *frag_len,
 					  uint16_t l2_hdr_pad)
 {
-	uint32_t rx_pkt_tlv_len = soc->rx_mon_pkt_tlv_size;
+	uint32_t rx_pkt_tlv_len = soc->rx_pkt_tlv_size;
 
 	if (*total_len >= (RX_MONITOR_BUFFER_SIZE - rx_pkt_tlv_len)) {
 		*frag_len = RX_MONITOR_BUFFER_SIZE - rx_pkt_tlv_len -
@@ -266,9 +261,6 @@ void dp_rx_mon_frag_adjust_frag_len(uint32_t *total_len, uint32_t *frag_len,
 
 /**
  * DP_RX_MON_GET_NBUF_FROM_DESC() - Get nbuf from desc
- * @rx_desc: RX descriptor
- *
- * Return: nbuf address
  */
 #define DP_RX_MON_GET_NBUF_FROM_DESC(rx_desc) \
 	NULL
@@ -298,7 +290,7 @@ dp_rx_mon_add_msdu_to_list_failure_handler(void *rx_tlv_hdr,
 	qdf_frag_free(rx_tlv_hdr);
 	if (head_msdu)
 		qdf_nbuf_list_free(*head_msdu);
-	dp_err("[%s] failed to allocate subsequent parent buffer to hold all frag",
+	dp_err("[%s] failed to allocate subsequent parent buffer to hold all frag\n",
 	       func_name);
 	if (head_msdu)
 		*head_msdu = NULL;
@@ -310,9 +302,6 @@ dp_rx_mon_add_msdu_to_list_failure_handler(void *rx_tlv_hdr,
 
 /**
  * dp_rx_mon_get_paddr_from_desc() - Get paddr from desc
- * @rx_desc: RX descriptor
- *
- * Return: Physical address of the buffer
  */
 static inline
 qdf_dma_addr_t dp_rx_mon_get_paddr_from_desc(struct dp_rx_desc *rx_desc)
@@ -322,9 +311,6 @@ qdf_dma_addr_t dp_rx_mon_get_paddr_from_desc(struct dp_rx_desc *rx_desc)
 
 /**
  * DP_RX_MON_IS_BUFFER_ADDR_NULL() - Is Buffer received from hw is NULL
- * @rx_desc: RX descriptor
- *
- * Return: true if the buffer is NULL, otherwise false
  */
 #define DP_RX_MON_IS_BUFFER_ADDR_NULL(rx_desc) \
 	(!(rx_desc->rx_buf_start))
@@ -403,20 +389,19 @@ QDF_STATUS dp_rx_mon_alloc_parent_buffer(qdf_nbuf_t *head_msdu)
 
 /**
  * dp_rx_mon_parse_desc_buffer() - Parse desc buffer based.
- * @dp_soc:             struct dp_soc*
- * @msdu_info:          struct hal_rx_msdu_desc_info*
- * @is_frag_p:          is_frag *
- * @total_frag_len_p:   Remaining frag len to be updated
- * @frag_len_p:         frag len
- * @l2_hdr_offset_p:    l2 hdr offset
- * @rx_desc_tlv:        rx_desc_tlv
- * @first_rx_desc_tlv:
- * @is_frag_non_raw_p:  Non raw frag
- * @data:               NBUF Data
  *
  * Below code will parse desc buffer, handle continuation frame,
  * adjust frag length and update l2_hdr_padding
  *
+ * @soc                : struct dp_soc*
+ * @msdu_info          : struct hal_rx_msdu_desc_info*
+ * @is_frag_p          : is_frag *
+ * @total_frag_len_p   : Remaining frag len to be updated
+ * @frag_len_p         : frag len
+ * @l2_hdr_offset_p    : l2 hdr offset
+ * @rx_desc_tlv        : rx_desc_tlv
+ * @is_frag_non_raw_p  : Non raw frag
+ * @data               : NBUF Data
  */
 static inline void
 dp_rx_mon_parse_desc_buffer(struct dp_soc *dp_soc,
@@ -424,12 +409,11 @@ dp_rx_mon_parse_desc_buffer(struct dp_soc *dp_soc,
 			    bool *is_frag_p, uint32_t *total_frag_len_p,
 			    uint32_t *frag_len_p, uint16_t *l2_hdr_offset_p,
 			    qdf_frag_t rx_desc_tlv,
-			    void **first_rx_desc_tlv,
 			    bool *is_frag_non_raw_p, void *data)
 {
 	struct hal_rx_mon_dest_buf_info frame_info;
 	uint16_t tot_payload_len =
-			RX_MONITOR_BUFFER_SIZE - dp_soc->rx_mon_pkt_tlv_size;
+			RX_MONITOR_BUFFER_SIZE - dp_soc->rx_pkt_tlv_size;
 
 	if (msdu_info->msdu_flags & HAL_MSDU_F_MSDU_CONTINUATION) {
 		/* First buffer of MSDU */
@@ -538,8 +522,6 @@ dp_rx_mon_parse_desc_buffer(struct dp_soc *dp_soc,
 
 /**
  * dp_rx_mon_buffer_set_pktlen() - set pktlen for buffer
- * @msdu: MSDU
- * @size: MSDU size
  */
 static inline void dp_rx_mon_buffer_set_pktlen(qdf_nbuf_t msdu, uint32_t size)
 {
@@ -568,7 +550,7 @@ QDF_STATUS dp_rx_mon_add_msdu_to_list(struct dp_soc *soc, qdf_nbuf_t *head_msdu,
 	/* Here head_msdu and *head_msdu must not be NULL */
 	/* Dont add frag to skb if frag length is zero. Drop frame */
 	if (qdf_unlikely(!frag_len || !head_msdu || !(*head_msdu))) {
-		dp_err("[%s] frag_len[%d] || head_msdu[%pK] || *head_msdu is Null while adding frag to skb",
+		dp_err("[%s] frag_len[%d] || head_msdu[%pK] || *head_msdu is Null while adding frag to skb\n",
 		       __func__, frag_len, head_msdu);
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -581,7 +563,7 @@ QDF_STATUS dp_rx_mon_add_msdu_to_list(struct dp_soc *soc, qdf_nbuf_t *head_msdu,
 
 	/* Current msdu must not be NULL */
 	if (qdf_unlikely(!msdu_curr)) {
-		dp_err("[%s] Current msdu can't be Null while adding frag to skb",
+		dp_err("[%s] Current msdu can't be Null while adding frag to skb\n",
 		       __func__);
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -739,88 +721,12 @@ QDF_STATUS dp_rx_mon_alloc_parent_buffer(qdf_nbuf_t *head_msdu)
 	return QDF_STATUS_SUCCESS;
 }
 
-#ifdef QCA_WIFI_MONITOR_MODE_NO_MSDU_START_TLV_SUPPORT
-
-#define RXDMA_DATA_DMA_BLOCK_SIZE 128
 static inline void
 dp_rx_mon_parse_desc_buffer(struct dp_soc *dp_soc,
 			    struct hal_rx_msdu_desc_info *msdu_info,
 			    bool *is_frag_p, uint32_t *total_frag_len_p,
-			    uint32_t *frag_len_p,
-			    uint16_t *l2_hdr_offset_p,
+			    uint32_t *frag_len_p, uint16_t *l2_hdr_offset_p,
 			    qdf_frag_t rx_desc_tlv,
-			    void **first_rx_desc_tlv,
-			    bool *is_frag_non_raw_p, void *data)
-{
-	struct hal_rx_mon_dest_buf_info frame_info = {0};
-	uint32_t rx_pkt_tlv_len = dp_rx_mon_get_rx_pkt_tlv_size(dp_soc);
-
-	/*
-	 * HW structures call this L3 header padding
-	 * -- even though this is actually the offset
-	 * from the buffer beginning where the L2
-	 * header begins.
-	 */
-	*l2_hdr_offset_p =
-	hal_rx_msdu_end_l3_hdr_padding_get(dp_soc->hal_soc, data);
-
-	if (msdu_info->msdu_flags & HAL_MSDU_F_MSDU_CONTINUATION) {
-		/*
-		 * Set l3_hdr_pad for first frag. This can be later
-		 * changed based on decap format, detected in last frag
-		 */
-		*l2_hdr_offset_p = DP_RX_MON_RAW_L2_HDR_PAD_BYTE;
-		if (!(*is_frag_p)) {
-			*l2_hdr_offset_p = DP_RX_MON_RAW_L2_HDR_PAD_BYTE;
-			*first_rx_desc_tlv = rx_desc_tlv;
-		}
-
-		*is_frag_p = true;
-		*frag_len_p = (RX_MONITOR_BUFFER_SIZE - rx_pkt_tlv_len -
-			       *l2_hdr_offset_p) &
-			      ~(RXDMA_DATA_DMA_BLOCK_SIZE - 1);
-		*total_frag_len_p += *frag_len_p;
-	} else {
-		if (hal_rx_tlv_decap_format_get(dp_soc->hal_soc, rx_desc_tlv) ==
-		    HAL_HW_RX_DECAP_FORMAT_RAW)
-			frame_info.is_decap_raw = 1;
-
-		if (hal_rx_tlv_mpdu_len_err_get(dp_soc->hal_soc, rx_desc_tlv))
-			frame_info.mpdu_len_err = 1;
-
-		frame_info.l2_hdr_pad = hal_rx_msdu_end_l3_hdr_padding_get(
-						dp_soc->hal_soc, rx_desc_tlv);
-
-		if (*is_frag_p) {
-			/* Last fragment of msdu */
-			*frag_len_p = msdu_info->msdu_len - *total_frag_len_p;
-
-			/* Set this in the first frag priv data */
-			hal_rx_priv_info_set_in_tlv(dp_soc->hal_soc,
-						    *first_rx_desc_tlv,
-						    (uint8_t *)&frame_info,
-						    sizeof(frame_info));
-		} else {
-			*frag_len_p = msdu_info->msdu_len;
-			hal_rx_priv_info_set_in_tlv(dp_soc->hal_soc,
-						    rx_desc_tlv,
-						    (uint8_t *)&frame_info,
-						    sizeof(frame_info));
-		}
-		*is_frag_p = false;
-		*first_rx_desc_tlv = NULL;
-	}
-}
-#else
-
-static inline void
-dp_rx_mon_parse_desc_buffer(struct dp_soc *dp_soc,
-			    struct hal_rx_msdu_desc_info *msdu_info,
-			    bool *is_frag_p, uint32_t *total_frag_len_p,
-			    uint32_t *frag_len_p,
-			    uint16_t *l2_hdr_offset_p,
-			    qdf_frag_t rx_desc_tlv,
-			    qdf_frag_t first_rx_desc_tlv,
 			    bool *is_frag_non_raw_p, void *data)
 {
 	/*
@@ -850,7 +756,6 @@ dp_rx_mon_parse_desc_buffer(struct dp_soc *dp_soc,
 		*is_frag_p = false;
 	}
 }
-#endif
 
 static inline void dp_rx_mon_buffer_set_pktlen(qdf_nbuf_t msdu, uint32_t size)
 {
@@ -904,33 +809,31 @@ uint8_t *dp_rx_mon_get_buffer_data(struct dp_rx_desc *rx_desc)
 
 #endif
 
-#ifndef WLAN_SOFTUMAC_SUPPORT
 /**
  * dp_rx_cookie_2_mon_link_desc() - Retrieve Link descriptor based on target
  * @pdev: core physical device context
- * @buf_info: ptr to structure holding the buffer info
- * @mac_id: mac number
+ * @hal_buf_info: structure holding the buffer info
+ * mac_id: mac number
  *
  * Return: link descriptor address
  */
 static inline
 void *dp_rx_cookie_2_mon_link_desc(struct dp_pdev *pdev,
-				   struct hal_buf_info *buf_info,
+				   struct hal_buf_info buf_info,
 				   uint8_t mac_id)
 {
 	if (pdev->soc->wlan_cfg_ctx->rxdma1_enable)
-		return dp_rx_cookie_2_mon_link_desc_va(pdev, buf_info,
+		return dp_rx_cookie_2_mon_link_desc_va(pdev, &buf_info,
 						       mac_id);
 
-	return dp_rx_cookie_2_link_desc_va(pdev->soc, buf_info);
+	return dp_rx_cookie_2_link_desc_va(pdev->soc, &buf_info);
 }
 
 /**
  * dp_rx_monitor_link_desc_return() - Return Link descriptor based on target
  * @pdev: core physical device context
  * @p_last_buf_addr_info: MPDU Link descriptor
- * @mac_id: mac number
- * @bm_action:
+ * mac_id: mac number
  *
  * Return: QDF_STATUS
  */
@@ -947,25 +850,6 @@ QDF_STATUS dp_rx_monitor_link_desc_return(struct dp_pdev *pdev,
 	return dp_rx_link_desc_return_by_addr(pdev->soc, p_last_buf_addr_info,
 				      bm_action);
 }
-#else
-static inline
-void *dp_rx_cookie_2_mon_link_desc(struct dp_pdev *pdev,
-				   struct hal_buf_info *buf_info,
-				   uint8_t mac_id)
-{
-	return dp_rx_cookie_2_mon_link_desc_va(pdev, buf_info, mac_id);
-}
-
-static inline
-QDF_STATUS dp_rx_monitor_link_desc_return(struct dp_pdev *pdev,
-					  hal_buff_addrinfo_t
-					  p_last_buf_addr_info,
-					  uint8_t mac_id, uint8_t bm_action)
-{
-	return dp_rx_mon_link_desc_return(pdev, p_last_buf_addr_info,
-					  mac_id);
-}
-#endif
 
 static inline bool dp_is_rxdma_dst_ring_common(struct dp_pdev *pdev)
 {

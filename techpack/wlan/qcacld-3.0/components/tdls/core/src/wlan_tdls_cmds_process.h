@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -128,7 +127,7 @@ void tdls_reset_nss(struct tdls_soc_priv_obj *tdls_soc,
 
 /**
  * tdls_release_serialization_command() - TDLS wrapper to
- * releases serialization command.
+ * relases serialization command.
  * @vdev: Object manager vdev
  * @type: command to release.
  *
@@ -138,14 +137,6 @@ void tdls_reset_nss(struct tdls_soc_priv_obj *tdls_soc,
 void
 tdls_release_serialization_command(struct wlan_objmgr_vdev *vdev,
 				   enum wlan_serialization_cmd_type type);
-
-/**
- * tdls_get_connected_peer_count_from_vdev() -  Get TDLS connected peer count
- * @vdev: Pointer to vdev obj
- *
- * Return: Connected peer count
- */
-uint16_t tdls_get_connected_peer_count_from_vdev(struct wlan_objmgr_vdev *vdev);
 
 /**
  * tdls_set_cap() - set TDLS capability type
@@ -176,7 +167,7 @@ QDF_STATUS tdls_send_mgmt_tx_completion(
 			struct tdls_mgmt_tx_completion_ind *tx_complete);
 
 /**
- * tdls_process_del_peer_rsp() - handle response for delete TDLS peer
+ * tdls_process_add_peer_rsp() - handle response for delete TDLS peer
  * @rsp: TDLS delete peer response
  *
  * Return: QDF status
@@ -214,8 +205,8 @@ QDF_STATUS tdls_process_connection_tracker_notify(struct wlan_objmgr_vdev *vdev,
 						  struct tdls_event_info *evt);
 
 /**
- * tdls_validate_mgmt_request() - validate mgmt request
- * @tdls_mgmt_req: action frame request
+ * tdls_validate_mgmt_request() -validate mgmt request
+ * @tdls_validate: action frame request
  *
  * Return: 0 for success or -EINVAL otherwise
  */
@@ -231,15 +222,13 @@ int tdls_set_responder(struct tdls_set_responder_req *set_req);
 
 /**
  * tdls_decrement_peer_count() - decrement connected TDLS peer counter
- * @vdev: vdev obj mgr
  * @soc_obj: TDLS soc object
  *
  * Used in scheduler thread context, no lock needed.
  *
  * Return: None.
  */
-void tdls_decrement_peer_count(struct wlan_objmgr_vdev *vdev,
-			       struct tdls_soc_priv_obj *soc_obj);
+void tdls_decrement_peer_count(struct tdls_soc_priv_obj *soc_obj);
 
 /**
  * wlan_tdls_offchan_parms_callback() - Callback to release ref count

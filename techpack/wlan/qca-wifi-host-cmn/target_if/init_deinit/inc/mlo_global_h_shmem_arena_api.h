@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -27,18 +26,6 @@
 #include<qdf_types.h>
 #include<wlan_lmac_if_def.h>
 
-#ifdef WLAN_MLO_GLOBAL_SHMEM_SUPPORT
-/**
- * global_shmem_register_wifi3_0_ops() - Register wifi3.0 operations of
- * global shared memory access module
- * @shmem_local_ops: Pointer to the local ops table of global shared mem module.
- *
- * Return: QDF_STATUS of operation
- */
-QDF_STATUS global_shmem_register_wifi3_0_ops(
-		struct wlan_lmac_if_global_shmem_local_ops *shmem_local_ops);
-
-#ifdef WLAN_MGMT_RX_REO_SUPPORT
 /**
  * mgmt_rx_reo_register_wifi3_0_ops() - Register wifi3.0 operations of MGMT Rx
  * REO module
@@ -51,6 +38,4 @@ QDF_STATUS global_shmem_register_wifi3_0_ops(
  */
 QDF_STATUS mgmt_rx_reo_register_wifi3_0_ops(
 	struct wlan_lmac_if_mgmt_rx_reo_low_level_ops *reo_low_level_ops);
-#endif /* WLAN_MGMT_RX_REO_SUPPORT */
-#endif /* WLAN_MLO_GLOBAL_SHMEM_SUPPORT */
-#endif /* _MLO_GLOBAL_H_SHMEM_ARENA_API_H_ */
+#endif

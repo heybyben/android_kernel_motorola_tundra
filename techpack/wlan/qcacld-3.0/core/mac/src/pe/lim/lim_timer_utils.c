@@ -49,12 +49,6 @@
  */
 #define LIM_AUTH_SAE_TIMER_MS 5000
 
-/*
- * STA stats resp timer of 10secs. This is required for duration of RRM
- * STA STATS report response from report request.
- */
-#define LIM_RRM_STA_STATS_RSP_TIMER_MS 10000
-
 static bool lim_create_non_ap_timers(struct mac_context *mac)
 {
 	uint32_t cfgValue;
@@ -129,6 +123,18 @@ static bool lim_create_non_ap_timers(struct mac_context *mac)
 			    SIR_LIM_AUTH_FAIL_TIMEOUT,
 			    cfgValue, 0, TX_NO_ACTIVATE) != TX_SUCCESS) {
 		pe_err("could not create Auth failure timer");
+		return false;
+	}
+
+	/* Change timer to reactivate it in future */
+	cfgValue = SYS_MS_TO_TICKS(
+		mac->mlme_cfg->timeouts.probe_after_hb_fail_timeout);
+	if (tx_timer_create(mac, &mac->lim.lim_timers.gLimProbeAfterHBTimer,
+			    "Probe after Heartbeat TIMEOUT",
+			    lim_timer_handler,
+			    SIR_LIM_PROBE_HB_FAILURE_TIMEOUT,
+			    cfgValue, 0, TX_NO_ACTIVATE) != TX_SUCCESS) {
+		pe_err("unable to create ProbeAfterHBTimer");
 		return false;
 	}
 
@@ -234,34 +240,23 @@ uint32_t lim_create_timers(struct mac_context *mac)
 	cfgValue = SYS_MS_TO_TICKS(cfgValue);
 	if (tx_timer_create(mac, &mac->lim.lim_timers.gLimDeauthAckTimer,
 			    "DISASSOC ACK TIMEOUT",
-			    lim_process_deauth_ack_timeout,
-			    WLAN_INVALID_VDEV_ID,
+			    lim_timer_handler, SIR_LIM_DEAUTH_ACK_TIMEOUT,
 			    cfgValue, 0, TX_NO_ACTIVATE) != TX_SUCCESS) {
 		pe_err("could not create DEAUTH ACK TIMEOUT timer");
 		goto err_timer;
 	}
 
-	if ((tx_timer_create(mac,
-			     &mac->lim.lim_timers.rrm_sta_stats_resp_timer,
-			     "STA STATS RSP timer",
-			     lim_timer_handler,
-			     SIR_LIM_RRM_STA_STATS_RSP_TIMEOUT,
-			     SYS_MS_TO_TICKS(LIM_RRM_STA_STATS_RSP_TIMER_MS), 0,
-			     TX_NO_ACTIVATE)) != TX_SUCCESS) {
-		pe_err("could not create STA STATS RSP Timer");
-		goto err_timer;
-	}
 	return TX_SUCCESS;
 
 err_timer:
 	lim_delete_timers_host_roam(mac);
-	tx_timer_delete(&mac->lim.lim_timers.rrm_sta_stats_resp_timer);
 	tx_timer_delete(&mac->lim.lim_timers.gLimDeauthAckTimer);
 	tx_timer_delete(&mac->lim.lim_timers.gLimDisassocAckTimer);
 	tx_timer_delete(&mac->lim.lim_timers.gLimUpdateOlbcCacheTimer);
 	while (((int32_t)-- i) >= 0) {
 		tx_timer_delete(&mac->lim.lim_timers.gpLimCnfWaitTimer[i]);
 	}
+	tx_timer_delete(&mac->lim.lim_timers.gLimProbeAfterHBTimer);
 	tx_timer_delete(&mac->lim.lim_timers.gLimAuthFailureTimer);
 	tx_timer_delete(&mac->lim.lim_timers.gLimAddtsRspTimer);
 	tx_timer_delete(&mac->lim.lim_timers.gLimAssocFailureTimer);
@@ -316,8 +311,6 @@ void lim_timer_handler(void *pMacGlobal, uint32_t param)
 	msg.type = (uint16_t) param;
 	msg.bodyptr = NULL;
 	msg.bodyval = 0;
-
-	pe_debug("param %X ", msg.type);
 
 	status = lim_post_msg_high_priority(mac, &msg);
 	if (status != QDF_STATUS_SUCCESS)
@@ -633,6 +626,33 @@ void lim_deactivate_and_change_timer(struct mac_context *mac, uint32_t timerId)
 
 		break;
 
+	case eLIM_PROBE_AFTER_HB_TIMER:
+		if (tx_timer_deactivate
+			    (&mac->lim.lim_timers.gLimProbeAfterHBTimer) !=
+		    TX_SUCCESS) {
+			/* Could not deactivate Heartbeat timer. */
+			/* Log error */
+			pe_err("unable to deactivate probeAfterHBTimer");
+		} else {
+			pe_debug("Deactivated probe after hb timer");
+		}
+
+		/* Change timer to reactivate it in future */
+		val = SYS_MS_TO_TICKS(
+			mac->mlme_cfg->timeouts.probe_after_hb_fail_timeout);
+
+		if (tx_timer_change(&mac->lim.lim_timers.gLimProbeAfterHBTimer,
+				    val, 0) != TX_SUCCESS) {
+			/* Could not change HeartBeat timer. */
+			/* Log error */
+			pe_err("unable to change ProbeAfterHBTimer");
+		} else {
+			pe_debug("Probe after HB timer value is changed: %u",
+				val);
+		}
+
+		break;
+
 	case eLIM_DISASSOC_ACK_TIMER:
 		if (tx_timer_deactivate(
 			&mac->lim.lim_timers.gLimDisassocAckTimer) !=
@@ -692,21 +712,6 @@ void lim_deactivate_and_change_timer(struct mac_context *mac, uint32_t timerId)
 		if (tx_timer_change(&mac->lim.lim_timers.sae_auth_timer,
 				    val, 0) != TX_SUCCESS)
 			pe_err("unable to change SAE auth timer");
-
-		break;
-	case eLIM_RRM_STA_STATS_RSP_TIMER:
-		if (tx_timer_deactivate
-		   (&mac->lim.lim_timers.rrm_sta_stats_resp_timer)
-		    != TX_SUCCESS)
-			pe_err("Unable to deactivate STA STATS RSP timer");
-
-		/* Change timer to reactivate it in future */
-		val = SYS_MS_TO_TICKS(LIM_RRM_STA_STATS_RSP_TIMER_MS);
-
-		if (tx_timer_change(
-			&mac->lim.lim_timers.rrm_sta_stats_resp_timer,
-			val, 0) != TX_SUCCESS)
-			pe_err("unable to change STA STATS RSP timer");
 
 		break;
 

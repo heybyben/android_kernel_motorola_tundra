@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -149,8 +148,7 @@ static void wlan_ser_print_all_history(
 				continue;
 		}
 		ser_err_no_fl(
-			"|0x%016llx|%8d|%6d|%7d|%8d|%8d|%6s|%7s|%17s|",
-			data->time,
+			"%8d|%6d|%7d|%8d|%8d|%6s|%7s|%17s|",
 			data->cmd_type,
 			data->cmd_id,
 			data->vdev_id,
@@ -215,7 +213,7 @@ QDF_STATUS wlan_ser_print_history(
 		}
 		break;
 	default:
-		ser_err("Invalid parameter for queue type(scan/non_scan");
+		ser_err("Invalid pramater for queue type(scan/non_scan");
 		goto error;
 	}
 
@@ -250,7 +248,6 @@ void wlan_ser_update_cmd_history(
 	ser_data_info->ser_reason = ser_reason;
 	ser_data_info->vdev_id = wlan_vdev_get_id(cmd->vdev);
 	ser_data_info->data_updated = true;
-	ser_data_info->time = qdf_get_log_timestamp();
 
 	ser_history_info->index++;
 }

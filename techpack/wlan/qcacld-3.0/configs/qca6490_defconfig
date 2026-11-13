@@ -1,4 +1,5 @@
 CONFIG_CNSS_QCA6490 := y
-# /dev/wlan, the Wi-Fi HAL's driver state control (WIFI_DRIVER_STATE_CTRL_PARAM)
-CONFIG_WLAN_CTRL_NAME := wlan
 include $(WLAN_ROOT)/configs/default_defconfig
+
+#Enable Constrained Application Protocol feature
+CONFIG_WLAN_FEATURE_COAP := y

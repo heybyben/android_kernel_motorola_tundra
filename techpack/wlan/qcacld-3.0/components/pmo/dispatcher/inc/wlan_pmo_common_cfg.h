@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -21,16 +21,6 @@
 #define WLAN_PMO_COMMON_CFG_H__
 
 #include "wlan_pmo_common_public_struct.h"
-
-#ifdef CONNECTION_ROAMING_CFG
-# define CONDTIMSKIPPING_NUMBER_MIN 0
-# define CONDTIMSKIPPING_NUMBER_MAX 10
-# define CONDTIMSKIPPING_NUMBER_DEFAULT 3
-#else
-# define CONDTIMSKIPPING_NUMBER_MIN 0
-# define CONDTIMSKIPPING_NUMBER_MAX 10
-# define CONDTIMSKIPPING_NUMBER_DEFAULT 0
-#endif
 
 /*
  * <ini>
@@ -190,36 +180,11 @@
  *
  * </ini>
  */
-
-/*
- * <ini>
- * gEnableModulatedDTIM/ConDTIMSkipping_Number - Enable/Disable modulated DTIM
- * feature
- * @Min: 0
- * @Max: 10
- * @Default: 0
- *
- * This ini is used to enable/disable modulated DTIM feature.
- *
- * 0 - Disable modulated DTIM.
- * 1 to 10 - The maximum No. of modulated DTIM period used for calculating the
- * target listen interval.
- *
- * The target listen interval will be updated to firmware when host driver is
- * setting the suspend DTIM parameters.
- *
- * This configuration will be ignored when dynamic DTIM is enabled(by
- * gEnableDynamicDTIM).
- *
- * Usage: External
- *
- * </ini>
- */
 #define CFG_PMO_ENABLE_MODULATED_DTIM CFG_INI_UINT( \
 	"gEnableModulatedDTIM ConDTIMSkipping_Number", \
-	CONDTIMSKIPPING_NUMBER_MIN, \
-	CONDTIMSKIPPING_NUMBER_MAX, \
-	CONDTIMSKIPPING_NUMBER_DEFAULT, \
+	0, \
+	10, \
+	0, \
 	CFG_VALUE_OR_DEFAULT, \
 	"Enable/disable modulated DTIM feature")
 
@@ -250,14 +215,13 @@
  * <ini>
  * gOptimizedPowerManagement - Optimized Power Management
  * @Min: 0
- * @Max: 2
+ * @Max: 1
  * @Default: 1
  *
  * This ini is used to set Optimized Power Management configuration:
  * Current values of gOptimizedPowerManagement:
  * 0 -> Disable optimized power management
  * 1 -> Enable optimized power management
- * 2 -> User Defined
  *
  * Related: None
  *
@@ -270,7 +234,7 @@
 #define CFG_PMO_POWERSAVE_MODE CFG_INI_UINT( \
 	"gOptimizedPowerManagement", \
 	0, \
-	2, \
+	1, \
 	1, \
 	CFG_VALUE_OR_DEFAULT, \
 	"Optimized Power Management")
@@ -357,7 +321,7 @@
  * 0 - Disable both magic pattern match and pattern byte match.
  * 1 - Enable magic pattern match on all interfaces.
  * 2 - Enable pattern byte match on all interfaces.
- * 3 - Enable both magic pattern and pattern byte match on all interfaces.
+ * 3 - Enable both magic patter and pattern byte match on all interfaces.
  *
  * Related: None
  *
@@ -383,7 +347,7 @@
  * 0 - Does not support suspend.
  * 1 - Legency suspend mode, PDEV suspend.
  * 2 - WOW suspend mode.
- * 3 - Shutdown wlan while suspend.
+ * 3 - Full power down while suspend.
  *
  * Related: None
  *
@@ -473,8 +437,7 @@
  * @Max: 255
  * @Default: 50
  *
- * This ini is used to set data inactivity timeout in wow mode and
- * the value is honored in firmware when User defined OPM is set
+ * This ini is used to set data inactivity timeout in wow mode.
  *
  * Supported Feature: inactivity timeout in wow mode
  *
@@ -489,29 +452,6 @@
 		50, \
 		CFG_VALUE_OR_DEFAULT, \
 		"Data activity timeout in wow mode")
-/*
- * <ini>
- * g_wow_spec_wake_interval - OPM Speculative wake interval in wow mode.
- * @Min: 0
- * @Max: 255
- * @Default: 0
- *
- * This ini is used to set OPM speculative wake interval in wow mode and
- * the value is honored in firmware when User defined OPM is set
- *
- * Supported Feature: OPM Speculative wake interval in wow mode
- *
- * Usage: External
- *
- * </ini>
- */
-#define CFG_PMO_WOW_SPEC_WAKE_INTERVAL CFG_INI_UINT( \
-		"g_wow_spec_wake_interval", \
-		0, \
-		255, \
-		0, \
-		CFG_VALUE_OR_DEFAULT, \
-		"Speculative wake interval in wow mode")
 /*
  * <ini>
  * gRArateLimitInterval - RA rate limit interval
@@ -636,14 +576,14 @@
 
 /*
  * <ini>
- * action_on_page_fault - Host action on page fault wakeup event
- * @Min: PMO_PF_HOST_ACTION_NO_OP
- * @Max: PMO_PF_HOST_ACTION_MAX - 1
- * @Default: PMO_PF_HOST_ACTION_NO_OP
+ * enable_ssr_on_page_fault - Enable SSR on pagefault
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
  *
- * This INI is used to determine host behavior on WOW_REASON_PAGE_FAULT wakeup
- * event.
- * For ex: If action is to trigger SSR, min_pagefault_wakeups_for_action = 30,
+ * This INI is used to enable/disable SSR when host is woken up with the reason
+ * as pagefault.
+ * For ex: If enable_ssr_on_page_fault = 1, max_pagefault_wakeups_for_ssr = 30,
  * interval_for_pagefault_wakeup_counts = 180000 (3 mins) and
  * ssr_frequency_on_pagefault = 3600000 (1hr), in this case host will trigger
  * the SSR if it receives 30 wakeups because of pagefaults in 3 mins, host will
@@ -652,29 +592,25 @@
  * of pagefaults. This 1 hr time is getting monitored from last SSR.
  *
  * </ini>
- */
-#define CFG_HOST_ACTION_ON_PAGEFAULT CFG_INI_UINT( \
-		"action_on_page_fault", \
-		PMO_PF_HOST_ACTION_NO_OP, \
-		PMO_PF_HOST_ACTION_MAX - 1, \
-		PMO_PF_HOST_ACTION_NO_OP, \
-		CFG_VALUE_OR_DEFAULT, \
-		"Host action on FW pagefault event")
+*/
+#define CFG_ENABLE_SSR_ON_PAGEFAULT CFG_INI_BOOL( \
+		"enable_ssr_on_page_fault", \
+		0, \
+		"Enable SSR on pagefault")
 
 /*
  * <ini>
- * min_pagefault_wakeups_for_action - Min number of pagefaults wakeups to
- * initiate host action.
- * @Min: 2
+ * max_pagefault_wakeups_for_ssr - Max number of pagefaults wakeups to trigger
+ * SSR
+ * @Min: 1
  * @Max: 255
  * @Default: 30
  *
- * This ini is used to get the count of max pagefault wakeups to reach before
- * host takes action.
- * If the count is reached within the wakeup time interval host will either
- * trigger SSR (within the limits of SSR trigger freq) or may notify APPS or
- * ignore if no action is set.
- * For ex: If SSR on pagefault = 1, min_pagefault_wakeups_for_action = 30,
+ * This ini is used to trigger SSR if fw wakes up host for
+ * max_pagefault_wakeups_for_ssr number of times in
+ * interval_for_pagefault_wakeup_counts interval. SSR is triggered only once
+ * in ssr_frequency_on_pagefault interval.
+ * For ex: If enable_ssr_on_page_fault = 1, max_pagefault_wakeups_for_ssr = 30,
  * interval_for_pagefault_wakeup_counts = 180000 (3 mins) and
  * ssr_frequency_on_pagefault = 3600000 (1hr), in this case host will trigger
  * the SSR if it receives 30 wakeups because of pagefaults in 3 mins, host will
@@ -682,9 +618,9 @@
  * trigger next SSR for next 1 hr even if it receives 30 wakeups from fw because
  * of pagefaults. This 1 hr time is getting monitored from last SSR.
  */
-#define CFG_MIN_PAGEFAULT_WAKEUPS_FOR_ACTION CFG_INI_UINT( \
-		"min_pagefault_wakeups_for_action", \
-		2, \
+#define CFG_MAX_PAGEFAULT_WAKEUPS_FOR_SSR CFG_INI_UINT( \
+		"max_pagefault_wakeups_for_ssr", \
+		1, \
 		255, \
 		30, \
 		CFG_VALUE_OR_DEFAULT, \
@@ -693,16 +629,16 @@
 /*
  * <ini>
  * interval_for_pagefault_wakeup_counts - Time in ms in which
- * min_pagefault_wakeups_for_action needs to be monitored
- * @Min: 60000 (1min)
- * @Max: 18000000 (5hrs)
+ * max_pagefault_wakeups_for_ssr needs to be monitored
+ * @Min: 60000
+ * @Max: 300000
  * @Default: 180000 (3 mins)
  *
- * This ini define time in ms in which min_pagefault_wakeups_for_host action
- * needs to be monitored. If in interval_for_pagefault_wakeup_counts ms,
- * min_pagefault_wakeups_for_action is reached host will trigger the action.
+ * This ini define time in ms in which max_pagefault_wakeups_for_ssr needs to be
+ * Monitored. If in interval_for_pagefault_wakeup_counts ms,
+ * max_pagefault_wakeups_for_ssr is reached host will trigger the SSR.
  * SSR is triggered only once in ssr_frequency_on_pagefault interval.
- * For ex: If SSR on pagefault = 1, min_pagefault_wakeups_for_action = 30,
+ * For ex: If enable_ssr_on_page_fault = 1, max_pagefault_wakeups_for_ssr = 30,
  * interval_for_pagefault_wakeup_counts = 180000 (3 mins) and
  * ssr_frequency_on_pagefault = 3600000 (1hr), in this case host will trigger
  * the SSR if it receives 30 wakeups because of pagefaults in 3 mins, host will
@@ -713,10 +649,10 @@
 #define CFG_INTERVAL_FOR_PAGEFAULT_WAKEUP_COUNT CFG_INI_UINT( \
 	"interval_for_pagefault_wakeup_counts", \
 	60000, \
-	18000000, \
+	300000, \
 	180000, \
 	CFG_VALUE_OR_DEFAULT, \
-	"Interval in which min_pagefault_wakeups_for_ssr needs to be monitored")
+	"Interval in which max_pagefault_wakeups_for_ssr needs to be monitored")
 
 /*
  * <ini>
@@ -727,11 +663,11 @@
  * @Default: 3600000 (1 hr)
  *
  * This ini define time in ms in which next SSR needs to be triggered if
- * min_pagefault_wakeups_for_action is reached in
+ * max_pagefault_wakeups_for_ssr is reached in
  * interval_for_pagefault_wakeup_counts time.
  * INIs max_pagefault_wakeups_for_ssr, interval_for_pagefault_wakeup_counts and
  * ssr_frequency_on_pagefault needs to be considered together.
- * For ex: If enable_ssr_on_page_fault = 1, min_pagefault_wakeups_for_ssr = 30,
+ * For ex: If enable_ssr_on_page_fault = 1, max_pagefault_wakeups_for_ssr = 30,
  * interval_for_pagefault_wakeup_counts = 180000 (3 mins) and
  * ssr_frequency_on_pagefault = 3600000 (1hr), in this case host will trigger
  * the SSR if it receives 30 wakeups because of pagefaults in 3 mins, host will
@@ -745,7 +681,7 @@
 	7200000, \
 	3600000, \
 	CFG_VALUE_OR_DEFAULT, \
-	"Interval in which min_pagefault_wakeups_for_ssr needs to be monitored")
+	"Interval in which max_pagefault_wakeups_for_ssr needs to be monitored")
 
 /*
  * <ini>
@@ -786,7 +722,6 @@
 	CFG(CFG_PMO_ACTIVE_MODE) \
 	CFG(CFG_PMO_PWR_FAILURE) \
 	CFG(CFG_PMO_WOW_DATA_INACTIVITY_TIMEOUT) \
-	CFG(CFG_PMO_WOW_SPEC_WAKE_INTERVAL) \
 	CFG(CFG_RA_RATE_LIMIT_INTERVAL) \
 	CFG(CFG_PMO_MOD_DTIM_ON_SYS_SUSPEND) \
 	CFG(CFG_ENABLE_BUS_SUSPEND_IN_SAP_MODE) \
@@ -794,8 +729,8 @@
 	CFG(CFG_DISCONNECT_SAP_TDLS_IN_WOW) \
 	CFG(CFG_IGMP_VERSION_SUPPORT) \
 	CFG(CFG_ENABLE_ICMP_OFFLOAD) \
-	CFG(CFG_HOST_ACTION_ON_PAGEFAULT) \
-	CFG(CFG_MIN_PAGEFAULT_WAKEUPS_FOR_ACTION) \
+	CFG(CFG_ENABLE_SSR_ON_PAGEFAULT) \
+	CFG(CFG_MAX_PAGEFAULT_WAKEUPS_FOR_SSR) \
 	CFG(CFG_INTERVAL_FOR_PAGEFAULT_WAKEUP_COUNT) \
 	CFG(CFG_SSR_FREQUENCY_ON_PAGEFAULT)
 

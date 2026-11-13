@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -56,7 +55,7 @@ target_if_tdls_update_peer_state(struct wlan_objmgr_psoc *psoc,
 /**
  * target_if_tdls_set_offchan_mode() - lmac handler to set tdls off channel mode
  * @psoc: psoc object
- * @params: tdls channel switch params
+ * @params: tdls channel swithc params
  *
  * Return: QDF_STATUS
  */

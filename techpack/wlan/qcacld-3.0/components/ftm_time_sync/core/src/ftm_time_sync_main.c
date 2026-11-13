@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -87,13 +86,13 @@ enum ftm_time_sync_role ftm_time_sync_get_role(struct wlan_objmgr_psoc *psoc)
 
 	if (!psoc) {
 		ftm_time_sync_err("psoc is NULL");
-		return FTM_TIMESYNC_TARGET_ROLE;
+		return FTM_TIMESYNC_SLAVE_ROLE;
 	}
 
 	psoc_priv = ftm_time_sync_psoc_get_priv(psoc);
 	if (!psoc_priv) {
 		ftm_time_sync_err("psoc priv is NULL");
-		return FTM_TIMESYNC_TARGET_ROLE;
+		return FTM_TIMESYNC_SLAVE_ROLE;
 	}
 
 	return psoc_priv->cfg_param.role;
@@ -192,7 +191,7 @@ ftm_time_sync_vdev_create_notification(struct wlan_objmgr_vdev *vdev, void *arg)
 	target_if_ftm_time_sync_register_rx_ops(&vdev_priv->rx_ops);
 
 	vdev_priv->rx_ops.ftm_time_sync_register_start_stop(psoc);
-	vdev_priv->rx_ops.ftm_time_sync_regiser_initiator_target_offset(psoc);
+	vdev_priv->rx_ops.ftm_time_sync_regiser_master_slave_offset(psoc);
 
 	vdev_priv->valid = true;
 
@@ -373,8 +372,8 @@ QDF_STATUS ftm_time_sync_stop(struct wlan_objmgr_vdev *vdev)
 	qdf_delayed_work_stop_sync(&vdev_priv->ftm_time_sync_work);
 
 	for (iter = 0; iter < vdev_priv->num_qtime_pair; iter++) {
-		vdev_priv->ftm_ts_priv.time_pair[iter].qtime_initiator = 0;
-		vdev_priv->ftm_ts_priv.time_pair[iter].qtime_target = 0;
+		vdev_priv->ftm_ts_priv.time_pair[iter].qtime_master = 0;
+		vdev_priv->ftm_ts_priv.time_pair[iter].qtime_slave = 0;
 	}
 
 	vdev_priv->num_qtime_pair = 0;
@@ -385,7 +384,7 @@ QDF_STATUS ftm_time_sync_stop(struct wlan_objmgr_vdev *vdev)
 ssize_t ftm_time_sync_show(struct wlan_objmgr_vdev *vdev, char *buf)
 {
 	struct ftm_time_sync_vdev_priv *vdev_priv;
-	uint64_t q_initiator, q_target;
+	uint64_t q_master, q_slave;
 	ssize_t size = 0;
 	int iter;
 
@@ -395,20 +394,18 @@ ssize_t ftm_time_sync_show(struct wlan_objmgr_vdev *vdev, char *buf)
 		return 0;
 	}
 
-	size = qdf_scnprintf(buf, PAGE_SIZE,
-			     "%s " QDF_MAC_ADDR_FMT "\n", "BSSID",
-			     QDF_MAC_ADDR_REF(vdev_priv->bssid.bytes));
+	size = qdf_scnprintf(buf, PAGE_SIZE, "%s %pM\n", "BSSID",
+			     vdev_priv->bssid.bytes);
 
 	for (iter = 0; iter < vdev_priv->num_qtime_pair; iter++) {
-		q_initiator = vdev_priv->ftm_ts_priv.time_pair[iter].qtime_initiator;
-		q_target = vdev_priv->ftm_ts_priv.time_pair[iter].qtime_target;
+		q_master = vdev_priv->ftm_ts_priv.time_pair[iter].qtime_master;
+		q_slave = vdev_priv->ftm_ts_priv.time_pair[iter].qtime_slave;
 
 		size += qdf_scnprintf(buf + size, PAGE_SIZE - size,
 				      "%s %llu %s %llu %s %lld\n",
-
-				      "Qtime_initiator", q_initiator, "Qtime_target",
-				      q_target, "Offset", q_target > q_initiator ?
-				      q_target - q_initiator : q_initiator - q_target);
+				      "Qtime_master", q_master, "Qtime_slave",
+				      q_slave, "Offset", q_slave > q_master ?
+				      q_slave - q_master : q_master - q_slave);
 	}
 	return size;
 }

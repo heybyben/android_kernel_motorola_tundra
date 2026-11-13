@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -29,13 +29,13 @@
  * @cache_timeout: the cached packet expire timeout in ms
  * @src_ip_v4: source IPv4 address for sending reply message
  * @src_udp_port: source udp port for sending reply message
- * @dest_ip_v4: destination IPv4 address to match received CoAP message
+ * @dest_ip_v4: destination IPv4 address to match recived CoAP message
  * @dest_ip_v4_is_bc: indicate whether the destination address is broadcast
  * address or not
- * @dest_udp_port: destination UDP port to match received CoAP message
- * @verify_offset: UDP payload offset to match received CoAP message
- * @verify_len: UDP payload length to match received CoAP message
- * @verify: pointer to binary data to match received CoAP message
+ * @dest_udp_port: destination UDP port to match recived CoAP message
+ * @verify_offset: UDP payload offset to match recived CoAP message
+ * @verify_len: UDP payload length to match recived CoAP message
+ * @verify: pointer to binary data to match recived CoAP message
  * @coapmsg_len: CoAP reply message length
  * @coapmsg: pointer to CoAP reply message
  */
@@ -57,7 +57,7 @@ struct coap_offload_reply_param {
 
 /**
  * struct coap_offload_periodic_tx_param - parameters to enable CoAP offload
- * periodic transmitting
+ * periodic tranmitting
  * @vdev_id: vdev id
  * @pattern_id: pattern id
  * @src_ip_v4: IPv4 address for sending CoAP message

@@ -74,8 +74,7 @@ QDF_STATUS os_if_monitor_mode_configure(struct hdd_adapter *adapter,
 	struct nlattr *tb[SET_MONITOR_MODE_CONFIG_MAX + 1];
 	QDF_STATUS status;
 
-	vdev = hdd_objmgr_get_vdev_by_user(adapter->deflink,
-					   WLAN_PKT_CAPTURE_ID);
+	vdev = hdd_objmgr_get_vdev_by_user(adapter, WLAN_PKT_CAPTURE_ID);
 	if (!vdev)
 		return QDF_STATUS_E_INVAL;
 

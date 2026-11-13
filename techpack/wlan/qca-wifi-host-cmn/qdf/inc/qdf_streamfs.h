@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2018, 2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -58,7 +57,7 @@ static inline void qdf_streamfs_remove_file(qdf_dentry_t d)
 }
 
 /**
- * qdf_streamfs_remove_dir_recursive() - wrapper to remove directory recursively
+ * qdf_debugfs_remove_dir_recursive() - wrapper to remove directory recursively
  * @d: debugfs node
  *
  * This function will recursively remove a directory in streamfs that was
@@ -84,7 +83,7 @@ qdf_dentry_t qdf_streamfs_create_file(const char *name, uint16_t mode,
 				      qdf_streamfs_chan_buf_t buf);
 
 /**
- * qdf_streamfs_open() - Create streamfs channel for data transfer
+ * qdf_streamfs_open() - Create streamfs channel for data trasfer
  * @base_filename: base name of files to create, %NULL for buffering only
  * @parent: dentry of parent directory, %NULL for root directory
  * @subbuf_size: size of sub-buffers
@@ -131,7 +130,7 @@ void qdf_streamfs_reset(qdf_streamfs_chan_t chan);
  * count
  * @chan: pointer to qdf_streamfs_chan.
  * @cpu: the cpu associated with the channel buffer to update
- * @consumed: number of sub-buffers to add to current buf's count
+ * @subbufs_consumed: number of sub-buffers to add to current buf's count
  *
  * Returns NONE
  */

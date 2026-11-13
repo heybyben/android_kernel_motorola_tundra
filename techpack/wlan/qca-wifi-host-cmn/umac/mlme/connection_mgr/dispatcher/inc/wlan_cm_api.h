@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -93,17 +93,6 @@ QDF_STATUS wlan_cm_bss_peer_create_rsp(struct wlan_objmgr_vdev *vdev,
 				       struct qdf_mac_addr *peer_mac);
 
 /**
- * wlan_cm_update_scan_mlme_info() - Called after connect/roam complete
- * to update the scan cache with assoc state
- * @vdev: vdev object pointer
- * @resp: Connect response
- *
- * Return: QDF_STATUS
- */
-void wlan_cm_update_scan_mlme_info(struct wlan_objmgr_vdev *vdev,
-				   struct wlan_cm_connect_resp *resp);
-
-/**
  * wlan_cm_connect_rsp() - Connection manager connect response
  * @vdev: vdev pointer
  * @resp: Connect response
@@ -168,7 +157,7 @@ void wlan_cm_set_max_connect_timeout(struct wlan_objmgr_vdev *vdev,
 				     uint32_t max_connect_timeout);
 
 /**
- * wlan_cm_is_vdev_connecting() - check if vdev is in connecting state
+ * wlan_cm_is_vdev_connecting() - check if vdev is in conneting state
  * @vdev: vdev pointer
  *
  * Return: bool
@@ -176,7 +165,7 @@ void wlan_cm_set_max_connect_timeout(struct wlan_objmgr_vdev *vdev,
 bool wlan_cm_is_vdev_connecting(struct wlan_objmgr_vdev *vdev);
 
 /**
- * wlan_cm_is_vdev_connected() - check if vdev is in connected state
+ * wlan_cm_is_vdev_connected() - check if vdev is in conneted state
  * @vdev: vdev pointer
  *
  * Return: bool
@@ -184,7 +173,7 @@ bool wlan_cm_is_vdev_connecting(struct wlan_objmgr_vdev *vdev);
 bool wlan_cm_is_vdev_connected(struct wlan_objmgr_vdev *vdev);
 
 /**
- * wlan_cm_is_vdev_active() - check if vdev is in active state ie connected or
+ * wlan_cm_is_vdev_active() - check if vdev is in active state ie conneted or
  * roaming state
  * @vdev: vdev pointer
  *
@@ -193,7 +182,7 @@ bool wlan_cm_is_vdev_connected(struct wlan_objmgr_vdev *vdev);
 bool wlan_cm_is_vdev_active(struct wlan_objmgr_vdev *vdev);
 
 /**
- * wlan_cm_is_vdev_disconnecting() - check if vdev is in disconnecting state
+ * wlan_cm_is_vdev_disconnecting() - check if vdev is in disconneting state
  * @vdev: vdev pointer
  *
  * Return: bool
@@ -209,15 +198,6 @@ bool wlan_cm_is_vdev_disconnecting(struct wlan_objmgr_vdev *vdev);
 bool wlan_cm_is_vdev_disconnected(struct wlan_objmgr_vdev *vdev);
 
 /**
- * wlan_cm_is_vdev_idle_due_to_link_switch() - Check if VDEV is in IDLE
- * due to link switch sub-state.
- * @vdev: VDEV objmgr pointer
- *
- * Return: bool
- */
-bool wlan_cm_is_vdev_idle_due_to_link_switch(struct wlan_objmgr_vdev *vdev);
-
-/**
  * wlan_cm_is_vdev_roaming() - check if vdev is in roaming state
  * @vdev: vdev pointer
  *
@@ -225,58 +205,6 @@ bool wlan_cm_is_vdev_idle_due_to_link_switch(struct wlan_objmgr_vdev *vdev);
  */
 bool wlan_cm_is_vdev_roaming(struct wlan_objmgr_vdev *vdev);
 
-/**
- * wlan_cm_free_connect_req() - free up connect request and its sub memory
- * @connect_req: Connect request
- *
- * Return: void
- */
-void wlan_cm_free_connect_req(struct wlan_cm_connect_req *connect_req);
-
-/**
- * wlan_cm_free_connect_resp() - free up connect response and its sub memory
- * @connect_rsp: Connect response
- *
- * Return: void
- */
-void wlan_cm_free_connect_resp(struct wlan_cm_connect_resp *connect_rsp);
-
-/**
- * wlan_cm_free_connect_req_param() - free up connect request sub memory
- * @req: Connect request
- *
- * Return: void
- */
-void wlan_cm_free_connect_req_param(struct wlan_cm_connect_req *req);
-
-/**
- * wlan_cm_is_link_switch_disconnect_resp() - Check if the disconnect response
- * is for link switch request.
- * @resp: Connection manager disconnect response.
- *
- * Return: bool
- */
-bool wlan_cm_is_link_switch_disconnect_resp(struct wlan_cm_discon_rsp *resp);
-
-/**
- * wlan_cm_is_link_switch_connect_resp() - Check if the connect response if for
- * link switch request.
- * @resp: Connection manager connect response.
- *
- * Return: bool
- */
-bool wlan_cm_is_link_switch_connect_resp(struct wlan_cm_connect_resp *resp);
-
-/**
- * wlan_cm_trigger_panic_on_cmd_timeout() - Trigger recovery on CM command
- * timeout.
- * @vdev: VDEV object manager
- * @reason: Hang reason code
- *
- * Return: void
- */
-void wlan_cm_trigger_panic_on_cmd_timeout(struct wlan_objmgr_vdev *vdev,
-					  enum qdf_hang_reason reason);
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 /**
  * wlan_cm_is_vdev_roam_started() - check if vdev is in roaming state and
@@ -341,56 +269,11 @@ bool wlan_cm_is_vdev_roam_reassoc_state(struct wlan_objmgr_vdev *vdev)
 #endif
 
 /**
- * wlan_cm_connect_resp_fill_mld_addr_from_cm_id() - API to get MLD of
- * current candidate from connect request ID.
- * @vdev: VDEV objmgr pointer.
- * @cm_id: connect request ID.
- * @rsp: connect resp pointer.
- *
- * This wrapper API fills MLD address in @rsp from connect request ID.
- *
- * Return: void
- */
-void
-wlan_cm_connect_resp_fill_mld_addr_from_cm_id(struct wlan_objmgr_vdev *vdev,
-					      wlan_cm_id cm_id,
-					      struct wlan_cm_connect_resp *rsp);
-
-/**
- * wlan_cm_connect_resp_fill_mld_addr_from_vdev_id() - API to get MLD
- * from scan entry in join request.
- * @psoc: PSOC objmgr pointer.
- * @vdev_id: session ID.
- * @entry: Scan entry of the candidate.
- * @rsp: connect response pointer.
- *
- * This wrapper API gets VDEV from join request and fills MLD address
- * in @rsp from the scan entry in join request.
- *
- * Return: void
- */
-#ifdef WLAN_FEATURE_11BE_MLO
-void
-wlan_cm_connect_resp_fill_mld_addr_from_vdev_id(struct wlan_objmgr_psoc *psoc,
-						uint8_t vdev_id,
-						struct scan_cache_entry *entry,
-						struct wlan_cm_connect_resp *rsp);
-#else
-static inline void
-wlan_cm_connect_resp_fill_mld_addr_from_vdev_id(struct wlan_objmgr_psoc *psoc,
-						uint8_t vdev_id,
-						struct scan_cache_entry *entry,
-						struct wlan_cm_connect_resp *rsp)
-{
-}
-#endif
-
-/**
  * wlan_cm_get_active_connect_req() - Get copy of active connect request
  * @vdev: vdev pointer
  * @req: pointer to the copy of the active connect request
  * *
- * Context: Should be called only in the context of the
+ * Context: Should be called only in the conext of the
  * cm request activation
  *
  * Return: true and connect req if any request is active
@@ -398,35 +281,13 @@ wlan_cm_connect_resp_fill_mld_addr_from_vdev_id(struct wlan_objmgr_psoc *psoc,
 bool wlan_cm_get_active_connect_req(struct wlan_objmgr_vdev *vdev,
 				    struct wlan_cm_vdev_connect_req *req);
 
-/**
- * wlan_cm_is_first_candidate_connect_attempt() - Check whether it is
- * the first attempt for the current AP after receiving connect request
- * @vdev: vdev pointer
- *
- * Return: True if it is the first connecting attempt on a candidate.
- * Otherwise return false
- */
-bool wlan_cm_is_first_candidate_connect_attempt(struct wlan_objmgr_vdev *vdev);
-
-/**
- * wlan_cm_get_active_connect_req_param() - API to fetch connect request
- * parameter.
- * @vdev: vdev pointer
- * @req: Connection request parameter buffer to be filled
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS
-wlan_cm_get_active_connect_req_param(struct wlan_objmgr_vdev *vdev,
-				     struct wlan_cm_connect_req *req);
-
 #ifdef WLAN_FEATURE_HOST_ROAM
 /**
  * wlan_cm_get_active_reassoc_req() - Get copy of active reassoc request
  * @vdev: vdev pointer
  * @req: pointer to the copy of the active reassoc request
  * *
- * Context: Should be called only in the context of the
+ * Context: Should be called only in the conext of the
  * cm request activation
  *
  * Return: true and reassoc req if any request is active
@@ -447,7 +308,7 @@ bool wlan_cm_get_active_reassoc_req(struct wlan_objmgr_vdev *vdev,
  * @vdev: vdev pointer
  * @req: pointer to the copy of the active disconnect request
  * *
- * Context: Should be called only in the context of the
+ * Context: Should be called only in the conext of the
  * cm request activation
  *
  * Return: true and disconnect req if any request is active
@@ -594,129 +455,24 @@ void wlan_cm_set_candidate_custom_sort_cb(
  * wlan_cm_get_rnr() - get rnr
  * @vdev:vdev
  * @cm_id: connect mgr id
- * @rnr: pointer to copy rnr info
  *
- * Return: QDF_STATUS
+ * Return: rnr pointer
  */
-QDF_STATUS wlan_cm_get_rnr(struct wlan_objmgr_vdev *vdev, wlan_cm_id cm_id,
-			   struct reduced_neighbor_report *rnr);
-
-/**
- * wlan_cm_get_curr_candidate_entry() - Get current candidate from cnx mgr
- * @vdev: VDEV object manager
- * @cm_id: cnx mgr ID
- *
- * Get the current candidate for connection from cnx mgr.
- *
- * Return: Scan entry
- */
-struct scan_cache_entry *
-wlan_cm_get_curr_candidate_entry(struct wlan_objmgr_vdev *vdev,
-				 wlan_cm_id cm_id);
+struct reduced_neighbor_report *wlan_cm_get_rnr(struct wlan_objmgr_vdev *vdev,
+						wlan_cm_id cm_id);
 
 /**
  * wlan_cm_disc_cont_after_rso_stop() - Continue disconnect after RSO stop
  * @vdev: Objmgr vdev
+ * @is_ho_fail: True if ho_fail happened
  * @req: pointer to cm vdev disconnect req
- *
- * Continue disconnect after RSO stop response is receive from south bound.
+
  * This is a wrapper to call core API cm_disconnect_continue_after_rso_stop
- * by acquiring cm_lock through cm_sm_deliver_event.
  *
  * Return: QDF_STATUS
  */
 QDF_STATUS
 wlan_cm_disc_cont_after_rso_stop(struct wlan_objmgr_vdev *vdev,
+				 bool is_ho_fail,
 				 struct wlan_cm_vdev_discon_req *req);
-
-#ifdef WLAN_FEATURE_11BE
-/**
- * wlan_cm_sta_set_chan_param() - set channel parameters for 802.11be sta
- *
- * @vdev: vdev
- * @ch_freq: operating channel frequency
- * @ori_bw: bandwidth information according to EHT operation IE
- * @ori_punc: original puncture bitmap from EHT operation IE
- * @ccfs0: EHT channel center frequency segment0 information
- * @ccfs1: EHT channel center frequency segment1 information
- * @chan_param: chan_param to be set
- *
- * ori_bw, ori_punc, ccfs0, ccfs1 are information from AP EHT operation IE
- * chan_param->ch_width is the intersected channel width based on STA's
- * capability. Complete chan_param including puncture will be set if
- * it returns success.
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS wlan_cm_sta_set_chan_param(struct wlan_objmgr_vdev *vdev,
-				      qdf_freq_t ch_freq,
-				      enum phy_ch_width ori_bw,
-				      uint16_t ori_punc,
-				      uint8_t ccfs0, uint8_t ccfs1,
-				      struct ch_params *chan_param);
-
-/**
- * wlan_cm_sta_update_bw_puncture() - update puncture and channel width for sta
- * @vdev: vdev
- * @peer_mac: peer mac address
- * @ori_punc: original puncture bitmap from EHT operation IE
- * @ori_bw: bandwidth information according to EHT operation IE
- * @ccfs0: EHT Channel Centre Frequency Segment0 information
- * @ccfs1: EHT Channel Centre Frequency Segment1 information
- * @new_bw: bandwidth to be set
- */
-QDF_STATUS wlan_cm_sta_update_bw_puncture(struct wlan_objmgr_vdev *vdev,
-					  uint8_t *peer_mac,
-					  uint16_t ori_punc,
-					  enum phy_ch_width ori_bw,
-					  uint8_t ccfs0, uint8_t ccfs1,
-					  enum phy_ch_width new_bw);
-#endif /* WLAN_FEATURE_11BE */
-
-#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_FEATURE_11BE_MLO_ADV_FEATURE)
-
-/**
- * wlan_cm_check_mlo_roam_auth_status - api to check roam auth status on link
- * @vdev: vdev corresponds to given link
- *
- * This api will be called to check if roam auth status is connected
- *
- * Return: boolean true or false
- */
-bool
-wlan_cm_check_mlo_roam_auth_status(struct wlan_objmgr_vdev *vdev);
-#else
-static inline bool
-wlan_cm_check_mlo_roam_auth_status(struct wlan_objmgr_vdev *vdev)
-{
-	return false;
-}
-#endif
-
-/**
- * wlan_cm_bss_mlo_type() - Check if the scan entry is of MLO type
- * @psoc: Pointer to psoc
- * @entry: scan cache entry
- * @scan_list: list of scan entries to look for if @entry is of ML type
- *
- * Return: MLO AP type: SLO, MLMR or EMLSR.
- */
-enum MLO_TYPE
-wlan_cm_bss_mlo_type(struct wlan_objmgr_psoc *psoc,
-		     struct scan_cache_entry *entry,
-		     qdf_list_t *scan_list);
-
-#ifdef WLAN_FEATURE_LL_LT_SAP
-/**
- * wlan_cm_bearer_switch_resp() - Bearer switch response
- * @psoc: psoc pointer
- * @vdev_id: vdev id
- * @cm_id: connection ID which gave the hw mode change request
- * @status: status of the Bearer switch
- *
- * Return: void
- */
-void wlan_cm_bearer_switch_resp(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id,
-				wlan_cm_id cm_id, QDF_STATUS status);
-#endif /* WLAN_FEATURE_LL_LT_SAP */
 #endif /* __WLAN_CM_UCFG_API_H */

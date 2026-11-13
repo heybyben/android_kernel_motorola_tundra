@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2015, 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -29,7 +29,7 @@
 #include <wlan_cm_public_struct.h>
 
 /* Max candidate/attempts to be tried to connect */
-#define CM_MAX_CONNECT_ATTEMPTS 10
+#define CM_MAX_CONNECT_ATTEMPTS 5
 /*
  * Default connect timeout to consider 3 sec join timeout + 5 sec auth timeout +
  * 2 sec assoc timeout + 5 sec buffer for vdev related timeouts.
@@ -58,13 +58,11 @@
  * @WLAN_CM_SS_IDLE:                    Idle state (no substate)
  * @WLAN_CM_SS_JOIN_PENDING:            Connect request not serialized
  * @WLAN_CM_SS_SCAN:                    Scan for SSID state
- * @WLAN_CM_SS_JOIN_ACTIVE:             Connect request activated
+ * @WLAN_CM_SS_JOIN_ACTIVE:             Conenct request activated
  * @WLAN_CM_SS_PREAUTH:                 Roam substate of preauth stage
  * @WLAN_CM_SS_REASSOC:                 Roam substate for reassoc state
  * @WLAN_CM_SS_ROAM_STARTED:            Roaming in progress (LFR 3.0)
  * @WLAN_CM_SS_ROAM_SYNC:               Roam sync indication from FW
- * @WLAN_CM_SS_IDLE_DUE_TO_LINK_SWITCH: Substate when VDEV moves to INIT state
- *                                      due to link switch.
  * @WLAN_CM_SS_MAX:                     Max Substate
  */
 enum wlan_cm_sm_state {
@@ -82,8 +80,7 @@ enum wlan_cm_sm_state {
 	WLAN_CM_SS_REASSOC = 11,
 	WLAN_CM_SS_ROAM_STARTED = 12,
 	WLAN_CM_SS_ROAM_SYNC = 13,
-	WLAN_CM_SS_IDLE_DUE_TO_LINK_SWITCH = 14,
-	WLAN_CM_SS_MAX = 15,
+	WLAN_CM_SS_MAX = 14,
 };
 
 /**
@@ -114,7 +111,6 @@ struct cm_state_sm {
  * @cur_candidate_retries: attempts for current candidate
  * @connect_attempts: number of connect attempts tried
  * @connect_active_time: timestamp when connect became active
- * @first_candidate_rsp: connect response for first candidate
  */
 struct cm_connect_req {
 	wlan_cm_id cm_id;
@@ -125,9 +121,6 @@ struct cm_connect_req {
 	uint8_t cur_candidate_retries;
 	uint8_t connect_attempts;
 	qdf_time_t connect_active_time;
-#ifdef CONN_MGR_ADV_FEATURE
-	struct wlan_cm_connect_resp *first_candidate_rsp;
-#endif
 };
 
 /**
@@ -186,7 +179,6 @@ struct cm_req {
  * @CM_REQ_DEL_ACTIVE: Remove request from active queue
  * @CM_REQ_DEL_PENDING: Remove request from pending queue
  * @CM_REQ_DEL_FLUSH: Request removed due to request list flush
- * @CM_REQ_DEL_MAX: Maximum enumeration
  */
 enum cm_req_del_type {
 	CM_REQ_DEL_ACTIVE,
@@ -240,7 +232,7 @@ struct cm_req_history {
  * this is used to get which command to flush from serialization during
  * host roaming.
  * @req_list: connect/disconnect req list
- * @cm_req_lock: lock to manipulate/read the cm req list
+ * @cm_req_lock: lock to manupulate/read the cm req list
  * @disconnect_count: disconnect count
  * @connect_count: connect count
  * @force_rsne_override: if QCA_WLAN_VENDOR_ATTR_CONFIG_RSN_IE is set by
@@ -251,9 +243,7 @@ struct cm_req_history {
  * @scan_requester_id: scan requester id.
  * @disconnect_complete: disconnect completion wait event
  * @ext_cm_ptr: connection manager ext pointer
- * @req_history: Holds the connection manager history
- * @cm_candidate_advance_filter:
- * @cm_candidate_list_custom_sort:
+ * @history: Holds the connection manager history
  */
 struct cnx_mgr {
 	struct wlan_objmgr_vdev *vdev;
@@ -300,7 +290,7 @@ struct vdev_op_search_arg {
 
 /**
  * wlan_cm_init() - Invoke connection manager init
- * @vdev_mlme:  VDEV MLME comp object
+ * @vdev_mlme_obj:  VDEV MLME comp object
  *
  * API allocates CM and init
  *
@@ -311,7 +301,7 @@ QDF_STATUS wlan_cm_init(struct vdev_mlme_obj *vdev_mlme);
 
 /**
  * wlan_cm_deinit() - Invoke connection manager deinit
- * @vdev_mlme:  VDEV MLME comp object
+ * @vdev_mlme_obj:  VDEV MLME comp object
  *
  * API destroys CM
  *

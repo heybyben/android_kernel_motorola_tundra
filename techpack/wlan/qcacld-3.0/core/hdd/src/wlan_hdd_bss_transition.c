@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -63,7 +62,7 @@ static int wlan_hdd_fill_btm_resp(struct sk_buff *reply_skb,
 	attr = nla_nest_start(reply_skb, index);
 	if (!attr) {
 		hdd_err("nla_nest_start failed");
-		wlan_cfg80211_vendor_free_skb(reply_skb);
+		kfree_skb(reply_skb);
 		return -EINVAL;
 	}
 
@@ -74,7 +73,7 @@ static int wlan_hdd_fill_btm_resp(struct sk_buff *reply_skb,
 		 QCA_WLAN_VENDOR_ATTR_BTM_CANDIDATE_INFO_STATUS,
 		 info->status)) {
 		hdd_err("nla_put failed");
-		wlan_cfg80211_vendor_free_skb(reply_skb);
+		kfree_skb(reply_skb);
 		return -EINVAL;
 	}
 
@@ -121,7 +120,7 @@ __wlan_hdd_cfg80211_fetch_bss_transition_status(struct wiphy *wiphy,
 	struct nlattr *tb_msg[QCA_WLAN_VENDOR_ATTR_BTM_CANDIDATE_INFO_MAX + 1];
 	uint8_t transition_reason;
 	struct nlattr *attr;
-	struct sk_buff *skb;
+	struct sk_buff *reply_skb;
 	int rem, j;
 	int ret;
 	bool is_bt_in_progress;
@@ -130,7 +129,8 @@ __wlan_hdd_cfg80211_fetch_bss_transition_status(struct wiphy *wiphy,
 	struct hdd_context *hdd_ctx = wiphy_priv(wiphy);
 	struct net_device *dev = wdev->netdev;
 	struct hdd_adapter *adapter = WLAN_HDD_GET_PRIV_PTR(dev);
-	struct hdd_station_ctx *hdd_sta_ctx;
+	struct hdd_station_ctx *hdd_sta_ctx =
+					WLAN_HDD_GET_STATION_CTX_PTR(adapter);
 	mac_handle_t mac_handle;
 	QDF_STATUS status;
 
@@ -145,9 +145,8 @@ __wlan_hdd_cfg80211_fetch_bss_transition_status(struct wiphy *wiphy,
 	if (ret)
 		return ret;
 
-	hdd_sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter->deflink);
 	if (adapter->device_mode != QDF_STA_MODE ||
-	    !hdd_cm_is_vdev_associated(adapter->deflink)) {
+	    !hdd_cm_is_vdev_associated(adapter)) {
 		hdd_err("Command is either not invoked for STA mode (device mode: %d) or STA is not associated (Connection state: %d)",
 			adapter->device_mode, hdd_sta_ctx->conn_info.conn_state);
 		return -EINVAL;
@@ -212,21 +211,19 @@ __wlan_hdd_cfg80211_fetch_bss_transition_status(struct wiphy *wiphy,
 		return -EINVAL;
 
 	/* Prepare the reply and send it to userspace */
-	skb = wlan_cfg80211_vendor_cmd_alloc_reply_skb(wiphy,
-						       (QDF_MAC_ADDR_SIZE +
-							sizeof(uint32_t)) *
-						       nof_candidates +
-						       NLMSG_HDRLEN);
-	if (!skb) {
+	reply_skb = cfg80211_vendor_cmd_alloc_reply_skb(wiphy,
+			((QDF_MAC_ADDR_SIZE + sizeof(uint32_t)) *
+			 nof_candidates) + NLMSG_HDRLEN);
+	if (!reply_skb) {
 		hdd_err("reply buffer alloc failed");
 		return -ENOMEM;
 	}
 
-	attr = nla_nest_start(skb,
+	attr = nla_nest_start(reply_skb,
 			      QCA_WLAN_VENDOR_ATTR_BTM_CANDIDATE_INFO);
 	if (!attr) {
 		hdd_err("nla_nest_start failed");
-		wlan_cfg80211_vendor_free_skb(skb);
+		kfree_skb(reply_skb);
 		return -EINVAL;
 	}
 
@@ -237,7 +234,7 @@ __wlan_hdd_cfg80211_fetch_bss_transition_status(struct wiphy *wiphy,
 	for (i = 0, j = 0; i < nof_candidates; i++) {
 		/* copy accepted candidate list */
 		if (candidate_info[i].status == QCA_STATUS_ACCEPT) {
-			if (wlan_hdd_fill_btm_resp(skb,
+			if (wlan_hdd_fill_btm_resp(reply_skb,
 						   &candidate_info[i], j))
 				return -EINVAL;
 			j++;
@@ -246,17 +243,17 @@ __wlan_hdd_cfg80211_fetch_bss_transition_status(struct wiphy *wiphy,
 	for (i = 0; i < nof_candidates; i++) {
 		/* copy rejected candidate list */
 		if (candidate_info[i].status != QCA_STATUS_ACCEPT) {
-			if (wlan_hdd_fill_btm_resp(skb,
+			if (wlan_hdd_fill_btm_resp(reply_skb,
 						   &candidate_info[i], j))
 				return -EINVAL;
 			j++;
 		}
 	}
-	nla_nest_end(skb, attr);
+	nla_nest_end(reply_skb, attr);
 
 	hdd_exit();
 
-	return wlan_cfg80211_vendor_cmd_reply(skb);
+	return cfg80211_vendor_cmd_reply(reply_skb);
 }
 
 int wlan_hdd_cfg80211_fetch_bss_transition_status(struct wiphy *wiphy,

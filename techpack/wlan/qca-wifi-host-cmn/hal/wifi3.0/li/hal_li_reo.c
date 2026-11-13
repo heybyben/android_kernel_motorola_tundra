@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -28,6 +27,17 @@ uint32_t hal_get_reo_reg_base_offset_li(void)
 	return SEQ_WCSS_UMAC_REO_REG_OFFSET;
 }
 
+/**
+ * hal_reo_qdesc_setup - Setup HW REO queue descriptor
+ *
+ * @hal_soc: Opaque HAL SOC handle
+ * @ba_window_size: BlockAck window size
+ * @start_seq: Starting sequence number
+ * @hw_qdesc_vaddr: Virtual address of REO queue descriptor memory
+ * @hw_qdesc_paddr: Physical address of REO queue descriptor memory
+ * @tid: TID
+ *
+ */
 void hal_reo_qdesc_setup_li(hal_soc_handle_t hal_soc_hdl, int tid,
 			    uint32_t ba_window_size,
 			    uint32_t start_seq, void *hw_qdesc_vaddr,
@@ -140,7 +150,7 @@ void hal_reo_qdesc_setup_li(hal_soc_handle_t hal_soc_hdl, int tid,
 
 	/* TODO: HW queue descriptors are currently allocated for max BA
 	 * window size for all QOS TIDs so that same descriptor can be used
-	 * later when ADDBA request is received. This should be changed to
+	 * later when ADDBA request is recevied. This should be changed to
 	 * allocate HW queue descriptors based on BA window size being
 	 * negotiated (0 for non BA cases), and reallocate when BA window
 	 * size changes and also send WMI message to FW to change the REO
@@ -185,6 +195,13 @@ void hal_reo_qdesc_setup_li(hal_soc_handle_t hal_soc_hdl, int tid,
 
 qdf_export_symbol(hal_reo_qdesc_setup_li);
 
+/**
+ * hal_get_ba_aging_timeout_li - Get BA Aging timeout
+ *
+ * @hal_soc: Opaque HAL SOC handle
+ * @ac: Access category
+ * @value: window size to get
+ */
 void hal_get_ba_aging_timeout_li(hal_soc_handle_t hal_soc_hdl, uint8_t ac,
 				 uint32_t *value)
 {
@@ -218,6 +235,14 @@ void hal_get_ba_aging_timeout_li(hal_soc_handle_t hal_soc_hdl, uint8_t ac,
 }
 qdf_export_symbol(hal_get_ba_aging_timeout_li);
 
+/**
+ * hal_set_ba_aging_timeout_li - Set BA Aging timeout
+ *
+ * @hal_soc: Opaque HAL SOC handle
+ * @ac: Access category
+ * ac: 0 - Background, 1 - Best Effort, 2 - Video, 3 - Voice
+ * @value: Input value to set
+ */
 void hal_set_ba_aging_timeout_li(hal_soc_handle_t hal_soc_hdl, uint8_t ac,
 				 uint32_t value)
 {
@@ -330,16 +355,11 @@ hal_reo_cmd_queue_stats_li(hal_ring_handle_t  hal_ring_hdl,
 	HAL_DESC_SET_FIELD(reo_desc, REO_GET_QUEUE_STATS_2, CLEAR_STATS,
 			   cmd->u.stats_params.clear);
 
-	if (hif_rtpm_get(HIF_RTPM_GET_ASYNC, HIF_RTPM_ID_HAL_REO_CMD) == 0) {
-		if (hif_system_pm_state_check(hal_soc->hif_handle)) {
-			hal_srng_access_end_reap(hal_soc_hdl, hal_ring_hdl);
-			hal_srng_set_event(hal_ring_hdl, HAL_SRNG_FLUSH_EVENT);
-			hal_srng_inc_flush_cnt(hal_ring_hdl);
-		} else {
-			hal_srng_access_end(hal_soc_hdl, hal_ring_hdl);
-		}
-
-		hif_rtpm_put(HIF_RTPM_PUT_ASYNC, HIF_RTPM_ID_HAL_REO_CMD);
+	if (hif_pm_runtime_get(hal_soc->hif_handle,
+			       RTPM_ID_HAL_REO_CMD, false) == 0) {
+		hal_srng_access_end(hal_soc_hdl, hal_ring_hdl);
+		hif_pm_runtime_put(hal_soc->hif_handle,
+				   RTPM_ID_HAL_REO_CMD);
 	} else {
 		hal_srng_access_end_reap(hal_soc_hdl, hal_ring_hdl);
 		hal_srng_set_event(hal_ring_hdl, HAL_SRNG_FLUSH_EVENT);
@@ -478,16 +498,11 @@ hal_reo_cmd_flush_cache_li(hal_ring_handle_t hal_ring_hdl,
 	HAL_DESC_SET_FIELD(reo_desc, REO_FLUSH_CACHE_2, FLUSH_ENTIRE_CACHE,
 			   cp->flush_entire_cache);
 
-	if (hif_rtpm_get(HIF_RTPM_GET_ASYNC, HIF_RTPM_ID_HAL_REO_CMD) == 0) {
-		if (hif_system_pm_state_check(hal_soc->hif_handle)) {
-			hal_srng_access_end_reap(hal_soc_hdl, hal_ring_hdl);
-			hal_srng_set_event(hal_ring_hdl, HAL_SRNG_FLUSH_EVENT);
-			hal_srng_inc_flush_cnt(hal_ring_hdl);
-		} else {
-			hal_srng_access_end(hal_soc_hdl, hal_ring_hdl);
-		}
-
-		hif_rtpm_put(HIF_RTPM_PUT_ASYNC, HIF_RTPM_ID_HAL_REO_CMD);
+	if (hif_pm_runtime_get(hal_soc->hif_handle,
+			       RTPM_ID_HAL_REO_CMD, false) == 0) {
+		hal_srng_access_end(hal_soc_hdl, hal_ring_hdl);
+		hif_pm_runtime_put(hal_soc->hif_handle,
+				   RTPM_ID_HAL_REO_CMD);
 	} else {
 		hal_srng_access_end_reap(hal_soc_hdl, hal_ring_hdl);
 		hal_srng_set_event(hal_ring_hdl, HAL_SRNG_FLUSH_EVENT);
@@ -779,6 +794,13 @@ hal_reo_cmd_update_rx_queue_li(hal_ring_handle_t hal_ring_hdl,
 	HAL_DESC_SET_FIELD(reo_desc, REO_UPDATE_RX_REO_QUEUE_4,
 			   BA_WINDOW_SIZE, p->ba_window_size - 1);
 
+	if (p->pn_size == 24)
+		p->pn_size = PN_SIZE_24;
+	else if (p->pn_size == 48)
+		p->pn_size = PN_SIZE_48;
+	else if (p->pn_size == 128)
+		p->pn_size = PN_SIZE_128;
+
 	HAL_DESC_SET_FIELD(reo_desc, REO_UPDATE_RX_REO_QUEUE_4,
 			   PN_SIZE, p->pn_size);
 
@@ -806,16 +828,11 @@ hal_reo_cmd_update_rx_queue_li(hal_ring_handle_t hal_ring_hdl,
 	HAL_DESC_SET_FIELD(reo_desc, REO_UPDATE_RX_REO_QUEUE_8,
 			   PN_127_96, p->pn_127_96);
 
-	if (hif_rtpm_get(HIF_RTPM_GET_ASYNC, HIF_RTPM_ID_HAL_REO_CMD) == 0) {
-		if (hif_system_pm_state_check(hal_soc->hif_handle)) {
-			hal_srng_access_end_reap(hal_soc_hdl, hal_ring_hdl);
-			hal_srng_set_event(hal_ring_hdl, HAL_SRNG_FLUSH_EVENT);
-			hal_srng_inc_flush_cnt(hal_ring_hdl);
-		} else {
-			hal_srng_access_end(hal_soc_hdl, hal_ring_hdl);
-		}
-
-		hif_rtpm_put(HIF_RTPM_PUT_ASYNC, HIF_RTPM_ID_HAL_REO_CMD);
+	if (hif_pm_runtime_get(hal_soc->hif_handle,
+			       RTPM_ID_HAL_REO_CMD, false) == 0) {
+		hal_srng_access_end(hal_soc_hdl, hal_ring_hdl);
+		hif_pm_runtime_put(hal_soc->hif_handle,
+				   RTPM_ID_HAL_REO_CMD);
 	} else {
 		hal_srng_access_end_reap(hal_soc_hdl, hal_ring_hdl);
 		hal_srng_set_event(hal_ring_hdl, HAL_SRNG_FLUSH_EVENT);
@@ -1338,10 +1355,8 @@ uint8_t hal_get_tlv_hdr_size_li(void)
 	return sizeof(struct tlv_32_hdr);
 }
 
-uint64_t hal_rx_get_qdesc_addr_li(uint8_t *dst_ring_desc, uint8_t *buf)
+uint8_t *hal_rx_get_qdesc_addr_li(uint8_t *dst_ring_desc, uint8_t *buf)
 {
-	uint8_t *dst_qdesc_addr = dst_ring_desc +
+	return dst_ring_desc +
 		REO_DESTINATION_RING_6_RX_REO_QUEUE_DESC_ADDR_31_0_OFFSET;
-
-	return *(uint64_t *)dst_qdesc_addr;
 }

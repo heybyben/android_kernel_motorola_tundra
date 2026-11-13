@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2015-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -30,7 +29,6 @@
 #include "wlan_hdd_main.h" /* hdd_err/warn... */
 #include "qdf_types.h"     /* QDF_MODULE_ID_... */
 #include "ce_api.h"
-#include "wlan_dp_ucfg_api.h"
 
 /*  guaranteed to be initialized to zero/NULL by the standard */
 static struct qca_napi_data *hdd_napi_ctx;
@@ -140,7 +138,7 @@ int hdd_napi_create(void)
 	}
 
 	rc = hdd_napi_event(NAPI_EVT_INI_FILE,
-			    (void *)ucfg_dp_get_napi_enabled(hdd_ctx->psoc));
+			    (void *)hdd_ctx->napi_enable);
 	napid->user_cpu_affin_mask =
 		hdd_ctx->config->napi_cpu_affinity_mask;
 
@@ -263,9 +261,6 @@ int hdd_napi_event(enum qca_napi_event event, void *data)
 }
 
 #if defined HELIUMPLUS && defined MSM_PLATFORM
-
-static int napi_tput_policy_delay;
-
 /**
  * hdd_napi_perfd_cpufreq() - set/reset min CPU freq for cores
  * @req_state:  high/low
@@ -352,6 +347,7 @@ hnpc_ret:
  * Return: 0 : no action taken, or action return code
  *         !0: error, or action error code
  */
+static int napi_tput_policy_delay;
 int hdd_napi_apply_throughput_policy(struct hdd_context *hddctx,
 				     uint64_t tx_packets,
 				     uint64_t rx_packets)
@@ -372,7 +368,7 @@ int hdd_napi_apply_throughput_policy(struct hdd_context *hddctx,
 		napi_tput_policy_delay--;
 
 		/* make sure the next timer call calls us */
-		ucfg_dp_set_current_throughput_level(hddctx->psoc, -1);
+		hddctx->cur_vote_level = -1;
 
 		return rc;
 	}
@@ -388,7 +384,7 @@ int hdd_napi_apply_throughput_policy(struct hdd_context *hddctx,
 		return rc;
 	}
 
-	if (packets > ucfg_dp_get_bus_bw_high_threshold(hddctx->psoc))
+	if (packets > hddctx->config->bus_bw_high_threshold)
 		req_state = QCA_NAPI_TPUT_HI;
 	else
 		req_state = QCA_NAPI_TPUT_LO;
@@ -396,7 +392,7 @@ int hdd_napi_apply_throughput_policy(struct hdd_context *hddctx,
 	if (req_state != napid->napi_mode) {
 		/* [re]set the floor frequency of high cluster */
 		rc = hdd_napi_perfd_cpufreq(req_state);
-		/* denylist/boost_mode on/off */
+		/* blacklist/boost_mode on/off */
 		rc = hdd_napi_event(NAPI_EVT_TPUT_STATE, (void *)req_state);
 	}
 	return rc;
@@ -436,8 +432,7 @@ int hdd_napi_serialize(int is_on)
 		/* make sure that bus_bandwidth trigger is executed */
 		hdd_ctx = cds_get_context(QDF_MODULE_ID_HDD);
 		if (hdd_ctx)
-			ucfg_dp_set_current_throughput_level(hdd_ctx->psoc,
-							     -1);
+			hdd_ctx->cur_vote_level = -1;
 
 	}
 	return rc;
@@ -479,7 +474,7 @@ int hdd_display_napi_stats(void)
 	 * Expecting each NAPI bucket item to need at max 5 numerals + space for
 	 * formatting. For example "10000 " Thus the array needs to have
 	 * (5 + 1) * QCA_NAPI_NUM_BUCKETS bytes of space. Leaving one space at
-	 * the end of the "buf" array for end of string char.
+	 * the end of the "buf" arrary for end of string char.
 	 */
 	char buf[6 * QCA_NAPI_NUM_BUCKETS + 1] = {'\0'};
 
@@ -490,7 +485,7 @@ int hdd_display_napi_stats(void)
 	}
 	hdd_nofl_info("[NAPI %u][BL %d]:  scheds   polls   comps    done t-lim p-lim  corr  max_time napi-buckets(%d)",
 		      napid->napi_mode,
-		      hif_napi_cpu_denylist(napid, DENYLIST_QUERY),
+		      hif_napi_cpu_blacklist(napid, BLACKLIST_QUERY),
 		      QCA_NAPI_NUM_BUCKETS);
 
 	for (i = 0; i < CE_COUNT_MAX; i++)

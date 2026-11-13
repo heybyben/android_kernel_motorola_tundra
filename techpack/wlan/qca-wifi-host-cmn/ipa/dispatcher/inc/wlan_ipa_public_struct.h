@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -40,8 +39,6 @@
  * @ipa_bw_medium: IPA bandwidth medium threshold
  * @ipa_bw_low: IPA bandwidth low threshold
  * @ipa_force_voting: support force bw voting
- * @ipa_wds: WDS support for IPA
- * @ipa_vlan_support: support got vlan with IPA
  */
 struct wlan_ipa_config {
 	uint32_t ipa_config;
@@ -54,8 +51,6 @@ struct wlan_ipa_config {
 	uint32_t ipa_bw_medium;
 	uint32_t ipa_bw_low;
 	bool ipa_force_voting;
-	bool ipa_wds;
-	bool ipa_vlan_support;
 };
 
 /**
@@ -81,32 +76,6 @@ enum wlan_ipa_wlan_event {
 };
 
 /**
- * enum wlan_ipa_bw_level -ipa bandwidth level
- * @WLAN_IPA_BW_LEVEL_LOW: vote for low bandwidth
- * @WLAN_IPA_BW_LEVEL_MEDIUM: vote for medium bandwidth
- * @WLAN_IPA_BW_LEVEL_HIGH: vote for high bandwidth
- */
-enum wlan_ipa_bw_level {
-	WLAN_IPA_BW_LEVEL_LOW,
-	WLAN_IPA_BW_LEVEL_MEDIUM,
-	WLAN_IPA_BW_LEVEL_HIGH,
-};
-
-#ifdef IPA_OPT_WIFI_DP
-/**
- * enum wlan_ipa_cce_super_rule_flt_hdl - Filter hdl values for cce super rules
- * @WLAN_HDL_FILTER1 : Handle for filter1
- * @WLAN_HDL_FILTER2 : Handle for filter 2
- * @WLAN_HDL_MAX_FILTER : Max value for filter handle
- */
-enum wlan_ipa_cce_super_rule_flt_hdl {
-	WLAN_HDL_FILTER1 = 0xC,
-	WLAN_HDL_FILTER2 = 0xD,
-	WLAN_HDL_MAX_FILTER
-};
-#endif
-
-/**
  * struct ipa_uc_offload_control_params - ipa offload control params
  * @offload_type: ipa offload type
  * @vdev_id: vdev id
@@ -127,4 +96,12 @@ struct ipa_intrabss_control_params {
 	uint32_t vdev_id;
 	uint32_t enable;
 };
+
+/* fp to send IPA UC offload cmd */
+typedef QDF_STATUS (*ipa_uc_offload_control_req)(struct wlan_objmgr_psoc *psoc,
+				struct ipa_uc_offload_control_params *req);
+/* fp to send IPA intrabss cmd */
+typedef QDF_STATUS (*ipa_intrabss_control_req)(struct wlan_objmgr_psoc *psoc,
+				struct ipa_intrabss_control_params *req);
+
 #endif /* end  of _WLAN_IPA_PUBLIC_STRUCT_H_ */

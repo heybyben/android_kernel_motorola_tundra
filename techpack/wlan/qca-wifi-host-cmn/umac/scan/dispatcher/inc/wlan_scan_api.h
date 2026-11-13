@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -28,32 +28,6 @@
 #include <wlan_objmgr_pdev_obj.h>
 #include <wlan_objmgr_vdev_obj.h>
 #include "../../core/src/wlan_scan_main.h"
-
-#ifdef FEATURE_SET
-/**
- * wlan_scan_get_feature_info() - Get scan feature set info
- * @psoc: pointer to psoc object
- * @scan_feature_set: feature set info which needs to be filled
- *
- * Return: none
- */
-void wlan_scan_get_feature_info(struct wlan_objmgr_psoc *psoc,
-				struct wlan_scan_features *scan_feature_set);
-#endif
-
-/**
- * wlan_scan_get_scan_entry_by_mac_freq() - API to get scan entry
- * info from scan db by mac addr
- * @pdev: pointer to pdev object
- * @bssid: pointer to mac addr
- * @freq: frequency for scan filter
- *
- * Return: scan entry if found, else NULL
- */
-struct scan_cache_entry *
-wlan_scan_get_scan_entry_by_mac_freq(struct wlan_objmgr_pdev *pdev,
-				     struct qdf_mac_addr *bssid,
-				     uint16_t freq);
 
 /**
  * wlan_scan_cfg_set_active_2g_dwelltime() - API to set scan active 2g dwelltime
@@ -126,28 +100,11 @@ QDF_STATUS wlan_scan_cfg_get_passive_6g_dwelltime(struct wlan_objmgr_psoc *psoc,
  */
 void wlan_scan_cfg_get_min_dwelltime_6g(struct wlan_objmgr_psoc *psoc,
 					uint32_t *min_dwell_time_6ghz);
-
-/**
- * wlan_scan_cfg_set_scan_mode_6g() - API to set scan mode for 6 GHz
- * @psoc: pointer to psoc object
- * @scan_mode_6g: scan mode value for 6 GHz
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS wlan_scan_cfg_set_scan_mode_6g(struct wlan_objmgr_psoc *psoc,
-					  enum scan_mode_6ghz scan_mode_6g);
 #else
 static inline
 void wlan_scan_cfg_get_min_dwelltime_6g(struct wlan_objmgr_psoc *psoc,
 					uint32_t *min_dwell_time_6ghz)
 {
-}
-
-static inline
-QDF_STATUS wlan_scan_cfg_set_scan_mode_6g(struct wlan_objmgr_psoc *psoc,
-					  enum scan_mode_6ghz scan_mode_6g)
-{
-	return QDF_STATUS_E_NOSUPPORT;
 }
 #endif
 
@@ -201,26 +158,6 @@ void wlan_scan_cfg_get_passive_dwelltime(struct wlan_objmgr_psoc *psoc,
 void wlan_scan_update_pno_dwell_time(struct wlan_objmgr_vdev *vdev,
 				     struct pno_scan_req_params *req,
 				     struct scan_default_params *scan_def);
-
-/*
- * wlan_scan_update_low_latency_profile_chnlist() - Low latency SAP + scan
- * concurrencies
- * @vdev: vdev object pointer
- * @req: scan request
- *
- * Return: void
- */
-void wlan_scan_update_low_latency_profile_chnlist(
-				struct wlan_objmgr_vdev *vdev,
-				struct scan_start_request *req);
-#else
-static inline
-void wlan_scan_update_low_latency_profile_chnlist(
-				struct wlan_objmgr_vdev *vdev,
-				struct scan_start_request *req)
-{
-}
-
 #endif
 
 /**
@@ -325,7 +262,7 @@ bool wlan_scan_is_snr_monitor_enabled(struct wlan_objmgr_psoc *psoc);
  * scheduler thread
  * @psoc: psoc context
  * @buf: frame buf
- * @rx_param: rx event params
+ * @params: rx event params
  * @frm_type: frame type
  *
  * handle bcn without posting to scheduler thread, this should be called
@@ -491,88 +428,4 @@ wlan_scan_unregister_requester(struct wlan_objmgr_psoc *psoc,
  */
 bool wlan_scan_cfg_skip_6g_and_indoor_freq(
 			struct wlan_objmgr_psoc *psoc);
-
-/**
- * wlan_scan_register_mbssid_cb() - register api to inform bcn/probe rsp
- * @psoc: psoc object
- * @cb: callback to be registered
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS wlan_scan_register_mbssid_cb(struct wlan_objmgr_psoc *psoc,
-					update_mbssid_bcn_prb_rsp cb);
-
-/**
- * wlan_scan_get_entry_by_mac_addr() - Get bcn/probe rsp from scan db
- * @pdev: pdev info
- * @bssid: BSSID of the bcn/probe response to be fetched from scan db
- * @frame: Frame from scan db with given bssid.
- *
- * This is a wrapper to fetch the bcn/probe rsp frame with given mac address
- * through scm_scan_get_entry_by_mac_addr(). scm_scan_get_entry_by_mac_add()
- * allocates memory for the frame and it's caller responsibility to free
- * the memory once it's done with the usage i.e. frame->ptr.
- *
- * Return: QDF_STATUS_SUCCESS if scan entry is present in db
- */
-QDF_STATUS
-wlan_scan_get_entry_by_mac_addr(struct wlan_objmgr_pdev *pdev,
-				struct qdf_mac_addr *bssid,
-				struct element_info *frame);
-
-/**
- * wlan_scan_get_last_scan_ageout_time() - API to get last scan
- * ageout time
- * @psoc: psoc object
- * @last_scan_ageout_time: last scan ageout time
- *
- * Return: void
- */
-void
-wlan_scan_get_last_scan_ageout_time(struct wlan_objmgr_psoc *psoc,
-				    uint32_t *last_scan_ageout_time);
-/**
- * wlan_scan_get_entry_by_bssid() - function to get scan entry by bssid
- * @pdev: pdev object
- * @bssid: bssid to be fetched from scan db
- *
- * Return : scan entry if found, else NULL
- */
-struct scan_cache_entry *
-wlan_scan_get_entry_by_bssid(struct wlan_objmgr_pdev *pdev,
-			     struct qdf_mac_addr *bssid);
-
-/**
- * wlan_scan_get_mld_addr_by_link_addr() - Function to get MLD address
- * in the scan entry from the link BSSID.
- * @pdev: pdev object
- * @link_addr: Link BSSID to match the scan filter
- * @mld_mac_addr: Pointer to fill the MLD address.
- *
- * A wrapper API which fills @mld_mac_addr with MLD address of scan entry
- * whose bssid field matches @link_addr.
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS
-wlan_scan_get_mld_addr_by_link_addr(struct wlan_objmgr_pdev *pdev,
-				    struct qdf_mac_addr *link_addr,
-				    struct qdf_mac_addr *mld_mac_addr);
-
-/**
- * wlan_scan_get_aux_support() - get aux scan policy
- * @psoc: psoc object
- *
- * Set aux scan bits in scan_ctrl_ext_flag value depending on scan type.
- *
- * Return: true/false
- */
-bool wlan_scan_get_aux_support(struct wlan_objmgr_psoc *psoc);
-
-static inline bool
-wlan_scan_entries_contain_cmn_akm(struct scan_cache_entry *entry1,
-				  struct scan_cache_entry *entry2)
-{
-	return scm_scan_entries_contain_cmn_akm(entry1, entry2);
-}
 #endif

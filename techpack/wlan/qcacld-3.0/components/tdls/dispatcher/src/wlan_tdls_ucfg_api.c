@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -33,11 +33,9 @@
 #include <wlan_objmgr_cmn.h>
 #include "wlan_policy_mgr_api.h"
 #include "wlan_scan_ucfg_api.h"
-#include "cfg_tdls.h"
-#include "wlan_mlo_mgr_sta.h"
+#include "wlan_tdls_cfg.h"
 #include "cfg_ucfg_api.h"
 #include "wlan_tdls_api.h"
-#include <wlan_mlme_ucfg_api.h>
 
 QDF_STATUS ucfg_tdls_init(void)
 {
@@ -155,27 +153,6 @@ tdls_update_feature_flag(struct tdls_soc_priv_obj *tdls_soc_obj)
 }
 
 /**
- * wlan_tdls_get_mlme_cfg_he_cap() - Get mlme cfg he caps
- * @psoc: pointer to psoc
- * @he_cap_cfg: HE cap
- *
- * Return: QDF_STATUS
- */
-#ifdef WLAN_FEATURE_11AX
-static QDF_STATUS wlan_tdls_get_mlme_cfg_he_cap(struct wlan_objmgr_psoc *psoc,
-						tDot11fIEhe_cap *he_cap_cfg)
-{
-	return ucfg_mlme_cfg_get_he_caps(psoc, he_cap_cfg);
-}
-#else
-static QDF_STATUS wlan_tdls_get_mlme_cfg_he_cap(struct wlan_objmgr_psoc *psoc,
-						tDot11fIEhe_cap *he_cap_cfg)
-{
-	return QDF_STATUS_E_INVAL;
-}
-#endif /*WLAN_FEATURE_11AX*/
-
-/**
  * tdls_object_init_params() - init parameters for tdls object
  * @tdls_soc_obj: pointer to tdls psoc object
  *
@@ -185,8 +162,6 @@ static QDF_STATUS tdls_object_init_params(
 	struct tdls_soc_priv_obj *tdls_soc_obj)
 {
 	struct wlan_objmgr_psoc *psoc;
-	tDot11fIEhe_cap he_cap_cfg;
-	QDF_STATUS status;
 
 	if (!tdls_soc_obj) {
 		tdls_err("invalid param");
@@ -227,25 +202,8 @@ static QDF_STATUS tdls_object_init_params(
 			cfg_get(psoc, CFG_TDLS_PUAPSD_PEER_TRAFFIC_RSP_TIMEOUT);
 	tdls_soc_obj->tdls_configs.tdls_pre_off_chan_num =
 			cfg_get(psoc, CFG_TDLS_PREFERRED_OFF_CHANNEL_NUM);
-	tdls_soc_obj->tdls_configs.tdls_pre_off_chan_freq_6g =
-			cfg_get(psoc, CFG_TDLS_PREFERRED_OFF_CHANNEL_FREQ_6G);
 	tdls_soc_obj->tdls_configs.tdls_pre_off_chan_bw =
 			cfg_get(psoc, CFG_TDLS_PREFERRED_OFF_CHANNEL_BW);
-
-	tdls_debug("tdls_pre_off_chan_bw: %d",
-		   tdls_soc_obj->tdls_configs.tdls_pre_off_chan_bw);
-
-	status = wlan_tdls_get_mlme_cfg_he_cap(psoc, &he_cap_cfg);
-
-	/* If HW does not support 160 MHz*/
-	if (QDF_IS_STATUS_SUCCESS(status) && !he_cap_cfg.chan_width_3) {
-		tdls_soc_obj->tdls_configs.tdls_pre_off_chan_bw =
-			tdls_soc_obj->tdls_configs.tdls_pre_off_chan_bw &
-					~(1 << BW_160_OFFSET_BIT);
-		tdls_debug("updated tdls_pre_off_chan_bw: %d",
-			   tdls_soc_obj->tdls_configs.tdls_pre_off_chan_bw);
-	}
-
 	tdls_soc_obj->tdls_configs.tdls_peer_kickout_threshold =
 			cfg_get(psoc, CFG_TDLS_PEER_KICKOUT_THRESHOLD);
 	tdls_soc_obj->tdls_configs.tdls_discovery_wake_timeout =
@@ -276,8 +234,7 @@ static QDF_STATUS tdls_object_init_params(
 
 #ifdef TDLS_WOW_ENABLED
 /**
- * tdls_wow_init() - Create/init wake lock for TDLS
- * @soc_obj: TDLS private soc object
+ * tdls_wow_init(): Create/init wake lock for TDLS
  *
  * Create/init wake lock for TDLS if DVR isn't supported
  *
@@ -294,8 +251,7 @@ static void tdls_wow_init(struct tdls_soc_priv_obj *soc_obj)
 }
 
 /**
- * tdls_wow_deinit() - Destroy/deinit wake lock for TDLS
- * @soc_obj: TDLS private soc object
+ * tdls_wow_deinit(): Destroy/deinit wake lock for TDLS
  *
  * Destroy/deinit wake lock for TDLS if DVR isn't supported
  *
@@ -328,7 +284,7 @@ static QDF_STATUS tdls_global_init(struct tdls_soc_priv_obj *soc_obj)
 	soc_obj->tdls_nss_transition_mode = TDLS_NSS_TRANSITION_S_UNKNOWN;
 	soc_obj->enable_tdls_connection_tracker = false;
 	soc_obj->tdls_external_peer_count = 0;
-	soc_obj->is_user_tdls_enable = true;
+	soc_obj->tdls_disable_in_progress = false;
 
 	qdf_spinlock_create(&soc_obj->tdls_ct_spinlock);
 	tdls_wow_init(soc_obj);
@@ -362,55 +318,6 @@ QDF_STATUS ucfg_tdls_psoc_open(struct wlan_objmgr_psoc *psoc)
 	return status;
 }
 
-void ucfg_tdls_update_fw_wideband_capability(struct wlan_objmgr_psoc *psoc,
-					     bool is_fw_tdls_wideband_capable)
-{
-	struct tdls_soc_priv_obj *soc_obj;
-
-	soc_obj = wlan_objmgr_psoc_get_comp_private_obj(psoc,
-							WLAN_UMAC_COMP_TDLS);
-	if (!soc_obj) {
-		tdls_err("Failed to get tdls psoc component");
-		return;
-	}
-
-	soc_obj->fw_tdls_wideband_capability = is_fw_tdls_wideband_capable;
-}
-
-bool ucfg_tdls_is_fw_wideband_capable(struct wlan_objmgr_psoc *psoc)
-{
-	struct tdls_soc_priv_obj *soc_obj;
-
-	soc_obj = wlan_objmgr_psoc_get_comp_private_obj(psoc,
-							WLAN_UMAC_COMP_TDLS);
-	if (!soc_obj) {
-		tdls_err("Failed to get tdls psoc component");
-		return false;
-	}
-
-	tdls_debug("FW wideband capability %d",
-		   soc_obj->fw_tdls_wideband_capability);
-
-	return soc_obj->fw_tdls_wideband_capability;
-}
-
-#ifdef WLAN_FEATURE_11BE
-void ucfg_tdls_update_fw_mlo_capability(struct wlan_objmgr_psoc *psoc,
-					bool is_fw_tdls_mlo_capable)
-{
-	struct tdls_soc_priv_obj *soc_obj;
-
-	soc_obj = wlan_objmgr_psoc_get_comp_private_obj(psoc,
-							WLAN_UMAC_COMP_TDLS);
-	if (!soc_obj) {
-		tdls_err("Failed to get tdls psoc component");
-		return;
-	}
-
-	soc_obj->fw_tdls_mlo_capable = is_fw_tdls_mlo_capable;
-}
-#endif
-
 #ifdef WLAN_FEATURE_11AX
 void ucfg_tdls_update_fw_11ax_capability(struct wlan_objmgr_psoc *psoc,
 					 bool is_fw_tdls_11ax_capable)
@@ -427,21 +334,6 @@ void ucfg_tdls_update_fw_11ax_capability(struct wlan_objmgr_psoc *psoc,
 	soc_obj->fw_tdls_11ax_capability = is_fw_tdls_11ax_capable;
 }
 
-void ucfg_update_fw_tdls_6g_capability(struct wlan_objmgr_psoc *psoc,
-				       bool is_fw_tdls_6g_capable)
-{
-	struct tdls_soc_priv_obj *soc_obj;
-
-	soc_obj = wlan_objmgr_psoc_get_comp_private_obj(psoc,
-							WLAN_UMAC_COMP_TDLS);
-	if (!soc_obj) {
-		tdls_err("Failed to get tdls psoc component");
-		return;
-	}
-
-	soc_obj->fw_tdls_6g_capability = is_fw_tdls_6g_capable;
-}
-
 bool  ucfg_tdls_is_fw_11ax_capable(struct wlan_objmgr_psoc *psoc)
 {
 	struct tdls_soc_priv_obj *soc_obj;
@@ -455,21 +347,6 @@ bool  ucfg_tdls_is_fw_11ax_capable(struct wlan_objmgr_psoc *psoc)
 	tdls_debug("FW 11AX capability %d", soc_obj->fw_tdls_11ax_capability);
 
 	return soc_obj->fw_tdls_11ax_capability;
-}
-
-bool  ucfg_tdls_is_fw_6g_capable(struct wlan_objmgr_psoc *psoc)
-{
-	struct tdls_soc_priv_obj *soc_obj;
-
-	soc_obj = wlan_objmgr_psoc_get_comp_private_obj(psoc,
-							WLAN_UMAC_COMP_TDLS);
-	if (!soc_obj) {
-		tdls_err("Failed to get tdls psoc component");
-		return false;
-	}
-	tdls_debug("FW 6g capability %d", soc_obj->fw_tdls_6g_capability);
-
-	return soc_obj->fw_tdls_6g_capability;
 }
 #endif
 
@@ -517,10 +394,6 @@ QDF_STATUS ucfg_tdls_update_config(struct wlan_objmgr_psoc *psoc,
 	soc_obj->tdls_dp_vdev_update = req->tdls_dp_vdev_update;
 	soc_obj->tdls_osif_init_cb = req->tdls_osif_init_cb;
 	soc_obj->tdls_osif_deinit_cb = req->tdls_osif_deinit_cb;
-	soc_obj->tdls_osif_update_cb.tdls_osif_conn_update =
-	       req->tdls_osif_update_cb.tdls_osif_conn_update;
-	soc_obj->tdls_osif_update_cb.tdls_osif_disconn_update =
-	       req->tdls_osif_update_cb.tdls_osif_disconn_update;
 	tdls_pm_call_backs.tdls_notify_increment_session =
 			tdls_notify_increment_session;
 
@@ -544,7 +417,8 @@ QDF_STATUS ucfg_tdls_update_config(struct wlan_objmgr_psoc *psoc,
 
 	soc_obj->tdls_last_mode = soc_obj->tdls_current_mode;
 	if (TDLS_IS_BUFFER_STA_ENABLED(tdls_feature_flags) ||
-	    TDLS_IS_SLEEP_STA_ENABLED(tdls_feature_flags))
+	    TDLS_IS_SLEEP_STA_ENABLED(tdls_feature_flags) ||
+	    TDLS_IS_OFF_CHANNEL_ENABLED(tdls_feature_flags))
 		soc_obj->max_num_tdls_sta =
 			WLAN_TDLS_STA_P_UAPSD_OFFCHAN_MAX_NUM;
 
@@ -557,50 +431,6 @@ QDF_STATUS ucfg_tdls_update_config(struct wlan_objmgr_psoc *psoc,
 			     QDF_MAC_ADDR_SIZE);
 	}
 	return QDF_STATUS_SUCCESS;
-}
-
-bool ucfg_tdls_link_vdev_is_matching(struct wlan_objmgr_vdev *vdev)
-{
-	struct wlan_objmgr_vdev *tdls_link_vdev;
-
-	tdls_link_vdev = tdls_mlo_get_tdls_link_vdev(vdev);
-	if (!tdls_link_vdev) {
-		wlan_vdev_mlme_feat_ext2_cap_set(vdev,
-						 WLAN_VDEV_FEXT2_MLO_STA_TDLS);
-		tdls_set_remain_links_unforce(vdev);
-		return true;
-	}
-
-	if (tdls_link_vdev && tdls_link_vdev != vdev) {
-		tdls_debug("tdls vdev has been created on vdev %d",
-			   wlan_vdev_get_id(tdls_link_vdev));
-		return false;
-	}
-
-	return true;
-}
-
-struct wlan_objmgr_vdev *
-ucfg_tdls_get_tdls_link_vdev(struct wlan_objmgr_vdev *vdev,
-			     wlan_objmgr_ref_dbgid dbg_id)
-{
-	struct wlan_objmgr_vdev *link_vdev;
-
-	link_vdev = tdls_mlo_get_tdls_link_vdev(vdev);
-	if (!link_vdev)
-		return NULL;
-
-	if (wlan_objmgr_vdev_try_get_ref(link_vdev, dbg_id) !=
-	    QDF_STATUS_SUCCESS)
-		return NULL;
-
-	return link_vdev;
-}
-
-void ucfg_tdls_put_tdls_link_vdev(struct wlan_objmgr_vdev *vdev,
-				  wlan_objmgr_ref_dbgid dbg_id)
-{
-	wlan_objmgr_vdev_release_ref(vdev, dbg_id);
 }
 
 QDF_STATUS ucfg_tdls_psoc_enable(struct wlan_objmgr_psoc *psoc)
@@ -965,8 +795,8 @@ QDF_STATUS ucfg_tdls_send_mgmt_frame(
 		mgmt_req->tdls_mgmt.len = 0;
 	}
 
-	tdls_debug("vdev id: %d, session id : %d, action %d", mgmt_req->vdev_id,
-		   mgmt_req->session_id, req->chk_frame.action_code);
+	tdls_debug("vdev id: %d, session id : %d", mgmt_req->vdev_id,
+		    mgmt_req->session_id);
 	status = wlan_objmgr_vdev_try_get_ref(req->vdev, WLAN_TDLS_NB_ID);
 
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -1025,10 +855,9 @@ QDF_STATUS ucfg_tdls_responder(struct tdls_set_responder_req *req)
 	return status;
 }
 
-void ucfg_tdls_teardown_links_sync(struct wlan_objmgr_psoc *psoc,
-				   struct wlan_objmgr_vdev *vdev)
+void ucfg_tdls_teardown_links_sync(struct wlan_objmgr_psoc *psoc)
 {
-	return wlan_tdls_check_and_teardown_links_sync(psoc, vdev);
+	return wlan_tdls_teardown_links_sync(psoc);
 }
 
 QDF_STATUS ucfg_tdls_teardown_links(struct wlan_objmgr_psoc *psoc)
@@ -1280,62 +1109,33 @@ free:
 	return status;
 }
 
-struct wlan_objmgr_vdev *ucfg_tdls_get_mlo_vdev(struct wlan_objmgr_vdev *vdev,
-						uint8_t index,
-						wlan_objmgr_ref_dbgid dbg_id)
-{
-	return wlan_tdls_get_mlo_vdev(vdev, index, dbg_id);
-}
-
-void ucfg_tdls_release_mlo_vdev(struct wlan_objmgr_vdev *vdev,
-				wlan_objmgr_ref_dbgid dbg_id)
-{
-	return wlan_tdls_release_mlo_vdev(vdev, dbg_id);
-}
-
-bool ucfg_tdls_discovery_on_going(struct wlan_objmgr_vdev *vdev)
-{
-	struct tdls_soc_priv_obj *tdls_soc;
-	uint8_t count;
-
-	tdls_soc = wlan_vdev_get_tdls_soc_obj(vdev);
-	if (!tdls_soc)
-		return false;
-	count = qdf_atomic_read(&tdls_soc->timer_cnt);
-	tdls_debug("discovery req timer count %d", count);
-
-	return count ? true : false;
-}
-
 QDF_STATUS ucfg_tdls_set_rssi(struct wlan_objmgr_vdev *vdev,
 			      uint8_t *mac, int8_t rssi)
 {
 	return tdls_set_rssi(vdev, mac, rssi);
 }
 
-void ucfg_tdls_notify_connect_failure(struct wlan_objmgr_psoc *psoc)
+/**
+ * wlan_tdls_notify_connect_failure() - This api is called if STA/P2P
+ * connection fails on one iface and to enable/disable TDLS on the other
+ * STA/P2P iface which is already connected.
+ * @psoc: psoc object
+ *
+ * Return: void
+ */
+static inline
+void  wlan_tdls_notify_connect_failure(struct wlan_objmgr_psoc *psoc)
 {
 	return tdls_notify_decrement_session(psoc);
 }
 
-uint16_t ucfg_get_tdls_conn_peer_count(struct wlan_objmgr_vdev *vdev)
+void ucfg_tdls_notify_connect_failure(struct wlan_objmgr_psoc *psoc)
 {
-	return tdls_get_connected_peer_count_from_vdev(vdev);
+	return wlan_tdls_notify_connect_failure(psoc);
 }
 
 struct wlan_objmgr_vdev *ucfg_get_tdls_vdev(struct wlan_objmgr_psoc *psoc,
 					    wlan_objmgr_ref_dbgid dbg_id)
 {
 	return tdls_get_vdev(psoc, dbg_id);
-}
-
-bool ucfg_tdls_check_is_tdls_allowed(struct wlan_objmgr_vdev *vdev)
-{
-	return tdls_check_is_tdls_allowed(vdev);
-}
-
-void ucfg_tdls_set_user_tdls_enable(struct wlan_objmgr_vdev *vdev,
-				    bool is_user_tdls_enable)
-{
-	return tdls_set_user_tdls_enable(vdev, is_user_tdls_enable);
 }

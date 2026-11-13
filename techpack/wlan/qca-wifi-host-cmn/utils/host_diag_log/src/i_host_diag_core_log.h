@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2014-2018 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -41,7 +40,7 @@
 /*--------------------------------------------------------------------------
    Preprocessor definitions and constants
    ------------------------------------------------------------------------*/
-/* FIXME To be removed when DIAG support is added. This definition should be */
+/* FIXME To be removed when DIAG support is added. This definiton should be */
 /* picked from log.h file above. */
 typedef struct {
 	/* Specifies the length, in bytes of the entry, including this header. */
@@ -117,7 +116,7 @@ static inline void host_diag_log_set_length(void *ptr, uint16_t length)
 #endif /* FEATURE_WLAN_DIAG_SUPPORT */
 
 /*-------------------------------------------------------------------------
-   Function declarations and documentation
+   Function declarations and documenation
    ------------------------------------------------------------------------*/
 
 #ifdef __cplusplus

@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2018 The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -61,7 +60,7 @@ int target_if_encrypt_decrypt_event_handler(ol_scn_t scn_handle, uint8_t *data,
 void target_if_disa_register_tx_ops(struct wlan_disa_tx_ops *tx_ops);
 
 /**
- * target_if_disa_register_ev_handlers() -  Register disa event handlers.
+ * target_if_disa_register_ev_handler() -  Register disa event handlers.
  * @psoc:objmgr psoc handle
  *
  * Return: QDF status
@@ -70,7 +69,7 @@ QDF_STATUS
 target_if_disa_register_ev_handlers(struct wlan_objmgr_psoc *psoc);
 
 /**
- * target_if_disa_unregister_ev_handlers() -  Unregister disa event handlers.
+ * target_if_disa_register_ev_handler() -  Unregister disa event handlers.
  * @psoc:objmgr psoc handle
  *
  * Return: QDF status

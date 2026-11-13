@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -18,10 +18,9 @@
  */
 
 /**
- *  DOC: htt_t2h.c
- *
- *  brief Provide functions to process target->host HTT messages.
- *  details
+ * @file htt_t2h.c
+ * @brief Provide functions to process target->host HTT messages.
+ * @details
  *  This file contains functions related to target->host HTT messages.
  *  There are two categories of functions:
  *  1.  A function that receives a HTT message from HTC, and dispatches it
@@ -226,9 +225,7 @@ static void htt_t2h_lp_msg_handler(void *context, qdf_nbuf_t htt_t2h_msg,
 	switch (msg_type) {
 	case HTT_T2H_MSG_TYPE_VERSION_CONF:
 	{
-		if (htc_dec_return_htt_runtime_cnt(pdev->htc_pdev) >= 0)
-			htc_pm_runtime_put(pdev->htc_pdev);
-
+		htc_pm_runtime_put(pdev->htc_pdev);
 		pdev->tgt_ver.major = HTT_VER_CONF_MAJOR_GET(*msg_word);
 		pdev->tgt_ver.minor = HTT_VER_CONF_MINOR_GET(*msg_word);
 		QDF_TRACE(QDF_MODULE_ID_HTT, QDF_TRACE_LEVEL_INFO_LOW,
@@ -706,7 +703,7 @@ static void htt_t2h_lp_msg_handler(void *context, qdf_nbuf_t htt_t2h_msg,
 		default:
 		{
 			qdf_print("unhandled error type %d",
-			  HTT_RX_OFLD_PKT_ERR_MSG_SUB_TYPE_GET(*msg_word));
+				  HTT_RX_OFLD_PKT_ERR_MSG_SUB_TYPE_GET(*msg_word));
 			break;
 		}
 		}
@@ -740,10 +737,10 @@ static void htt_t2h_lp_msg_handler(void *context, qdf_nbuf_t htt_t2h_msg,
 #define HTT_TX_COMPL_HEAD_SZ			4
 #define HTT_TX_COMPL_BYTES_PER_MSDU_ID		2
 
-/*
+/**
  * Generic Target to host Msg/event  handler  for low priority messages
  * Low priority message are handler in a different handler called from
- * this function . So that the most likely success path like Rx and
+ * this function . So that the most likely succes path like Rx and
  * Tx comp   has little code   foot print
  */
 void htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
@@ -1088,8 +1085,8 @@ void htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
 #ifdef WLAN_FEATURE_FASTPATH
 #define HTT_T2H_MSG_BUF_REINIT(_buf, dev)				\
 	do {								\
-		qdf_nbuf_push_head(_buf, (HTC_HEADER_LEN) +		\
-				   HTC_HDR_ALIGNMENT_PADDING);		\
+		QDF_NBUF_CB_PADDR(_buf) -= (HTC_HEADER_LEN +		\
+					HTC_HDR_ALIGNMENT_PADDING);	\
 		qdf_nbuf_init_fast((_buf));				\
 		qdf_mem_dma_sync_single_for_device(dev,			\
 					(QDF_NBUF_CB_PADDR(_buf)),	\
@@ -1103,12 +1100,11 @@ void htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
  * @context: HTT context
  * @cmpl_msdus: netbuf completions
  * @num_cmpls: number of completions to be handled
- * @ce_id: copy engine id
  *
  * Return: None
  */
 void htt_t2h_msg_handler_fast(void *context, qdf_nbuf_t *cmpl_msdus,
-			      uint32_t num_cmpls, unsigned int ce_id)
+			      uint32_t num_cmpls)
 {
 	struct htt_pdev_t *pdev = (struct htt_pdev_t *)context;
 	qdf_nbuf_t htt_t2h_msg;

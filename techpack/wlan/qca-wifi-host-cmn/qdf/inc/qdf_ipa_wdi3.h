@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2019, 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -37,26 +36,6 @@
 typedef __qdf_ipa_wdi_version_t qdf_ipa_wdi_version_t;
 
 /**
- * qdf_ipa_wdi_hdl_t - IPA handle
- */
-typedef __qdf_ipa_wdi_hdl_t qdf_ipa_wdi_hdl_t;
-
-/**
- * qdf_ipa_wdi_capabilities_out_params_t - wdi capabilities output parameters
- */
-typedef __qdf_ipa_wdi_capabilities_out_params_t	\
-		qdf_ipa_wdi_capabilities_out_params_t;
-
-#define QDF_IPA_WDI_CAPABILITIES_OUT_PARAMS_NUM_INSTANCES(out_params)	\
-	__QDF_IPA_WDI_CAPABILITIES_OUT_PARAMS_NUM_INSTANCES(out_params)
-
-static inline int qdf_ipa_wdi_get_capabilities(
-		qdf_ipa_wdi_capabilities_out_params_t *out)
-{
-	return __qdf_ipa_wdi_get_capabilities(out);
-}
-
-/**
  * qdf_ipa_wdi_init_in_params_t - wdi init input parameters
  */
 typedef __qdf_ipa_wdi_init_in_params_t qdf_ipa_wdi_init_in_params_t;
@@ -69,13 +48,6 @@ typedef __qdf_ipa_wdi_init_in_params_t qdf_ipa_wdi_init_in_params_t;
 	__QDF_IPA_WDI_INIT_IN_PARAMS_PRIV(in_params)
 #define QDF_IPA_WDI_INIT_IN_PARAMS_WDI_NOTIFY(in_params)	\
 	__QDF_IPA_WDI_INIT_IN_PARAMS_WDI_NOTIFY(in_params)
-#define QDF_IPA_WDI_INIT_IN_PARAMS_INSTANCE_ID(in_params)	\
-	__QDF_IPA_WDI_INIT_IN_PARAMS_INSTANCE_ID(in_params)
-
-#ifdef IPA_WDS_EASYMESH_FEATURE
-#define QDF_IPA_WDI_INIT_IN_PARAMS_WDS_UPDATE(in_params)	\
-	__QDF_IPA_WDI_INIT_IN_PARAMS_WDS_UPDATE(in_params)
-#endif
 
 /**
  * qdf_ipa_wdi_init_out_params_t - wdi init output parameters
@@ -86,10 +58,6 @@ typedef __qdf_ipa_wdi_init_out_params_t qdf_ipa_wdi_init_out_params_t;
 	__QDF_IPA_WDI_INIT_OUT_PARAMS_IS_UC_READY(out_params)
 #define QDF_IPA_WDI_INIT_OUT_PARAMS_IS_SMMU_ENABLED(out_params)	\
 	__QDF_IPA_WDI_INIT_OUT_PARAMS_IS_SMMU_ENABLED(out_params)
-#define QDF_IPA_WDI_INIT_OUT_PARAMS_HANDLE(out_params)	\
-	__QDF_IPA_WDI_INIT_OUT_PARAMS_HANDLE(out_params)
-#define QDF_IPA_WDI_INIT_OUT_PARAMS_OPT_WIFI_DP(out_params)   \
-	__QDF_IPA_WDI_INIT_OUT_PARAMS_OPT_WIFI_DP(out_params)
 
 /**
  * qdf_ipa_wdi_pipe_setup_info_smmu_t - WDI TX/Rx configuration
@@ -123,10 +91,6 @@ typedef __qdf_ipa_wdi_pipe_setup_info_smmu_t qdf_ipa_wdi_pipe_setup_info_smmu_t;
 	__QDF_IPA_WDI_SETUP_INFO_SMMU_PKT_OFFSET(txrx)
 #define QDF_IPA_WDI_SETUP_INFO_SMMU_DESC_FORMAT_TEMPLATE(txrx)	\
 	__QDF_IPA_WDI_SETUP_INFO_SMMU_DESC_FORMAT_TEMPLATE(txrx)
-#define QDF_IPA_WDI_SETUP_INFO_SMMU_RX_BANK_ID(txrx, bid)	\
-	__QDF_IPA_WDI_SETUP_INFO_SMMU_RX_BANK_ID(txrx, bid)
-#define QDF_IPA_WDI_SETUP_INFO_SMMU_RX_PMAC_ID(txrx, pmac_id)	\
-	__QDF_IPA_WDI_SETUP_INFO_SMMU_RX_PMAC_ID(txrx, pmac_id)
 
 typedef __qdf_ipa_ep_cfg_t qdf_ipa_ep_cfg_t;
 
@@ -167,13 +131,12 @@ static inline int qdf_ipa_wdi_init(qdf_ipa_wdi_init_in_params_t *in,
 /**
  * qdf_ipa_wdi_cleanup - Client should call this function to
  * clean up WDI IPA offload data path
- * @hdl: IPA handle
  *
  * @Return 0 on success, negative on failure
  */
-static inline int qdf_ipa_wdi_cleanup(qdf_ipa_wdi_hdl_t hdl)
+static inline int qdf_ipa_wdi_cleanup(void)
 {
-	return __qdf_ipa_wdi_cleanup(hdl);
+	return __qdf_ipa_wdi_cleanup();
 }
 #endif /* CONFIG_IPA_WDI_UNIFIED_API */
 
@@ -209,15 +172,9 @@ typedef __qdf_ipa_wdi_reg_intf_in_params_t qdf_ipa_wdi_reg_intf_in_params_t;
 	__QDF_IPA_WDI_REG_INTF_IN_PARAMS_META_DATA(in)
 #define QDF_IPA_WDI_REG_INTF_IN_PARAMS_META_DATA_MASK(in)	\
 	__QDF_IPA_WDI_REG_INTF_IN_PARAMS_META_DATA_MASK(in)
-#define QDF_IPA_WDI_REG_INTF_IN_PARAMS_HANDLE(in)	\
-	__QDF_IPA_WDI_REG_INTF_IN_PARAMS_HANDLE(in)
 #ifdef IPA_WDI3_TX_TWO_PIPES
 #define QDF_IPA_WDI_REG_INTF_IN_PARAMS_IS_TX1_USED(in)	\
 	__QDF_IPA_WDI_REG_INTF_IN_PARAMS_IS_TX1_USED(in)
-#endif
-#ifdef IPA_WDI3_VLAN_SUPPORT
-#define QDF_IPA_WDI_REG_INTF_IN_PARAMS_IS_RX1_USED(in)	\
-	__QDF_IPA_WDI_REG_INTF_IN_PARAMS_IS_RX1_USED(in)
 #endif
 
 /**
@@ -271,10 +228,6 @@ typedef __qdf_ipa_wdi_pipe_setup_info_t qdf_ipa_wdi_pipe_setup_info_t;
 	__QDF_IPA_WDI_SETUP_INFO_PKT_OFFSET(txrx)
 #define QDF_IPA_WDI_SETUP_INFO_DESC_FORMAT_TEMPLATE(txrx)	\
 	__QDF_IPA_WDI_SETUP_INFO_DESC_FORMAT_TEMPLATE(txrx)
-#define QDF_IPA_WDI_SETUP_INFO_RX_BANK_ID(txrx, bid)	\
-	__QDF_IPA_WDI_SETUP_INFO_RX_BANK_ID(txrx, bid)
-#define QDF_IPA_WDI_SETUP_INFO_RX_PMAC_ID(txrx, pmac_id)	\
-	__QDF_IPA_WDI_SETUP_INFO_RX_PMAC_ID(txrx, pmac_id)
 
 /**
  * qdf_ipa_wdi_conn_in_params_t - information provided by
@@ -300,14 +253,6 @@ typedef __qdf_ipa_wdi_conn_in_params_t qdf_ipa_wdi_conn_in_params_t;
 	__QDF_IPA_WDI_CONN_IN_PARAMS_RX(pipe_in)
 #define QDF_IPA_WDI_CONN_IN_PARAMS_RX_SMMU(pipe_in)	\
 	__QDF_IPA_WDI_CONN_IN_PARAMS_RX_SMMU(pipe_in)
-#define QDF_IPA_WDI_CONN_IN_PARAMS_HANDLE(pipe_in)	\
-	__QDF_IPA_WDI_CONN_IN_PARAMS_HANDLE(pipe_in)
-
-#ifdef IPA_WDS_EASYMESH_FEATURE
-#define QDF_IPA_WDI_CONN_IN_PARAMS_AST_NOTIFY(pipe_in)	\
-	__QDF_IPA_WDI_CONN_IN_PARAMS_AST_NOTIFY(pipe_in)
-#endif
-
 #ifdef IPA_WDI3_TX_TWO_PIPES
 #define QDF_IPA_WDI_CONN_IN_PARAMS_IS_TX1_USED(pipe_in)	\
 	__QDF_IPA_WDI_CONN_IN_PARAMS_IS_TX1_USED(pipe_in)
@@ -318,14 +263,7 @@ typedef __qdf_ipa_wdi_conn_in_params_t qdf_ipa_wdi_conn_in_params_t;
 #define QDF_IPA_WDI_CONN_OUT_PARAMS_TX_UC_ALT_DB_PA(pipe_out)	\
 	__QDF_IPA_WDI_CONN_OUT_PARAMS_TX_UC_ALT_DB_PA(pipe_out)
 #endif
-#ifdef IPA_WDI3_VLAN_SUPPORT
-#define QDF_IPA_WDI_CONN_IN_PARAMS_IS_RX1_USED(pipe_in)	\
-	__QDF_IPA_WDI_CONN_IN_PARAMS_IS_RX1_USED(pipe_in)
-#define QDF_IPA_WDI_CONN_IN_PARAMS_RX_ALT(pipe_in)	\
-	__QDF_IPA_WDI_CONN_IN_PARAMS_RX_ALT(pipe_in)
-#define QDF_IPA_WDI_CONN_IN_PARAMS_RX_ALT_SMMU(pipe_in)	\
-	__QDF_IPA_WDI_CONN_IN_PARAMS_RX_ALT_SMMU(pipe_in)
-#endif
+
 /**
  * qdf_ipa_wdi_conn_out_params_t - information provided
  *				to WLAN druver
@@ -338,10 +276,6 @@ typedef __qdf_ipa_wdi_conn_out_params_t qdf_ipa_wdi_conn_out_params_t;
 	__QDF_IPA_WDI_CONN_OUT_PARAMS_TX_UC_DB_VA(pipe_out)
 #define QDF_IPA_WDI_CONN_OUT_PARAMS_RX_UC_DB_PA(pipe_out)	\
 	__QDF_IPA_WDI_CONN_OUT_PARAMS_RX_UC_DB_PA(pipe_out)
-#ifdef IPA_WDI3_VLAN_SUPPORT
-#define QDF_IPA_WDI_CONN_OUT_PARAMS_RX_ALT_UC_DB_PA(pipe_out)	\
-	__QDF_IPA_WDI_CONN_OUT_PARAMS_RX_ALT_UC_DB_PA(pipe_out)
-#endif
 #define QDF_IPA_WDI_CONN_OUT_PARAMS_IS_DB_DDR_MAPPED(pipe_out)	\
 	__QDF_IPA_WDI_CONN_OUT_PARAMS_IS_DB_DDR_MAPPED(pipe_out)
 
@@ -373,20 +307,18 @@ static inline int qdf_ipa_wdi_reg_intf(
 /**
  * qdf_ipa_wdi_dereg_intf - Client Driver should call this
  * function to deregister before unload and after disconnect
- * @netdev_name: Net device name
- * @hdl: IPA handle
  *
  * @Return 0 on success, negative on failure
  */
-static inline int qdf_ipa_wdi_dereg_intf(const char *netdev_name,
-					 qdf_ipa_wdi_hdl_t hdl)
+static inline int qdf_ipa_wdi_dereg_intf(const char *netdev_name)
 {
-	return __qdf_ipa_wdi_dereg_intf(netdev_name, hdl);
+	return __qdf_ipa_wdi_dereg_intf(netdev_name);
 }
 
 /**
  * qdf_ipa_wdi_conn_pipes - Client should call this
  * function to connect pipes
+ *
  * @in:	[in] input parameters from client
  * @out: [out] output params to client
  *
@@ -404,89 +336,84 @@ static inline int qdf_ipa_wdi_conn_pipes(qdf_ipa_wdi_conn_in_params_t *in,
 /**
  * qdf_ipa_wdi_disconn_pipes() - Client should call this
  *		function to disconnect pipes
- * @hdl: IPA handle
  *
  * Note: Should not be called from atomic context
  *
  * Returns: 0 on success, negative on failure
  */
-static inline int qdf_ipa_wdi_disconn_pipes(qdf_ipa_wdi_hdl_t hdl)
+static inline int qdf_ipa_wdi_disconn_pipes(void)
 {
-	return __qdf_ipa_wdi_disconn_pipes(hdl);
+	return __qdf_ipa_wdi_disconn_pipes();
 }
 
 /**
  * qdf_ipa_wdi_enable_pipes() - Client should call this
  *		function to enable IPA offload data path
- * @hdl: IPA handle
  *
  * Note: Should not be called from atomic context
  *
  * Returns: 0 on success, negative on failure
  */
-static inline int qdf_ipa_wdi_enable_pipes(qdf_ipa_wdi_hdl_t hdl)
+static inline int qdf_ipa_wdi_enable_pipes(void)
 {
-	return __qdf_ipa_wdi_enable_pipes(hdl);
+	return __qdf_ipa_wdi_enable_pipes();
 }
 
 /**
  * qdf_ipa_wdi_disable_pipes() - Client should call this
  *		function to disable IPA offload data path
- * @hdl: IPA handle
  *
  * Note: Should not be called from atomic context
  *
  * Returns: 0 on success, negative on failure
  */
-static inline int qdf_ipa_wdi_disable_pipes(qdf_ipa_wdi_hdl_t hdl)
+static inline int qdf_ipa_wdi_disable_pipes(void)
 {
-	return __qdf_ipa_wdi_disable_pipes(hdl);
+	return __qdf_ipa_wdi_disable_pipes();
 }
 
 /**
  * qdf_ipa_wdi_set_perf_profile() - Client should call this function to
  *		set IPA clock bandwidth based on data rates
- * @hdl: IPA handle
+ *
  * @profile: [in] BandWidth profile to use
  *
  * Returns: 0 on success, negative on failure
  */
-static inline int qdf_ipa_wdi_set_perf_profile(qdf_ipa_wdi_hdl_t hdl,
-					       qdf_ipa_wdi_perf_profile_t *profile)
+static inline int qdf_ipa_wdi_set_perf_profile(
+			qdf_ipa_wdi_perf_profile_t *profile)
 {
-	return __qdf_ipa_wdi_set_perf_profile(hdl, profile);
+	return __qdf_ipa_wdi_set_perf_profile(profile);
 }
 
 /**
  * qdf_ipa_wdi_create_smmu_mapping() - Client should call this function to
  *		create smmu mapping
- * @hdl: IPA handle
+ *
  * @num_buffers: [in] number of buffers
  * @info: [in] wdi buffer info
  *
  * Returns: 0 on success, negative on failure
  */
-static inline int qdf_ipa_wdi_create_smmu_mapping(qdf_ipa_wdi_hdl_t hdl,
-						  uint32_t num_buffers,
-						  qdf_ipa_wdi_buffer_info_t *info)
+static inline int qdf_ipa_wdi_create_smmu_mapping(uint32_t num_buffers,
+		qdf_ipa_wdi_buffer_info_t *info)
 {
-	return __qdf_ipa_wdi_create_smmu_mapping(hdl, num_buffers, info);
+	return __qdf_ipa_wdi_create_smmu_mapping(num_buffers, info);
 }
 
 /**
  * qdf_ipa_wdi_release_smmu_mapping() - Client should call this function to
  *		release smmu mapping
- * @hdl: IPA handle
+ *
  * @num_buffers: [in] number of buffers
  * @info: [in] wdi buffer info
  *
  * Returns: 0 on success, negative on failure
  */
-static inline int qdf_ipa_wdi_release_smmu_mapping(qdf_ipa_wdi_hdl_t hdl,
-						   uint32_t num_buffers,
-						   qdf_ipa_wdi_buffer_info_t *info)
+static inline int qdf_ipa_wdi_release_smmu_mapping(uint32_t num_buffers,
+		qdf_ipa_wdi_buffer_info_t *info)
 {
-	return __qdf_ipa_wdi_release_smmu_mapping(hdl, num_buffers, info);
+	return __qdf_ipa_wdi_release_smmu_mapping(num_buffers, info);
 }
 
 #ifdef WDI3_STATS_UPDATE
@@ -512,75 +439,7 @@ static inline int qdf_ipa_uc_bw_monitor(qdf_ipa_wdi_bw_info_t *bw_info)
 {
 	return __qdf_ipa_uc_bw_monitor(bw_info);
 }
-
 #endif
 
-#ifdef IPA_OPT_WIFI_DP
-/**
- * qdf_ipa_wdi_register_flt_cb() - register cb functions with IPA
- * for optional wifi datapath
- * @hdl: ipa hdl
- * @flt_rsrv_cb: cb for filter reservation
- * @flt_rsrv_rel_cb: cb for filter release
- * @flt_add_cb: cb for filter addition
- * @flt_rem_cb: cb for filter removal
- *
- * Return: 0 on success, negative on failure
- */
-static inline int qdf_ipa_wdi_register_flt_cb(
-			ipa_wdi_hdl_t hdl,
-			ipa_wdi_opt_dpath_flt_rsrv_cb flt_rsrv_cb,
-			ipa_wdi_opt_dpath_flt_rsrv_rel_cb flt_rsrv_rel_cb,
-			ipa_wdi_opt_dpath_flt_add_cb flt_add_cb,
-			ipa_wdi_opt_dpath_flt_rem_cb flt_rem_cb)
-{
-	return __qdf_ipa_wdi_register_flt_cb((__qdf_ipa_wdi_hdl_t)hdl,
-					     flt_rsrv_cb, flt_rsrv_rel_cb,
-					     flt_add_cb, flt_rem_cb);
-}
-
-/**
- * ipa_wdi_opt_dpath_notify_flt_rsvd_per_inst() - notify IPA with filter
- * reserve response for optional wifi datapath
- * @hdl: ipa hdl
- * @is_succes: true for success, false or failure
- *
- * Return: 0 on success, negative on failure
- */
-static inline int qdf_ipa_wdi_opt_dpath_notify_flt_rsvd_per_inst(
-					    ipa_wdi_hdl_t hdl, bool is_success)
-{
-	return __qdf_ipa_wdi_opt_dpath_notify_flt_rsvd_per_inst(hdl,
-								is_success);
-}
-
-/**
- * qdf_ipa_wdi_opt_dpath_notify_flt_rlsd_per_inst() - notify IPA with filter
- * release response for optional wifi datapath
- * @hdl: ipa hdl
- * @is_succes: true for success, false or failure
- *
- * Return: 0 on success, negative on failure
- */
-static inline int qdf_ipa_wdi_opt_dpath_notify_flt_rlsd_per_inst(
-				ipa_wdi_hdl_t hdl, bool is_success)
-{
-	return __qdf_ipa_wdi_opt_dpath_notify_flt_rlsd_per_inst(hdl,
-								is_success);
-}
-
-#else
-static inline int qdf_ipa_wdi_opt_dpath_notify_flt_rsvd_per_inst(
-				ipa_wdi_hdl_t hdl, bool is_success)
-{
-	return 0;
-}
-
-static inline int qdf_ipa_wdi_opt_dpath_notify_flt_rlsd_per_inst(
-				ipa_wdi_hdl_t hdl, bool is_success)
-{
-	return 0;
-}
-#endif /* IPA_OPT_WIFI_DP  */
 #endif /* IPA_OFFLOAD */
-#endif /* QDF_IPA_WDI3_H */
+#endif /* _QDF_IPA_WDI3_H */

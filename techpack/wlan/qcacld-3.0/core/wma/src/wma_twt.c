@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -40,8 +40,6 @@ void wma_register_twt_events(tp_wma_handle wma_handle)
 
 void wma_set_twt_peer_caps(tpAddStaParams params, struct peer_assoc_params *cmd)
 {
-	cmd->twt_requester = params->twt_requestor;
-	cmd->twt_responder = params->twt_responder;
 }
 
 void wma_update_twt_tgt_cap(tp_wma_handle wh, struct wma_tgt_cfg *tgt_cfg)
@@ -180,7 +178,7 @@ void wma_send_twt_disable_cmd(uint32_t pdev_id,
 /**
  * wma_twt_disable_comp_event_handler- TWT disable complete event handler
  * @handle: wma handle
- * @data: data buffer
+ * @event: buffer with event
  * @len: buffer length
  *
  * Return: 0 on success, negative value on failure

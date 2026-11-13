@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2011-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -58,7 +57,7 @@
 #include "qdf_hrtimer.h"
 
 /* High/Low tx resource count in percentage */
-/* Set default high threshold to 15% */
+/* Set default high threashold to 15% */
 #ifndef TX_RESOURCE_HIGH_TH_IN_PER
 #define TX_RESOURCE_HIGH_TH_IN_PER 15
 #endif
@@ -128,7 +127,7 @@ ol_tx_desc_pool_size_hl(struct cdp_cfg *ctrl_pdev)
  * @msdu: the tx frame
  * @msdu_info: the tx meta data
  *
- * Return: the tx descriptor
+ * Return: the tx decriptor
  */
 static inline
 struct ol_tx_desc_t *ol_tx_hl_desc_alloc(struct ol_txrx_pdev_t *pdev,
@@ -147,7 +146,7 @@ struct ol_tx_desc_t *ol_tx_hl_desc_alloc(struct ol_txrx_pdev_t *pdev,
 		    (QDF_NBUF_CB_GET_PACKET_TYPE(msdu) ==
 		    QDF_NBUF_CB_PACKET_TYPE_EAPOL)) {
 			tx_desc = ol_tx_desc_hl(pdev, vdev, msdu, msdu_info);
-			ol_txrx_info("Got tx desc from resv pool");
+			ol_txrx_info("Got tx desc from resv pool\n");
 		}
 	}
 	return tx_desc;
@@ -373,7 +372,7 @@ static bool parse_ocb_tx_header(qdf_nbuf_t msdu,
  * @tx_mgmt_frm: the tx management frame
  * @tx_msdu_info: the tx meta data
  *
- * Return: the tx descriptor
+ * Return: the tx decriptor
  */
 struct ol_tx_desc_t *
 ol_txrx_mgmt_tx_desc_alloc(
@@ -429,7 +428,7 @@ int ol_txrx_mgmt_send_frame(
 	/* Initialize the HTT tx desc l2 header offset field.
 	 * Even though tx encap does not apply to mgmt frames,
 	 * htt_tx_desc_mpdu_header still needs to be called,
-	 * to specify that there was no L2 header added by tx encap,
+	 * to specifiy that there was no L2 header added by tx encap,
 	 * so the frame's length does not need to be adjusted to account for
 	 * an added L2 header.
 	 */
@@ -518,8 +517,7 @@ ol_tx_hl_base(
 		/* OL_TXRX_PROT_AN_LOG(pdev->prot_an_tx_sent, msdu);*/
 
 		qdf_dp_trace_log_pkt(vdev->vdev_id, msdu, QDF_TX,
-				     QDF_TRACE_DEFAULT_PDEV_ID,
-				     vdev->qdf_opmode);
+				     QDF_TRACE_DEFAULT_PDEV_ID);
 		DPTRACE(qdf_dp_trace_data_pkt(msdu, QDF_TRACE_DEFAULT_PDEV_ID,
 					      QDF_DP_TRACE_TX_PACKET_RECORD,
 					      tx_desc->id, QDF_TX));
@@ -1230,7 +1228,7 @@ ol_tx_hl_vdev_tcp_del_ack_timer(qdf_hrtimer_data_t *timer)
 	struct ol_txrx_vdev_t *vdev = qdf_container_of(timer,
 						       struct ol_txrx_vdev_t,
 						       tcp_ack_hash.timer);
-	enum qdf_hrtimer_restart_status ret = QDF_HRTIMER_NORESTART;
+	enum qdf_hrtimer_restart_status ret = __QDF_HRTIMER_NORESTART;
 
 	qdf_sched_bh(&vdev->tcp_ack_hash.tcp_del_ack_tq);
 	qdf_atomic_set(&vdev->tcp_ack_hash.is_timer_running, 0);
@@ -1435,7 +1433,7 @@ ol_tx_pdev_reset_bundle_require(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 
 	TAILQ_FOREACH(vdev, &pdev->vdev_list, vdev_list_elem) {
 		vdev->bundling_required = false;
-		ol_txrx_info("vdev_id %d bundle_require %d",
+		ol_txrx_info("vdev_id %d bundle_require %d\n",
 			     vdev->vdev_id, vdev->bundling_required);
 	}
 }
@@ -1459,7 +1457,7 @@ ol_tx_vdev_set_bundle_require(uint8_t vdev_id, unsigned long tx_bytes,
 		vdev->bundling_required = false;
 
 	if (old_bundle_required != vdev->bundling_required)
-		ol_txrx_info("vdev_id %d bundle_require %d tx_bytes %ld time_in_ms %d high_th %d low_th %d",
+		ol_txrx_info("vdev_id %d bundle_require %d tx_bytes %ld time_in_ms %d high_th %d low_th %d\n",
 			     vdev->vdev_id, vdev->bundling_required, tx_bytes,
 			     time_in_ms, high_th, low_th);
 }

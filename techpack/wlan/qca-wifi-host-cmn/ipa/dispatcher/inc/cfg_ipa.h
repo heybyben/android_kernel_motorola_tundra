@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -26,7 +25,7 @@
 
 #include "cfg_define.h"
 
-/* DP INI Declarations */
+/* DP INI Declerations */
 /*
  * IPA Offload configuration - Each bit enables a feature
  * bit0 - IPA Enable
@@ -34,10 +33,6 @@
  * bit2 - IPv6 enable
  * bit3 - IPA Resource Manager (RM) enable
  * bit4 - IPA Clock scaling enable
- * bit5 - IPA UC enable
- * bit6 - IPA UC STA enable
- * bit8 - IPA real time debugging
- * bit9 - IPA Optional wifi dp enable
  */
 
 /*
@@ -92,7 +87,7 @@
  * <ini>
  * gIPAHighBandwidthMbps - IPA high bw threshold
  * @Min: 200
- * @Max: 4294967295UL
+ * @Max: 1000
  * @Default: 400
  *
  * This ini specifies the IPA high bw threshold
@@ -108,7 +103,7 @@
  #define CFG_DP_IPA_HIGH_BANDWIDTH_MBPS \
 		CFG_INI_UINT("gIPAHighBandwidthMbps", \
 		200, \
-		4294967295UL, \
+		1000, \
 		400, \
 		CFG_VALUE_OR_DEFAULT, "IPA high bw threshold")
 
@@ -116,7 +111,7 @@
  * <ini>
  * gIPAMediumBandwidthMbps - IPA medium bw threshold
  * @Min: 100
- * @Max: 4294967295UL
+ * @Max: 400
  * @Default: 200
  *
  * This ini specifies the IPA medium bw threshold
@@ -132,7 +127,7 @@
  #define CFG_DP_IPA_MEDIUM_BANDWIDTH_MBPS \
 		CFG_INI_UINT("gIPAMediumBandwidthMbps", \
 		100, \
-		4294967295UL, \
+		400, \
 		200, \
 		CFG_VALUE_OR_DEFAULT, "IPA medium bw threshold")
 
@@ -140,7 +135,7 @@
  * <ini>
  * gIPALowBandwidthMbps - IPA low bw threshold
  * @Min: 0
- * @Max: 4294967295UL
+ * @Max: 100
  * @Default: 100
  *
  * This ini specifies the IPA low bw threshold
@@ -156,7 +151,7 @@
  #define CFG_DP_IPA_LOW_BANDWIDTH_MBPS \
 		CFG_INI_UINT("gIPALowBandwidthMbps", \
 		0, \
-		4294967295UL, \
+		100, \
 		100, \
 		CFG_VALUE_OR_DEFAULT, "IPA low bw threshold")
 
@@ -203,44 +198,6 @@
 		512, \
 		CFG_VALUE_OR_DEFAULT, "IPA tx buffer count")
 
-/*
- * <ini>
- * gIPAWds - IPA WDS Enable
- * @Default: false
- *
- * This ini specifies to enable WDS for IPA
- *
- * Related: N/A
- *
- * Supported Feature: IPA
- *
- * Usage: Internal
- *
- * </ini>
- */
-#define CFG_DP_IPA_WDS_STATUS \
-		CFG_INI_BOOL("gIPAWds", \
-		false, "Ctrl to enable WDS for EasyMesh")
-
-/*
- * <ini>
- * gIPAVlanEnable - IPA vlan support enable
- * @Default: false
- *
- * This ini specifies to enable IPA vlan support
- *
- * Related: N/A
- *
- * Supported Feature: IPA
- *
- * Usage: Internal
- *
- * </ini>
- */
-#define CFG_DP_IPA_ENABLE_VLAN_SUPPORT \
-		CFG_INI_BOOL("gIPAVlanEnable", \
-		false, "Ctrl to enable vlan support with IPA Offload")
-
 #define CFG_IPA \
 	CFG(CFG_DP_IPA_OFFLOAD_CONFIG) \
 	CFG(CFG_DP_IPA_DESC_SIZE) \
@@ -248,7 +205,6 @@
 	CFG(CFG_DP_IPA_MEDIUM_BANDWIDTH_MBPS) \
 	CFG(CFG_DP_IPA_LOW_BANDWIDTH_MBPS) \
 	CFG(CFG_DP_IPA_ENABLE_FORCE_VOTING) \
-	CFG(CFG_DP_IPA_UC_TX_BUF_COUNT) \
-	CFG(CFG_DP_IPA_WDS_STATUS) \
-	CFG(CFG_DP_IPA_ENABLE_VLAN_SUPPORT)
+	CFG(CFG_DP_IPA_UC_TX_BUF_COUNT)
+
 #endif /* _CFG_IPA_H_ */

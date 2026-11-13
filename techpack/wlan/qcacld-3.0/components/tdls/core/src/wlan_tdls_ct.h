@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -83,7 +82,7 @@ void tdls_update_tx_pkt_cnt(struct wlan_objmgr_vdev *vdev,
 				     struct qdf_mac_addr *mac_addr);
 
 /**
- * tdls_implicit_send_discovery_request() - send discovery request
+ * wlan_hdd_tdls_implicit_send_discovery_request() - send discovery request
  * @tdls_vdev_obj: tdls vdev object
  *
  * Return: None
@@ -93,7 +92,7 @@ void tdls_implicit_send_discovery_request(
 
 /**
  * tdls_recv_discovery_resp() - handling of tdls discovery response
- * @tdls_vdev: tdls vdev object
+ * @soc: object manager
  * @mac: mac address of peer from which the response was received
  *
  * Return: 0 for success or negative errno otherwise
@@ -107,11 +106,11 @@ int tdls_recv_discovery_resp(struct tdls_vdev_priv_obj *tdls_vdev,
  * @curr_peer: teardown peer
  * @reason: teardown reason
  *
- * Return: QDF_STATUS
+ * Return: Void
  */
-QDF_STATUS tdls_indicate_teardown(struct tdls_vdev_priv_obj *tdls_vdev,
-				  struct tdls_peer *curr_peer,
-				  uint16_t reason);
+void tdls_indicate_teardown(struct tdls_vdev_priv_obj *tdls_vdev,
+				struct tdls_peer *curr_peer,
+				uint16_t reason);
 
 /**
  * tdls_ct_handler() - TDLS connection tracker handler
@@ -138,7 +137,7 @@ void tdls_ct_idle_handler(void *user_data);
 
 /**
  * tdls_discovery_timeout_peer_cb() - tdls discovery timeout callback
- * @user_data: tdls vdev
+ * @userData: tdls vdev
  *
  * Return: None
  */
@@ -146,7 +145,7 @@ void tdls_discovery_timeout_peer_cb(void *user_data);
 
 /**
  * tdls_implicit_disable() - disable implicit tdls triggering
- * @tdls_vdev: TDLS vdev context
+ * @pHddTdlsCtx: TDLS context
  *
  * Return: Void
  */
@@ -154,7 +153,7 @@ void tdls_implicit_disable(struct tdls_vdev_priv_obj *tdls_vdev);
 
 /**
  * tdls_is_vdev_authenticated() - check the vdev authentication state
- * @vdev: vdev object
+ * @vdev: vdev oobject
  *
  * Return: true or false
  */
@@ -171,11 +170,12 @@ void tdls_teardown_connections(struct tdls_link_teardown *tdls_teardown);
 /**
  * tdls_disable_offchan_and_teardown_links - Disable offchannel
  * and teardown TDLS links
- * @vdev: vdev object
+ * @tdls_soc : tdls soc object
  *
  * Return: None
  */
-void tdls_disable_offchan_and_teardown_links(struct wlan_objmgr_vdev *vdev);
+void tdls_disable_offchan_and_teardown_links(
+				struct wlan_objmgr_vdev *vdev);
 
 /**
  * tdls_delete_all_tdls_peers() - send request to delete tdls peers
@@ -203,7 +203,7 @@ int tdls_set_tdls_offchannel(struct tdls_soc_priv_obj *tdls_soc,
 
 /**
  * tdls_set_tdls_offchannelmode() - set tdls off-channel mode
- * @vdev: vdev object
+ * @adapter: Pointer to the HDD adapter
  * @offchanmode: tdls off-channel mode
  *
  * This function sets tdls off-channel mode

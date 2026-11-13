@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * Copyright (c) 2021, 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -21,12 +21,6 @@
 #include <ce_main.h>
 #include "qdf_module.h"
 #include "qdf_net_if.h"
-#include <pld_common.h>
-#ifdef DP_UMAC_HW_RESET_SUPPORT
-#include "if_pci.h"
-#endif
-#include "qdf_ssr_driver_dump.h"
-
 /* mapping NAPI budget 0 to internal budget 0
  * NAPI budget 1 to internal budget [1,scaler -1]
  * NAPI budget 2 to internal budget [scaler, 2 * scaler - 1], etc
@@ -40,23 +34,6 @@ static struct hif_exec_context *hif_exec_tasklet_create(void);
 
 #ifdef WLAN_FEATURE_DP_EVENT_HISTORY
 struct hif_event_history hif_event_desc_history[HIF_NUM_INT_CONTEXTS];
-uint32_t hif_event_hist_max = HIF_EVENT_HIST_MAX;
-
-void hif_desc_history_log_register(void)
-{
-	qdf_ssr_driver_dump_register_region("hif_event_history",
-					    hif_event_desc_history,
-					    sizeof(hif_event_desc_history));
-	qdf_ssr_driver_dump_register_region("hif_event_hist_max",
-					    &hif_event_hist_max,
-					    sizeof(hif_event_hist_max));
-}
-
-void hif_desc_history_log_unregister(void)
-{
-	qdf_ssr_driver_dump_unregister_region("hif_event_hist_max");
-	qdf_ssr_driver_dump_unregister_region("hif_event_history");
-}
 
 static inline
 int hif_get_next_record_index(qdf_atomic_t *table_index,
@@ -215,7 +192,6 @@ void hif_event_history_deinit(struct hif_opaque_softc *hif_ctx, uint8_t id)
 }
 #endif /* WLAN_FEATURE_DP_EVENT_HISTORY */
 
-#ifndef QCA_WIFI_WCN6450
 /**
  * hif_print_napi_latency_stats() - print NAPI scheduling latency stats
  * @hif_state: hif context
@@ -320,97 +296,6 @@ static void hif_get_poll_times_hist_str(struct qca_napi_stat *stats, char *buf,
 					   "%u|", stats->poll_time_buckets[i]);
 }
 
-void hif_print_napi_stats(struct hif_opaque_softc *hif_ctx)
-{
-	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(hif_ctx);
-	struct hif_exec_context *hif_ext_group;
-	struct qca_napi_stat *napi_stats;
-	int i, j;
-
-	/*
-	 * Max value of uint_32 (poll_time_bucket) = 4294967295
-	 * Thus we need 10 chars + 1 space =11 chars for each bucket value.
-	 * +1 space for '\0'.
-	 */
-	char hist_str[(QCA_NAPI_NUM_BUCKETS * 11) + 1] = {'\0'};
-
-	QDF_TRACE(QDF_MODULE_ID_HIF, QDF_TRACE_LEVEL_INFO_HIGH,
-		  "NAPI[#]CPU[#] |scheds |polls  |comps  |dones  |t-lim  |max(us)|hist(500us buckets)");
-
-	for (i = 0;
-	     (i < hif_state->hif_num_extgroup && hif_state->hif_ext_group[i]);
-	     i++) {
-		hif_ext_group = hif_state->hif_ext_group[i];
-		for (j = 0; j < num_possible_cpus(); j++) {
-			napi_stats = &hif_ext_group->stats[j];
-			if (!napi_stats->napi_schedules)
-				continue;
-
-			hif_get_poll_times_hist_str(napi_stats,
-						    hist_str,
-						    sizeof(hist_str));
-			QDF_TRACE(QDF_MODULE_ID_HIF,
-				  QDF_TRACE_LEVEL_INFO_HIGH,
-				  "NAPI[%d]CPU[%d]: %7u %7u %7u %7u %7u %7llu %s",
-				  i, j,
-				  napi_stats->napi_schedules,
-				  napi_stats->napi_polls,
-				  napi_stats->napi_completes,
-				  napi_stats->napi_workdone,
-				  napi_stats->time_limit_reached,
-				  qdf_do_div(napi_stats->napi_max_poll_time,
-					     1000),
-				  hist_str);
-		}
-	}
-
-	hif_print_napi_latency_stats(hif_state);
-}
-
-qdf_export_symbol(hif_print_napi_stats);
-#else
-static inline
-void hif_get_poll_times_hist_str(struct qca_napi_stat *stats, char *buf,
-				 uint8_t buf_len)
-{
-}
-
-void hif_print_napi_stats(struct hif_opaque_softc *hif_ctx)
-{
-	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(hif_ctx);
-	struct hif_exec_context *hif_ext_group;
-	struct qca_napi_stat *napi_stats;
-	int i, j;
-
-	QDF_TRACE(QDF_MODULE_ID_HIF, QDF_TRACE_LEVEL_FATAL,
-		"NAPI[#ctx]CPU[#] |schedules |polls |completes |workdone");
-
-	for (i = 0; i < hif_state->hif_num_extgroup; i++) {
-		if (hif_state->hif_ext_group[i]) {
-			hif_ext_group = hif_state->hif_ext_group[i];
-			for (j = 0; j < num_possible_cpus(); j++) {
-				napi_stats = &(hif_ext_group->stats[j]);
-				if (napi_stats->napi_schedules != 0)
-					QDF_TRACE(QDF_MODULE_ID_HIF,
-						QDF_TRACE_LEVEL_FATAL,
-						"NAPI[%2d]CPU[%d]: "
-						"%7d %7d %7d %7d ",
-						i, j,
-						napi_stats->napi_schedules,
-						napi_stats->napi_polls,
-						napi_stats->napi_completes,
-						napi_stats->napi_workdone);
-			}
-		}
-	}
-
-	hif_print_napi_latency_stats(hif_state);
-}
-qdf_export_symbol(hif_print_napi_stats);
-#endif /* WLAN_FEATURE_RX_SOFTIRQ_TIME_LIMIT */
-#endif /* QCA_WIFI_WCN6450 */
-
-#ifdef WLAN_FEATURE_RX_SOFTIRQ_TIME_LIMIT
 /**
  * hif_exec_fill_poll_time_histogram() - fills poll time histogram for a NAPI
  * @hif_ext_group: hif_ext_group of type NAPI
@@ -503,7 +388,63 @@ void hif_exec_update_service_start_time(struct hif_exec_context *hif_ext_group)
 	hif_ext_group->poll_start_time = qdf_time_sched_clock();
 }
 
+void hif_print_napi_stats(struct hif_opaque_softc *hif_ctx)
+{
+	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(hif_ctx);
+	struct hif_exec_context *hif_ext_group;
+	struct qca_napi_stat *napi_stats;
+	int i, j;
+
+	/*
+	 * Max value of uint_32 (poll_time_bucket) = 4294967295
+	 * Thus we need 10 chars + 1 space =11 chars for each bucket value.
+	 * +1 space for '\0'.
+	 */
+	char hist_str[(QCA_NAPI_NUM_BUCKETS * 11) + 1] = {'\0'};
+
+	QDF_TRACE(QDF_MODULE_ID_HIF, QDF_TRACE_LEVEL_INFO_HIGH,
+		  "NAPI[#]CPU[#] |scheds |polls  |comps  |dones  |t-lim  |max(us)|hist(500us buckets)");
+
+	for (i = 0;
+	     (i < hif_state->hif_num_extgroup && hif_state->hif_ext_group[i]);
+	     i++) {
+		hif_ext_group = hif_state->hif_ext_group[i];
+		for (j = 0; j < num_possible_cpus(); j++) {
+			napi_stats = &hif_ext_group->stats[j];
+			if (!napi_stats->napi_schedules)
+				continue;
+
+			hif_get_poll_times_hist_str(napi_stats,
+						    hist_str,
+						    sizeof(hist_str));
+			QDF_TRACE(QDF_MODULE_ID_HIF,
+				  QDF_TRACE_LEVEL_INFO_HIGH,
+				  "NAPI[%d]CPU[%d]: %7u %7u %7u %7u %7u %7llu %s",
+				  i, j,
+				  napi_stats->napi_schedules,
+				  napi_stats->napi_polls,
+				  napi_stats->napi_completes,
+				  napi_stats->napi_workdone,
+				  napi_stats->time_limit_reached,
+				  qdf_do_div(napi_stats->napi_max_poll_time,
+					     1000),
+				  hist_str);
+		}
+	}
+
+	hif_print_napi_latency_stats(hif_state);
+}
+
+qdf_export_symbol(hif_print_napi_stats);
+
 #else
+
+static inline
+void hif_get_poll_times_hist_str(struct qca_napi_stat *stats, char *buf,
+				 uint8_t buf_len)
+{
+}
+
 static inline
 void hif_exec_update_service_start_time(struct hif_exec_context *hif_ext_group)
 {
@@ -513,6 +454,39 @@ static inline
 void hif_exec_fill_poll_time_histogram(struct hif_exec_context *hif_ext_group)
 {
 }
+
+void hif_print_napi_stats(struct hif_opaque_softc *hif_ctx)
+{
+	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(hif_ctx);
+	struct hif_exec_context *hif_ext_group;
+	struct qca_napi_stat *napi_stats;
+	int i, j;
+
+	QDF_TRACE(QDF_MODULE_ID_HIF, QDF_TRACE_LEVEL_FATAL,
+		"NAPI[#ctx]CPU[#] |schedules |polls |completes |workdone");
+
+	for (i = 0; i < hif_state->hif_num_extgroup; i++) {
+		if (hif_state->hif_ext_group[i]) {
+			hif_ext_group = hif_state->hif_ext_group[i];
+			for (j = 0; j < num_possible_cpus(); j++) {
+				napi_stats = &(hif_ext_group->stats[j]);
+				if (napi_stats->napi_schedules != 0)
+					QDF_TRACE(QDF_MODULE_ID_HIF,
+						QDF_TRACE_LEVEL_FATAL,
+						"NAPI[%2d]CPU[%d]: "
+						"%7d %7d %7d %7d ",
+						i, j,
+						napi_stats->napi_schedules,
+						napi_stats->napi_polls,
+						napi_stats->napi_completes,
+						napi_stats->napi_workdone);
+			}
+		}
+	}
+
+	hif_print_napi_latency_stats(hif_state);
+}
+qdf_export_symbol(hif_print_napi_stats);
 #endif /* WLAN_FEATURE_RX_SOFTIRQ_TIME_LIMIT */
 
 static void hif_exec_tasklet_schedule(struct hif_exec_context *ctx)
@@ -523,10 +497,10 @@ static void hif_exec_tasklet_schedule(struct hif_exec_context *ctx)
 }
 
 /**
- * hif_exec_tasklet_fn() - grp tasklet
- * @data: context
+ * hif_exec_tasklet() - grp tasklet
+ * data: context
  *
- * Return: void
+ * return: void
  */
 static void hif_exec_tasklet_fn(unsigned long data)
 {
@@ -534,11 +508,9 @@ static void hif_exec_tasklet_fn(unsigned long data)
 			(struct hif_exec_context *)data;
 	struct hif_softc *scn = HIF_GET_SOFTC(hif_ext_group->hif);
 	unsigned int work_done;
-	int cpu = smp_processor_id();
 
 	work_done =
-		hif_ext_group->handler(hif_ext_group->context, HIF_MAX_BUDGET,
-				       cpu);
+		hif_ext_group->handler(hif_ext_group->context, HIF_MAX_BUDGET);
 
 	if (hif_ext_group->work_complete(hif_ext_group, work_done)) {
 		qdf_atomic_dec(&(scn->active_grp_tasklet_cnt));
@@ -550,9 +522,9 @@ static void hif_exec_tasklet_fn(unsigned long data)
 
 /**
  * hif_latency_profile_measure() - calculate latency and update histogram
- * @hif_ext_group: hif exec context
+ * hif_ext_group: hif exec context
  *
- * Return: None
+ * return: None
  */
 #ifdef HIF_LATENCY_PROFILE_ENABLE
 static void hif_latency_profile_measure(struct hif_exec_context *hif_ext_group)
@@ -595,9 +567,9 @@ void hif_latency_profile_measure(struct hif_exec_context *hif_ext_group)
 
 /**
  * hif_latency_profile_start() - Update the start timestamp for HIF ext group
- * @hif_ext_group: hif exec context
+ * hif_ext_group: hif exec context
  *
- * Return: None
+ * return: None
  */
 #ifdef HIF_LATENCY_PROFILE_ENABLE
 static void hif_latency_profile_start(struct hif_exec_context *hif_ext_group)
@@ -627,35 +599,9 @@ hif_is_force_napi_complete_required(struct hif_exec_context *hif_ext_group)
 #endif
 
 /**
- * hif_irq_disabled_time_limit_reached() - determine if irq disabled limit
- * reached for single MSI
- * @hif_ext_group: hif exec context
- *
- * Return: true if reached, else false.
- */
-static bool
-hif_irq_disabled_time_limit_reached(struct hif_exec_context *hif_ext_group)
-{
-	unsigned long long irq_disabled_duration_ns;
-
-	if (hif_ext_group->type != HIF_EXEC_NAPI_TYPE)
-		return false;
-
-	irq_disabled_duration_ns = qdf_time_sched_clock() -
-					hif_ext_group->irq_disabled_start_time;
-	if (irq_disabled_duration_ns >= IRQ_DISABLED_MAX_DURATION_NS) {
-		hif_record_event(hif_ext_group->hif, hif_ext_group->grp_id,
-				 0, 0, 0, HIF_EVENT_IRQ_DISABLE_EXPIRED);
-		return true;
-	}
-
-	return false;
-}
-
-/**
  * hif_exec_poll() - napi poll
- * @napi: napi struct
- * @budget: budget for napi
+ * napi: napi struct
+ * budget: budget for napi
  *
  * Return: mapping of internal budget to napi
  */
@@ -684,7 +630,7 @@ static int hif_exec_poll(struct napi_struct *napi, int budget)
 	hif_latency_profile_measure(hif_ext_group);
 
 	work_done = hif_ext_group->handler(hif_ext_group->context,
-					   normalized_budget, cpu);
+					   normalized_budget);
 
 	actual_dones = work_done;
 
@@ -695,9 +641,7 @@ static int hif_exec_poll(struct napi_struct *napi, int budget)
 	}
 
 	if (qdf_unlikely(force_complete) ||
-	    (!hif_ext_group->force_break && work_done < normalized_budget) ||
-	    ((pld_is_one_msi(scn->qdf_dev->dev) &&
-	    hif_irq_disabled_time_limit_reached(hif_ext_group)))) {
+	    (!hif_ext_group->force_break && work_done < normalized_budget)) {
 		hif_record_event(hif_ext_group->hif, hif_ext_group->grp_id,
 				 0, 0, 0, HIF_EVENT_BH_COMPLETE);
 		napi_complete(napi);
@@ -736,39 +680,6 @@ static void hif_exec_napi_schedule(struct hif_exec_context *ctx)
 	napi_schedule(&n_ctx->napi);
 }
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0))
-/**
- * qdf_napi_get_dummy_nd_ptr() - Get dummy netdev pointer
- * @ctx: hif_napi_exec_context pointer
- *
- * Return: dummy netdev pointer
- */
-static inline struct net_device *
-qdf_napi_get_dummy_nd_ptr(struct hif_napi_exec_context *ctx)
-{
-	return ctx->netdev;
-}
-
-static inline void
-qdf_napi_set_dummy_nd_ptr(struct hif_napi_exec_context *ctx,
-			  struct net_device *nd)
-{
-	ctx->netdev = nd;
-}
-#else
-static inline struct net_device *
-qdf_napi_get_dummy_nd_ptr(struct hif_napi_exec_context *ctx)
-{
-	return &ctx->netdev;
-}
-
-static inline void
-qdf_napi_set_dummy_nd_ptr(struct hif_napi_exec_context *ctx,
-			  struct net_device *nd)
-{
-}
-#endif
-
 /**
  * hif_exec_napi_kill() - stop a napi exec context from being rescheduled
  * @ctx: a hif_exec_context known to be of napi type
@@ -777,11 +688,9 @@ static void hif_exec_napi_kill(struct hif_exec_context *ctx)
 {
 	struct hif_napi_exec_context *n_ctx = hif_exec_get_napi(ctx);
 	int irq_ind;
-	struct net_device *dummy_nd = qdf_napi_get_dummy_nd_ptr(n_ctx);
 
 	if (ctx->inited) {
-		qdf_napi_disable(&n_ctx->napi);
-		qdf_netif_napi_del(&n_ctx->napi);
+		napi_disable(&n_ctx->napi);
 		ctx->inited = 0;
 	}
 
@@ -789,8 +698,7 @@ static void hif_exec_napi_kill(struct hif_exec_context *ctx)
 		hif_irq_affinity_remove(ctx->os_irq[irq_ind]);
 
 	hif_core_ctl_set_boost(false);
-	qdf_net_if_destroy_dummy_if((struct qdf_net_if *)dummy_nd);
-	qdf_napi_set_dummy_nd_ptr(n_ctx, NULL);
+	netif_napi_del(&(n_ctx->napi));
 }
 
 struct hif_execution_ops napi_sched_ops = {
@@ -806,7 +714,6 @@ struct hif_execution_ops napi_sched_ops = {
 static struct hif_exec_context *hif_exec_napi_create(uint32_t scale)
 {
 	struct hif_napi_exec_context *ctx;
-	struct net_device *dummy_nd;
 
 	ctx = qdf_mem_malloc(sizeof(struct hif_napi_exec_context));
 	if (!ctx)
@@ -815,12 +722,10 @@ static struct hif_exec_context *hif_exec_napi_create(uint32_t scale)
 	ctx->exec_ctx.sched_ops = &napi_sched_ops;
 	ctx->exec_ctx.inited = true;
 	ctx->exec_ctx.scale_bin_shift = scale;
-	dummy_nd = qdf_napi_get_dummy_nd_ptr(ctx);
-	qdf_net_if_create_dummy_if((struct qdf_net_if **)&dummy_nd);
-	qdf_napi_set_dummy_nd_ptr(ctx, dummy_nd);
-	qdf_netif_napi_add(dummy_nd, &ctx->napi,
-			   hif_exec_poll, QCA_NAPI_BUDGET);
-	qdf_napi_enable(&ctx->napi);
+	qdf_net_if_create_dummy_if((struct qdf_net_if *)&ctx->netdev);
+	netif_napi_add_ni(&(ctx->netdev), &(ctx->napi), hif_exec_poll,
+		       QCA_NAPI_BUDGET);
+	napi_enable(&ctx->napi);
 
 	return &ctx->exec_ctx;
 }
@@ -858,7 +763,7 @@ struct hif_execution_ops tasklet_sched_ops = {
 };
 
 /**
- * hif_exec_tasklet_create() -  allocate and initialize a tasklet exec context
+ * hif_exec_tasklet_schedule() -  allocate and initialize a tasklet exec context
  */
 static struct hif_exec_context *hif_exec_tasklet_create(void)
 {
@@ -1004,7 +909,7 @@ hif_check_and_trigger_sys_resume(struct hif_softc *scn, int irq)
  * @irq: irq number of the interrupt
  * @context: the associated hif_exec_group context
  *
- * This callback function takes care of disabling the associated interrupts
+ * This callback function takes care of dissabling the associated interrupts
  * and scheduling the expected bottom half for the exec_context.
  * This callback function also helps keep track of the count running contexts.
  */
@@ -1020,10 +925,6 @@ irqreturn_t hif_ext_group_interrupt_handler(int irq, void *context)
 				 0, 0, 0, HIF_EVENT_IRQ_TRIGGER);
 
 		hif_ext_group->irq_disable(hif_ext_group);
-
-		if (pld_is_one_msi(scn->qdf_dev->dev))
-			hif_ext_group->irq_disabled_start_time =
-							qdf_time_sched_clock();
 		/*
 		 * if private ioctl has issued fake suspend command to put
 		 * FW in D0-WOW state then here is our chance to bring FW out
@@ -1050,7 +951,7 @@ irqreturn_t hif_ext_group_interrupt_handler(int irq, void *context)
 
 /**
  * hif_exec_kill() - grp tasklet kill
- * @hif_ctx: hif_softc
+ * scn: hif_softc
  *
  * return: void
  */
@@ -1087,9 +988,7 @@ hif_init_force_napi_complete(struct hif_exec_context *hif_ext_group)
  * @irq: array of irq values
  * @handler: callback interrupt handler function
  * @cb_ctx: context to passed in callback
- * @context_name: context name
  * @type: napi vs tasklet
- * @scale:
  *
  * Return: QDF_STATUS
  */
@@ -1144,12 +1043,11 @@ qdf_export_symbol(hif_register_ext_group);
 /**
  * hif_exec_create() - create an execution context
  * @type: the type of execution context to create
- * @scale:
  */
 struct hif_exec_context *hif_exec_create(enum hif_exec_type type,
 						uint32_t scale)
 {
-	hif_debug("%s: create exec_type %d budget %d",
+	hif_debug("%s: create exec_type %d budget %d\n",
 		  __func__, type, QCA_NAPI_BUDGET * scale);
 
 	switch (type) {
@@ -1202,7 +1100,7 @@ void hif_deregister_exec_group(struct hif_opaque_softc *hif_ctx,
 		if (!hif_ext_group)
 			continue;
 
-		hif_debug("%s: Deregistering grp id %d name %s",
+		hif_debug("%s: Deregistering grp id %d name %s\n",
 			  __func__,
 			  hif_ext_group->grp_id,
 			  hif_ext_group->context_name);
@@ -1217,139 +1115,3 @@ void hif_deregister_exec_group(struct hif_opaque_softc *hif_ctx,
 	}
 }
 qdf_export_symbol(hif_deregister_exec_group);
-
-#ifdef DP_UMAC_HW_RESET_SUPPORT
-/**
- * hif_umac_reset_handler_tasklet() - Tasklet for UMAC HW reset interrupt
- * @data: UMAC HW reset HIF context
- *
- * return: void
- */
-static void hif_umac_reset_handler_tasklet(unsigned long data)
-{
-	struct hif_umac_reset_ctx *umac_reset_ctx =
-		(struct hif_umac_reset_ctx *)data;
-
-	/* call the callback handler */
-	umac_reset_ctx->cb_handler(umac_reset_ctx->cb_ctx);
-}
-
-/**
- * hif_umac_reset_irq_handler() - Interrupt service routine of UMAC HW reset
- * @irq: irq coming from kernel
- * @ctx: UMAC HW reset HIF context
- *
- * return: IRQ_HANDLED if success, else IRQ_NONE
- */
-static irqreturn_t hif_umac_reset_irq_handler(int irq, void *ctx)
-{
-	struct hif_umac_reset_ctx *umac_reset_ctx = ctx;
-
-	/* Schedule the tasklet if it is umac reset interrupt and exit */
-	if (umac_reset_ctx->irq_handler(umac_reset_ctx->cb_ctx))
-		tasklet_hi_schedule(&umac_reset_ctx->intr_tq);
-
-	return IRQ_HANDLED;
-}
-
-QDF_STATUS hif_get_umac_reset_irq(struct hif_opaque_softc *hif_scn,
-				  int *umac_reset_irq)
-{
-	int ret;
-	struct hif_softc *hif_sc = HIF_GET_SOFTC(hif_scn);
-	struct hif_pci_softc *sc = HIF_GET_PCI_SOFTC(hif_sc);
-	struct platform_device *pdev = (struct platform_device *)sc->pdev;
-
-	ret = pfrm_get_irq(&pdev->dev, (struct qdf_pfm_hndl *)pdev,
-			   "umac_reset", 0, umac_reset_irq);
-
-	if (ret) {
-		hif_err("umac reset get irq failed ret %d", ret);
-		return QDF_STATUS_E_FAILURE;
-	}
-	return QDF_STATUS_SUCCESS;
-}
-
-qdf_export_symbol(hif_get_umac_reset_irq);
-
-QDF_STATUS hif_register_umac_reset_handler(struct hif_opaque_softc *hif_scn,
-					   bool (*irq_handler)(void *cb_ctx),
-					   int (*tl_handler)(void *cb_ctx),
-					   void *cb_ctx, int irq)
-{
-	struct hif_softc *hif_sc = HIF_GET_SOFTC(hif_scn);
-	struct hif_umac_reset_ctx *umac_reset_ctx;
-	int ret;
-
-	if (!hif_sc) {
-		hif_err("scn is null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	umac_reset_ctx = &hif_sc->umac_reset_ctx;
-
-	umac_reset_ctx->irq_handler = irq_handler;
-	umac_reset_ctx->cb_handler = tl_handler;
-	umac_reset_ctx->cb_ctx = cb_ctx;
-	umac_reset_ctx->os_irq = irq;
-
-	/* Init the tasklet */
-	tasklet_init(&umac_reset_ctx->intr_tq,
-		     hif_umac_reset_handler_tasklet,
-		     (unsigned long)umac_reset_ctx);
-
-	/* Register the interrupt handler */
-	ret  = pfrm_request_irq(hif_sc->qdf_dev->dev, irq,
-				hif_umac_reset_irq_handler,
-				IRQF_NO_SUSPEND,
-				"umac_hw_reset_irq",
-				umac_reset_ctx);
-	if (ret) {
-		hif_err("request_irq failed: %d", ret);
-		return qdf_status_from_os_return(ret);
-	}
-
-	umac_reset_ctx->irq_configured = true;
-
-	return QDF_STATUS_SUCCESS;
-}
-
-qdf_export_symbol(hif_register_umac_reset_handler);
-
-QDF_STATUS hif_unregister_umac_reset_handler(struct hif_opaque_softc *hif_scn)
-{
-	struct hif_softc *hif_sc = HIF_GET_SOFTC(hif_scn);
-	struct hif_umac_reset_ctx *umac_reset_ctx;
-	int ret;
-
-	if (!hif_sc) {
-		hif_err("scn is null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	umac_reset_ctx = &hif_sc->umac_reset_ctx;
-	if (!umac_reset_ctx->irq_configured) {
-		hif_err("unregister called without a prior IRQ configuration");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	ret  = pfrm_free_irq(hif_sc->qdf_dev->dev,
-			     umac_reset_ctx->os_irq,
-			     umac_reset_ctx);
-	if (ret) {
-		hif_err("free_irq failed: %d", ret);
-		return qdf_status_from_os_return(ret);
-	}
-	umac_reset_ctx->irq_configured = false;
-
-	tasklet_disable(&umac_reset_ctx->intr_tq);
-	tasklet_kill(&umac_reset_ctx->intr_tq);
-
-	umac_reset_ctx->cb_handler = NULL;
-	umac_reset_ctx->cb_ctx = NULL;
-
-	return QDF_STATUS_SUCCESS;
-}
-
-qdf_export_symbol(hif_unregister_umac_reset_handler);
-#endif

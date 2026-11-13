@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -207,26 +206,6 @@ struct tLimPreAuthNode *lim_search_pre_auth_list(struct mac_context *mac,
 	return pTempNode;
 } /*** end lim_search_pre_auth_list() ***/
 
-#ifdef WLAN_FEATURE_11BE_MLO
-struct tLimPreAuthNode *
-lim_search_pre_auth_list_by_mld_addr(struct mac_context *mac,
-				     tSirMacAddr mldaddr)
-{
-	struct tLimPreAuthNode *pTempNode = mac->lim.pLimPreAuthList;
-
-	while (pTempNode) {
-		if (!qdf_mem_cmp((uint8_t *)mldaddr,
-				 (uint8_t *)&pTempNode->peer_mld,
-				 sizeof(tSirMacAddr)))
-			break;
-
-		pTempNode = pTempNode->next;
-	}
-
-	return pTempNode;
-}
-#endif
-
 /**
  * lim_delete_open_auth_pre_auth_node() - delete any stale preauth nodes
  * @mac_ctx: Pointer to Global MAC structure
@@ -310,7 +289,7 @@ void lim_add_pre_auth_node(struct mac_context *mac, struct tLimPreAuthNode *pAut
  * lim_release_pre_auth_node
  *
  ***FUNCTION:
- * This function is called to release the acquired
+ * This function is called to realease the acquired
  * pre auth node from list.
  *
  ***LOGIC:
@@ -402,9 +381,9 @@ void lim_delete_pre_auth_node(struct mac_context *mac, tSirMacAddr macAddr)
 
 			pPrevNode->next = pTempNode->next;
 
-			pe_debug("subsequent node to delete, Release data entry: %pK id %d peer "QDF_MAC_ADDR_FMT,
-				 pTempNode, pTempNode->authNodeIdx,
-				 QDF_MAC_ADDR_REF(macAddr));
+			pe_debug("subsequent node to delete, Release data entry: %pK id %d peer",
+				       pTempNode, pTempNode->authNodeIdx);
+			       lim_print_mac_addr(mac, macAddr, LOG1);
 			lim_release_pre_auth_node(mac, pTempNode);
 
 			return;
@@ -414,8 +393,8 @@ void lim_delete_pre_auth_node(struct mac_context *mac, tSirMacAddr macAddr)
 		pTempNode = pTempNode->next;
 	}
 
-	pe_err("peer not found in pre-auth list, addr= "QDF_MAC_ADDR_FMT,
-	       QDF_MAC_ADDR_REF(macAddr));
+	pe_err("peer not found in pre-auth list, addr= ");
+	lim_print_mac_addr(mac, macAddr, LOGE);
 
 } /*** end lim_delete_pre_auth_node() ***/
 
@@ -760,3 +739,25 @@ lim_decrypt_auth_frame(struct mac_context *mac, uint8_t *pKey, uint8_t *pEncrBod
 
 	return QDF_STATUS_SUCCESS;
 } /****** end lim_decrypt_auth_frame() ******/
+
+/**
+ * lim_post_sme_set_keys_cnf
+ *
+ * A utility API to send MLM_SETKEYS_CNF to SME
+ */
+void lim_post_sme_set_keys_cnf(struct mac_context *mac,
+			       tLimMlmSetKeysReq *pMlmSetKeysReq,
+			       tLimMlmSetKeysCnf *mlmSetKeysCnf)
+{
+	/* Prepare and Send LIM_MLM_SETKEYS_CNF */
+	qdf_copy_macaddr(&mlmSetKeysCnf->peer_macaddr,
+			 &pMlmSetKeysReq->peer_macaddr);
+
+	/* Free up buffer allocated for mlmSetKeysReq */
+	qdf_mem_zero(pMlmSetKeysReq, sizeof(tLimMlmSetKeysReq));
+	qdf_mem_free(pMlmSetKeysReq);
+	mac->lim.gpLimMlmSetKeysReq = NULL;
+
+	lim_post_sme_message(mac,
+			     LIM_MLM_SETKEYS_CNF, (uint32_t *) mlmSetKeysCnf);
+}

@@ -38,7 +38,6 @@
 #include <../../core/src/wlan_cm_vdev_api.h>
 #include <wlan_mlo_mgr_public_structs.h>
 #include "wlan_objmgr_vdev_obj.h"
-#include "wlan_policy_mgr_ll_sap.h"
 
 #define CASE_RETURN_STR(n) {\
 	case (n): return (# n);\
@@ -68,7 +67,6 @@ const char *get_e_roam_cmd_status_str(eRoamCmdStatus val)
 		CASE_RETURN_STR(eCSR_ROAM_NDP_STATUS_UPDATE);
 		CASE_RETURN_STR(eCSR_ROAM_CHANNEL_COMPLETE_IND);
 		CASE_RETURN_STR(eCSR_ROAM_SAE_COMPUTE);
-		CASE_RETURN_STR(eCSR_ROAM_CHANNEL_INFO_EVENT_IND);
 	default:
 		return "unknown";
 	}
@@ -304,46 +302,45 @@ bool csr_is_conn_state_wds(struct mac_context *mac, uint32_t sessionId)
 	       csr_is_conn_state_disconnected_wds(mac, sessionId);
 }
 
-uint16_t cm_csr_get_vdev_dot11_mode(uint8_t vdev_id)
-{
-	mac_handle_t mac_handle;
-	struct mac_context *mac_ctx;
-	enum csr_cfgdot11mode curr_dot11_mode;
-
-	mac_handle = cds_get_context(QDF_MODULE_ID_SME);
-	mac_ctx = MAC_CONTEXT(mac_handle);
-	if (!mac_ctx)
-		return eCSR_CFG_DOT11_MODE_AUTO;
-
-	curr_dot11_mode = mac_ctx->roam.configParam.uCfgDot11Mode;
-
-	return csr_get_vdev_dot11_mode(mac_ctx, vdev_id, curr_dot11_mode);
-}
-
 enum csr_cfgdot11mode
 csr_get_vdev_dot11_mode(struct mac_context *mac,
-			uint8_t vdev_id,
+			enum QDF_OPMODE device_mode,
 			enum csr_cfgdot11mode curr_dot11_mode)
 {
-	struct wlan_objmgr_vdev *vdev;
-	struct vdev_mlme_obj *vdev_mlme;
 	enum mlme_vdev_dot11_mode vdev_dot11_mode;
+	uint8_t dot11_mode_indx;
 	enum csr_cfgdot11mode dot11_mode = curr_dot11_mode;
+	uint32_t vdev_type_dot11_mode =
+				mac->mlme_cfg->dot11_mode.vdev_type_dot11_mode;
 
-	vdev = wlan_objmgr_get_vdev_by_id_from_pdev(mac->pdev, vdev_id,
-						    WLAN_MLME_OBJMGR_ID);
-	if (!vdev)
-		return curr_dot11_mode;
+	sme_debug("curr_dot11_mode %d, vdev_dot11 %08X, dev_mode %d",
+		  curr_dot11_mode, vdev_type_dot11_mode, device_mode);
 
-	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
-	if (!vdev_mlme) {
-		wlan_objmgr_vdev_release_ref(vdev, WLAN_MLME_OBJMGR_ID);
-		return curr_dot11_mode;
+	switch (device_mode) {
+	case QDF_STA_MODE:
+		dot11_mode_indx = STA_DOT11_MODE_INDX;
+		break;
+	case QDF_P2P_CLIENT_MODE:
+	case QDF_P2P_DEVICE_MODE:
+		dot11_mode_indx = P2P_DEV_DOT11_MODE_INDX;
+		break;
+	case QDF_TDLS_MODE:
+		dot11_mode_indx = TDLS_DOT11_MODE_INDX;
+		break;
+	case QDF_NAN_DISC_MODE:
+		dot11_mode_indx = NAN_DISC_DOT11_MODE_INDX;
+		break;
+	case QDF_NDI_MODE:
+		dot11_mode_indx = NDI_DOT11_MODE_INDX;
+		break;
+	case QDF_OCB_MODE:
+		dot11_mode_indx = OCB_DOT11_MODE_INDX;
+		break;
+	default:
+		return dot11_mode;
 	}
-
-	vdev_dot11_mode = vdev_mlme->proto.vdev_dot11_mode;
-	wlan_objmgr_vdev_release_ref(vdev, WLAN_MLME_OBJMGR_ID);
-
+	vdev_dot11_mode = QDF_GET_BITS(vdev_type_dot11_mode,
+				       dot11_mode_indx, 4);
 	if (vdev_dot11_mode == MLME_VDEV_DOT11_MODE_AUTO)
 		dot11_mode = curr_dot11_mode;
 
@@ -373,7 +370,7 @@ static bool csr_is_conn_state_ap(struct mac_context *mac, uint32_t sessionId)
 {
 	enum QDF_OPMODE opmode;
 
-	opmode = wlan_get_opmode_from_vdev_id(mac->pdev, sessionId);
+	opmode = wlan_get_opmode_vdev_id(mac->pdev, sessionId);
 	if (opmode == QDF_SAP_MODE || opmode == QDF_P2P_GO_MODE)
 		return true;
 
@@ -572,8 +569,7 @@ static void csr_handle_conc_chnl_overlap_for_sap_go(
 		struct csr_roam_session *session,
 		uint32_t *sap_ch_freq, uint32_t *sap_hbw, uint32_t *sap_cfreq,
 		uint32_t *intf_ch_freq, uint32_t *intf_hbw,
-		uint32_t *intf_cfreq, enum QDF_OPMODE op_mode,
-		uint8_t cc_switch_mode)
+		uint32_t *intf_cfreq, enum QDF_OPMODE op_mode)
 {
 	qdf_freq_t op_chan_freq;
 	qdf_freq_t freq_seg_0;
@@ -595,10 +591,7 @@ static void csr_handle_conc_chnl_overlap_for_sap_go(
 			*sap_ch_freq = op_chan_freq;
 			*sap_cfreq = freq_seg_0;
 			*sap_hbw = csr_get_half_bw(ch_width);
-		} else if (*sap_ch_freq != op_chan_freq ||
-			   (cc_switch_mode ==
-				QDF_MCC_TO_SCC_SWITCH_WITH_FAVORITE_CHANNEL &&
-			    op_mode == QDF_P2P_GO_MODE)) {
+		} else if (*sap_ch_freq != op_chan_freq) {
 			*intf_ch_freq = op_chan_freq;
 			*intf_cfreq = freq_seg_0;
 			*intf_hbw = csr_get_half_bw(ch_width);
@@ -610,6 +603,18 @@ static void csr_handle_conc_chnl_overlap_for_sap_go(
 	}
 }
 
+
+/**
+ * csr_check_concurrent_channel_overlap() - To check concurrent overlap chnls
+ * @mac_ctx: Pointer to mac context
+ * @sap_ch: SAP channel
+ * @sap_phymode: SAP phy mode
+ * @cc_switch_mode: concurrent switch mode
+ *
+ * This routine will be called to check concurrent overlap channels
+ *
+ * Return: uint16_t
+ */
 uint16_t csr_check_concurrent_channel_overlap(struct mac_context *mac_ctx,
 			uint32_t sap_ch_freq, eCsrPhyMode sap_phymode,
 			uint8_t cc_switch_mode, uint8_t vdev_id)
@@ -622,44 +627,10 @@ uint16_t csr_check_concurrent_channel_overlap(struct mac_context *mac_ctx,
 	QDF_STATUS status;
 	enum QDF_OPMODE op_mode;
 	enum phy_ch_width ch_width;
-	enum channel_state state;
-
-#ifdef WLAN_FEATURE_LL_LT_SAP
-	qdf_freq_t new_sap_freq = 0;
-	bool is_ll_lt_sap_present = false;
-#endif
 
 	if (mac_ctx->roam.configParam.cc_switch_mode ==
 			QDF_MCC_TO_SCC_SWITCH_DISABLE)
 		return 0;
-
-	/*
-	 * This is temporary code and will be removed once this feature flag
-	 * is enabled
-	 */
-#ifndef WLAN_FEATURE_LL_LT_SAP
-		if (policy_mgr_is_vdev_ll_lt_sap(mac_ctx->psoc, vdev_id))
-			return 0;
-#else
-	policy_mgr_ll_lt_sap_get_valid_freq(
-				mac_ctx->psoc, mac_ctx->pdev,
-				vdev_id, sap_ch_freq,
-				mac_ctx->roam.configParam.cc_switch_mode,
-				&new_sap_freq,
-				&is_ll_lt_sap_present);
-	/*
-	 * If ll_lt_sap is present, then it has already updated the frequency
-	 * according to current concurrency, so, return from here
-	 */
-	if (is_ll_lt_sap_present) {
-		if (new_sap_freq == sap_ch_freq)
-			return 0;
-
-		sme_debug("LL_LT_SAP concurrency updated freq %d for vdev %d",
-			  new_sap_freq, vdev_id);
-		return new_sap_freq;
-	}
-#endif
 
 	if (sap_ch_freq != 0) {
 		sap_cfreq = sap_ch_freq;
@@ -688,16 +659,6 @@ uint16_t csr_check_concurrent_channel_overlap(struct mac_context *mac_ctx,
 		if ((op_mode == QDF_STA_MODE ||
 		     op_mode == QDF_P2P_CLIENT_MODE) &&
 		    cm_is_vdevid_connected(mac_ctx->pdev, i)) {
-			if (op_mode == QDF_STA_MODE &&
-			    policy_mgr_is_ml_vdev_id(mac_ctx->psoc,
-						     session->vdev_id) &&
-			    policy_mgr_vdev_is_force_inactive(
-							mac_ctx->psoc,
-							session->vdev_id)) {
-				sme_debug("skip inactive ml sta vdev %d",
-					  session->vdev_id);
-				continue;
-			}
 			wlan_get_op_chan_freq_info_vdev_id(mac_ctx->pdev,
 					   session->vdev_id,
 					   &intf_ch_freq, &intf_cfreq,
@@ -717,23 +678,8 @@ uint16_t csr_check_concurrent_channel_overlap(struct mac_context *mac_ctx,
 			csr_handle_conc_chnl_overlap_for_sap_go(mac_ctx,
 					session, &sap_ch_freq, &sap_hbw,
 					&sap_cfreq, &intf_ch_freq, &intf_hbw,
-					&intf_cfreq, op_mode,
-					cc_switch_mode);
+					&intf_cfreq, op_mode);
 		}
-
-		if (intf_ch_freq) {
-			state = wlan_reg_get_channel_state_for_pwrmode(
-					mac_ctx->pdev, intf_ch_freq,
-					REG_CURRENT_PWR_MODE);
-			if (state == CHANNEL_STATE_DISABLE ||
-			    state == CHANNEL_STATE_INVALID) {
-				sme_debug("skip vdev %d for intf_ch:%d",
-					  i, intf_ch_freq);
-				intf_ch_freq = 0;
-				continue;
-			}
-		}
-
 		if (intf_ch_freq &&
 		    ((intf_ch_freq <= wlan_reg_ch_to_freq(CHAN_ENUM_2484) &&
 		     sap_ch_freq <= wlan_reg_ch_to_freq(CHAN_ENUM_2484)) ||
@@ -765,18 +711,11 @@ uint16_t csr_check_concurrent_channel_overlap(struct mac_context *mac_ctx,
 			intf_ch_freq = 0;
 	} else if (intf_ch_freq && sap_ch_freq != intf_ch_freq &&
 		   (policy_mgr_is_force_scc(mac_ctx->psoc))) {
-		policy_mgr_check_scc_channel(mac_ctx->psoc, &intf_ch_freq,
-					     sap_ch_freq, vdev_id,
-					     cc_switch_mode);
+		policy_mgr_check_scc_sbs_channel(mac_ctx->psoc, &intf_ch_freq,
+						 sap_ch_freq, vdev_id,
+						 cc_switch_mode);
 	} else if ((intf_ch_freq == sap_ch_freq) && (cc_switch_mode ==
 				QDF_MCC_TO_SCC_SWITCH_WITH_FAVORITE_CHANNEL)) {
-		status = policy_mgr_handle_go_sap_fav_channel(
-					mac_ctx->psoc, vdev_id,
-					sap_ch_freq, &intf_ch_freq);
-		if (QDF_IS_STATUS_SUCCESS(status) &&
-		    intf_ch_freq && intf_ch_freq != sap_ch_freq)
-			goto end;
-
 		if (WLAN_REG_IS_24GHZ_CH_FREQ(intf_ch_freq) ||
 		    WLAN_REG_IS_6GHZ_CHAN_FREQ(sap_ch_freq)) {
 			status =
@@ -787,7 +726,7 @@ uint16_t csr_check_concurrent_channel_overlap(struct mac_context *mac_ctx,
 				sme_err("no mandatory channel");
 		}
 	}
-end:
+
 	if (intf_ch_freq == sap_ch_freq)
 		intf_ch_freq = 0;
 
@@ -1127,11 +1066,61 @@ bool csr_is_bssid_match(struct qdf_mac_addr *pProfBssid,
 	return fMatch;
 }
 
+void csr_release_profile(struct mac_context *mac,
+			 struct csr_roam_profile *pProfile)
+{
+	if (pProfile) {
+		if (pProfile->BSSIDs.bssid) {
+			qdf_mem_free(pProfile->BSSIDs.bssid);
+			pProfile->BSSIDs.bssid = NULL;
+		}
+		if (pProfile->SSIDs.SSIDList) {
+			qdf_mem_free(pProfile->SSIDs.SSIDList);
+			pProfile->SSIDs.SSIDList = NULL;
+		}
+
+		if (pProfile->ChannelInfo.freq_list) {
+			qdf_mem_free(pProfile->ChannelInfo.freq_list);
+			pProfile->ChannelInfo.freq_list = NULL;
+		}
+		if (pProfile->pRSNReqIE) {
+			qdf_mem_free(pProfile->pRSNReqIE);
+			pProfile->pRSNReqIE = NULL;
+		}
+		qdf_mem_zero(pProfile, sizeof(struct csr_roam_profile));
+	}
+}
+
+enum bss_type csr_translate_bsstype_to_mac_type(eCsrRoamBssType csrtype)
+{
+	enum bss_type ret;
+
+	switch (csrtype) {
+	case eCSR_BSS_TYPE_INFRASTRUCTURE:
+		ret = eSIR_INFRASTRUCTURE_MODE;
+		break;
+	case eCSR_BSS_TYPE_INFRA_AP:
+		ret = eSIR_INFRA_AP_MODE;
+		break;
+	case eCSR_BSS_TYPE_NDI:
+		ret = eSIR_NDI_MODE;
+		break;
+	case eCSR_BSS_TYPE_ANY:
+	default:
+		ret = eSIR_AUTO_MODE;
+		break;
+	}
+
+	return ret;
+}
+
 /* This function use the parameters to decide the CFG value. */
 /* CSR never sets MLME_DOT11_MODE_ALL to the CFG */
 /* So PE should not see MLME_DOT11_MODE_ALL when it gets the CFG value */
 enum csr_cfgdot11mode
-csr_get_cfg_dot11_mode_from_csr_phy_mode(bool is_ap, eCsrPhyMode phyMode)
+csr_get_cfg_dot11_mode_from_csr_phy_mode(struct csr_roam_profile *pProfile,
+					 eCsrPhyMode phyMode,
+					 bool fProprietary)
 {
 	uint32_t cfgDot11Mode = eCSR_CFG_DOT11_MODE_ABG;
 
@@ -1145,7 +1134,8 @@ csr_get_cfg_dot11_mode_from_csr_phy_mode(bool is_ap, eCsrPhyMode phyMode)
 		break;
 	case eCSR_DOT11_MODE_11g:
 	case eCSR_DOT11_MODE_11g_ONLY:
-		if (is_ap && (phyMode == eCSR_DOT11_MODE_11g_ONLY))
+		if (pProfile && (CSR_IS_INFRA_AP(pProfile))
+		    && (phyMode == eCSR_DOT11_MODE_11g_ONLY))
 			cfgDot11Mode = eCSR_CFG_DOT11_MODE_11G_ONLY;
 		else
 			cfgDot11Mode = eCSR_CFG_DOT11_MODE_11G;
@@ -1154,7 +1144,7 @@ csr_get_cfg_dot11_mode_from_csr_phy_mode(bool is_ap, eCsrPhyMode phyMode)
 			cfgDot11Mode = eCSR_CFG_DOT11_MODE_11N;
 		break;
 	case eCSR_DOT11_MODE_11n_ONLY:
-		if (is_ap)
+		if (pProfile && CSR_IS_INFRA_AP(pProfile))
 			cfgDot11Mode = eCSR_CFG_DOT11_MODE_11N_ONLY;
 		else
 			cfgDot11Mode = eCSR_CFG_DOT11_MODE_11N;
@@ -1270,6 +1260,46 @@ uint16_t sme_chn_to_freq(uint8_t chanNum)
 	return 0;
 }
 
+struct lim_channel_status *
+csr_get_channel_status(struct mac_context *mac, uint32_t chan_freq)
+{
+	uint8_t i;
+	struct lim_scan_channel_status *channel_status;
+	struct lim_channel_status *entry;
+
+	if (!mac->sap.acs_with_more_param)
+		return NULL;
+
+	channel_status = &mac->lim.scan_channel_status;
+	for (i = 0; i < channel_status->total_channel; i++) {
+		entry = &channel_status->channel_status_list[i];
+		if (entry->channelfreq == chan_freq)
+			return entry;
+	}
+	sme_err("Channel %d status info not exist", chan_freq);
+
+	return NULL;
+}
+
+void csr_clear_channel_status(struct mac_context *mac)
+{
+	struct lim_scan_channel_status *channel_status;
+
+	if (!mac->sap.acs_with_more_param)
+		return;
+
+	channel_status = &mac->lim.scan_channel_status;
+	channel_status->total_channel = 0;
+
+	return;
+}
+
+/**
+ * sme_bsstype_to_string() - converts bss type to string.
+ * @bss_type: bss type enum
+ *
+ * Return: printable string for bss type
+ */
 const char *sme_bss_type_to_string(const uint8_t bss_type)
 {
 	switch (bss_type) {
@@ -1409,7 +1439,7 @@ QDF_STATUS csr_mlme_vdev_disconnect_all_p2p_client_event(uint8_t vdev_id)
 	if (!mac_ctx)
 		return QDF_STATUS_E_FAILURE;
 
-	return csr_roam_call_callback(mac_ctx, vdev_id, NULL,
+	return csr_roam_call_callback(mac_ctx, vdev_id, NULL, 0,
 				      eCSR_ROAM_DISCONNECT_ALL_P2P_CLIENTS,
 				      eCSR_ROAM_RESULT_NONE);
 }
@@ -1421,7 +1451,7 @@ QDF_STATUS csr_mlme_vdev_stop_bss(uint8_t vdev_id)
 	if (!mac_ctx)
 		return QDF_STATUS_E_FAILURE;
 
-	return csr_roam_call_callback(mac_ctx, vdev_id, NULL,
+	return csr_roam_call_callback(mac_ctx, vdev_id, NULL, 0,
 				      eCSR_ROAM_SEND_P2P_STOP_BSS,
 				      eCSR_ROAM_RESULT_NONE);
 }

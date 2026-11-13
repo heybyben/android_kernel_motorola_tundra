@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -42,32 +41,6 @@ target_if_scan_get_rx_ops(struct wlan_objmgr_psoc *psoc)
 	}
 
 	return &rx_ops->scan;
-}
-
-QDF_STATUS target_if_update_aux_support(struct wlan_objmgr_psoc *psoc)
-{
-	struct wmi_unified *wmi_handle;
-	struct wlan_scan_obj *scan_obj;
-
-	wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
-
-	if (!wmi_handle) {
-		target_if_err("null wmi handle");
-		return QDF_STATUS_E_FAILURE;
-	}
-	scan_obj = wlan_psoc_get_scan_obj(psoc);
-
-	if (!scan_obj) {
-		target_if_err("Failed to get scan object");
-		return QDF_STATUS_E_FAILURE;
-	}
-	if (wmi_service_enabled(wmi_handle, wmi_service_aux_mac_support))
-		scan_obj->aux_mac_support = true;
-	else
-		scan_obj->aux_mac_support = false;
-
-	target_if_debug("aux_mac_support:%d", scan_obj->aux_mac_support);
-	return QDF_STATUS_SUCCESS;
 }
 
 static int
@@ -479,33 +452,6 @@ target_if_scan_cancel(struct wlan_objmgr_pdev *pdev,
 	return wmi_unified_scan_stop_cmd_send(pdev_wmi_handle, req);
 }
 
-#if defined(WLAN_FEATURE_11BE) && defined(WLAN_FEATURE_11BE_MLO_MBSSID)
-bool target_if_is_platform_eht_capable(struct wlan_objmgr_psoc *psoc,
-				       uint8_t pdev_id)
-{
-	struct wlan_psoc_host_mac_phy_caps *mac_phy_cap_arr, *mac_phy_cap;
-
-	if (psoc->tgt_if_handle) {
-		mac_phy_cap_arr =
-			target_psoc_get_mac_phy_cap(psoc->tgt_if_handle);
-		if (!mac_phy_cap_arr)
-			return false;
-
-		mac_phy_cap = &mac_phy_cap_arr[pdev_id];
-		if (mac_phy_cap && mac_phy_cap->supports_11be)
-			return true;
-	}
-
-	return false;
-}
-#else
-bool target_if_is_platform_eht_capable(struct wlan_objmgr_psoc *psoc,
-				       uint8_t pdev_id)
-{
-	return false;
-}
-#endif
-
 QDF_STATUS
 target_if_scan_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
 {
@@ -524,7 +470,6 @@ target_if_scan_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
 	scan->obss_disable = target_if_obss_scan_disable;
 	scan->scan_reg_ev_handler = target_if_scan_register_event_handler;
 	scan->scan_unreg_ev_handler = target_if_scan_unregister_event_handler;
-	scan->is_platform_eht_capable = target_if_is_platform_eht_capable;
 
 	return QDF_STATUS_SUCCESS;
 }

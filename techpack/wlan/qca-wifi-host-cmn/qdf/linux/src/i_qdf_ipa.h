@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -26,7 +25,7 @@
 /**
  * __qdf_ipa_wdi_meter_evt_type_t - type of event client callback is
  * for AP+STA mode metering
- * @IPA_GET_WDI_SAP_STATS: get IPA_stats between SAP and STA -
+ * @IPA_GET_WDI_SAP_STATS: get IPA_stats betwen SAP and STA -
  *			use ipa_get_wdi_sap_stats structure
  * @IPA_SET_WIFI_QUOTA: set quota limit on STA -
  *			use ipa_set_wifi_quota structure
@@ -484,37 +483,10 @@ typedef enum ipa_rm_resource_name __qdf_ipa_rm_resource_name_t;
 typedef enum ipa_wlan_event __qdf_ipa_wlan_event_t;
 typedef struct ipa_wlan_msg __qdf_ipa_wlan_msg_t;
 
-#ifdef IPA_WDS_EASYMESH_FEATURE
-/**
- * __qdf_ipa_ast_info_type_t - AST entry create/update information
- */
-typedef struct ipa_ast_info_type __qdf_ipa_ast_info_type_t;
-
-#define QDF_IPA_WLAN_MSG_WDS_UPDATE(ipa_msg)	\
-	(((struct ipa_wlan_msg *)(ipa_msg))->ast_update)
-#endif
-
 #define QDF_IPA_WLAN_MSG_NAME(ipa_msg)	\
 	(((struct ipa_wlan_msg *)(ipa_msg))->name)
 #define QDF_IPA_WLAN_MSG_MAC_ADDR(ipa_msg)	\
 	(((struct ipa_wlan_msg *)(ipa_msg))->mac_addr)
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0))
-#define QDF_IPA_WLAN_MSG_NETDEV_IF_ID(ipa_msg)	\
-	(((struct ipa_wlan_msg *)(ipa_msg))->if_index)
-#else
-/**
- * ipa_wlan_msg_if_index - Netdev interface id
- */
-struct ipa_wlan_msg_if_index {
-	char name[IPA_RESOURCE_NAME_MAX];
-	uint8_t mac_addr[IPA_MAC_ADDR_SIZE];
-	uint16_t if_index;
-};
-
-#define QDF_IPA_WLAN_MSG_NETDEV_IF_ID(ipa_msg)	\
-	(((struct ipa_wlan_msg_if_index *)(ipa_msg))->if_index)
-#endif
 
 typedef struct ipa_wlan_msg_ex __qdf_ipa_wlan_msg_ex_t;
 
@@ -941,11 +913,6 @@ static inline int __qdf_ipa_get_wdi_stats(struct IpaHwStatsWDIInfoData_t *stats)
 	return ipa_get_wdi_stats(stats);
 }
 
-/* IPA supports this call only on legacy devices. Starting from
- * Linux version 6.1.15, IPA has moved out of the kernel and
- * has deprecated this call.
- */
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 15))
 static inline int __qdf_ipa_uc_reg_rdyCB(struct ipa_wdi_uc_ready_params *param)
 {
 	return ipa_uc_reg_rdyCB(param);
@@ -955,23 +922,7 @@ static inline int __qdf_ipa_uc_dereg_rdyCB(void)
 {
 	return ipa_uc_dereg_rdyCB();
 }
-#else
-/* This call has been removed from IPA since
- * Commit-ID: b37958da466efc1320b7f97ddf876565762f05b7.
- * This call returns 0 here as ipa_wdi_init_per_inst()
- * call to IPA would already handle all the initialization steps
- * and do not require WLAN to make this IPA call.
- */
-static inline int __qdf_ipa_uc_reg_rdyCB(struct ipa_wdi_uc_ready_params *param)
-{
-	return 0;
-}
 
-static inline int __qdf_ipa_uc_dereg_rdyCB(void)
-{
-	return 0;
-}
-#endif
 static inline int __qdf_ipa_register_ipa_ready_cb(
 	void (*ipa_ready_cb)(void *user_data),
 	void *user_data)

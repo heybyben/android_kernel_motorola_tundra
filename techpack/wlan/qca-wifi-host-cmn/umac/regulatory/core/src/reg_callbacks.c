@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -53,7 +53,6 @@ static void reg_call_chan_change_cbks(struct wlan_objmgr_psoc *psoc,
 	uint32_t ctr;
 	struct avoid_freq_ind_data *avoid_freq_ind = NULL;
 	reg_chan_change_callback callback;
-	QDF_STATUS status;
 
 	psoc_priv_obj = reg_get_psoc_obj(psoc);
 	if (!IS_VALID_PSOC_REG_OBJ(psoc_priv_obj)) {
@@ -71,12 +70,11 @@ static void reg_call_chan_change_cbks(struct wlan_objmgr_psoc *psoc,
 	if (!cur_chan_list)
 		return;
 
-	status = reg_get_pwrmode_chan_list(pdev, cur_chan_list,
-					   REG_CURRENT_PWR_MODE);
-	if (!QDF_IS_STATUS_SUCCESS(status)) {
-		qdf_mem_free(cur_chan_list);
-		return;
-	}
+	qdf_mem_copy(cur_chan_list,
+		     pdev_priv_obj->cur_chan_list,
+		     NUM_CHANNELS *
+		     sizeof(struct regulatory_channel));
+
 	if (ch_avoid_ind)
 		avoid_freq_ind = avoid_info;
 
@@ -120,7 +118,6 @@ reg_fill_freq_ext_payload(struct reg_sched_payload **payload,
  * reg_alloc_and_fill_payload() - Alloc and fill payload structure.
  * @psoc: Pointer to global psoc structure.
  * @pdev: Pointer to global pdev structure.
- * @payload: output pointer to allocated payload buffer
  */
 static void reg_alloc_and_fill_payload(struct wlan_objmgr_psoc *psoc,
 				       struct wlan_objmgr_pdev *pdev,
@@ -419,23 +416,6 @@ void reg_register_chan_change_callback(struct wlan_objmgr_psoc *psoc,
 		reg_err("callback list is full");
 }
 
-void reg_register_ctry_change_callback(struct wlan_objmgr_psoc *psoc,
-				       reg_ctry_change_callback cbk)
-{
-	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
-
-	psoc_priv_obj = reg_get_psoc_obj(psoc);
-	if (!psoc_priv_obj) {
-		reg_err("reg psoc private obj is NULL");
-		return;
-	}
-
-	qdf_spin_lock_bh(&psoc_priv_obj->cbk_list_lock);
-	if (!psoc_priv_obj->cc_cbk.cbk)
-		psoc_priv_obj->cc_cbk.cbk = cbk;
-	qdf_spin_unlock_bh(&psoc_priv_obj->cbk_list_lock);
-}
-
 void reg_unregister_chan_change_callback(struct wlan_objmgr_psoc *psoc,
 					 reg_chan_change_callback cbk)
 {
@@ -461,55 +441,3 @@ void reg_unregister_chan_change_callback(struct wlan_objmgr_psoc *psoc,
 		reg_err("callback not found in the list");
 }
 
-void reg_unregister_ctry_change_callback(struct wlan_objmgr_psoc *psoc,
-					 reg_ctry_change_callback cbk)
-{
-	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
-
-	psoc_priv_obj = reg_get_psoc_obj(psoc);
-	if (!psoc_priv_obj) {
-		reg_err("reg psoc private obj is NULL");
-		return;
-	}
-
-	qdf_spin_lock_bh(&psoc_priv_obj->cbk_list_lock);
-	if (psoc_priv_obj->cc_cbk.cbk == cbk)
-		psoc_priv_obj->cc_cbk.cbk = NULL;
-	qdf_spin_unlock_bh(&psoc_priv_obj->cbk_list_lock);
-}
-
-void
-reg_register_is_chan_connected_callback(struct wlan_objmgr_psoc *psoc,
-				reg_get_connected_chan_for_mode_callback cbk)
-{
-	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
-
-	psoc_priv_obj = reg_get_psoc_obj(psoc);
-	if (!psoc_priv_obj) {
-		reg_err("reg psoc private obj is NULL");
-		return;
-	}
-
-	qdf_spin_lock_bh(&psoc_priv_obj->cbk_list_lock);
-	if (!psoc_priv_obj->conn_chan_cb.cbk)
-		psoc_priv_obj->conn_chan_cb.cbk = cbk;
-	qdf_spin_unlock_bh(&psoc_priv_obj->cbk_list_lock);
-}
-
-void
-reg_unregister_is_chan_connected_callback(struct wlan_objmgr_psoc *psoc,
-				reg_get_connected_chan_for_mode_callback cbk)
-{
-	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
-
-	psoc_priv_obj = reg_get_psoc_obj(psoc);
-	if (!psoc_priv_obj) {
-		reg_err("reg psoc private obj is NULL");
-		return;
-	}
-
-	qdf_spin_lock_bh(&psoc_priv_obj->cbk_list_lock);
-	if (psoc_priv_obj->conn_chan_cb.cbk == cbk)
-		psoc_priv_obj->conn_chan_cb.cbk = NULL;
-	qdf_spin_unlock_bh(&psoc_priv_obj->cbk_list_lock);
-}
