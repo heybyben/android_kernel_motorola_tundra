@@ -2,6 +2,11 @@
 #
 # Makefile for kernel SLIMbus framework.
 #
+
+# trace.h sets TRACE_INCLUDE_PATH to "." and is re-included through
+# include/trace/define_trace.h, so this directory must be on the include path.
+ccflags-y += -I$(src)
+
 obj-$(CONFIG_SLIMBUS)			+= slimbus.o
 slimbus-y				:= core.o messaging.o sched.o stream.o
 

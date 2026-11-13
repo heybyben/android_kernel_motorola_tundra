@@ -3,6 +3,10 @@
 # Makefile for the kernel serial device drivers.
 #
 
+# serial_trace.h sets TRACE_INCLUDE_PATH to "." and is re-included through
+# include/trace/define_trace.h, so this directory must be on the include path.
+ccflags-y += -I$(src)
+
 obj-$(CONFIG_SERIAL_CORE) += serial_core.o
 
 obj-$(CONFIG_SERIAL_EARLYCON) += earlycon.o
