@@ -662,6 +662,31 @@ out:
 DEFINE_DEBUGFS_ATTRIBUTE(votable_force_ops, force_active_get, force_active_set,
 		"%lld\n");
 
+int pmic_vote_force_val_set(struct votable *votable, u32 val)
+{
+	if (!votable)
+		return -EINVAL;
+
+	votable->force_val = val;
+	return 0;
+}
+
+int pmic_vote_force_active_get(struct votable *votable, u64 *val)
+{
+	if (!votable)
+		return -EINVAL;
+
+	return force_active_get(votable, val);
+}
+
+int pmic_vote_force_active_set(struct votable *votable, u64 val)
+{
+	if (!votable)
+		return -EINVAL;
+
+	return force_active_set(votable, val);
+}
+
 static int show_votable_clients(struct seq_file *m, void *data)
 {
 	struct votable *votable = m->private;
