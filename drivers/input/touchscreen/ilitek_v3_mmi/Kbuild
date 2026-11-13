@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# The driver selects its features with bare -D flags, mirroring the
+# CONFIG_* options the out-of-tree Android.mk passed to it.
+
+ccflags-y += -Wall
+ccflags-y += -I$(src) -I$(src)/firmware
+
+ccflags-$(CONFIG_TOUCHSCREEN_ILITEK_V3_MMI_ENABLE_DOUBLE_TAP) += -DILI_SENSOR_EN
+ccflags-$(CONFIG_TOUCHSCREEN_ILITEK_V3_MMI_USES_DOUBLE_TAP_CTRL) += -DILI_DOUBLE_TAP_CTRL -DILI_PRIMARY_NODE
+ccflags-$(CONFIG_TOUCHSCREEN_ILITEK_V3_MMI_SET_TOUCH_STATE) += -DILI_SET_TOUCH_STATE
+ccflags-$(CONFIG_TOUCHSCREEN_ILITEK_V3_MMI_RESUME_BY_DDI) += -DILI_CONFIG_RESUME_BY_DDI
+ccflags-$(CONFIG_TOUCHSCREEN_ILITEK_V3_MMI_CHARGER) += -DILI_CONFIG_MTK_CHARGER
+ccflags-$(CONFIG_TOUCHSCREEN_ILITEK_V3_MMI_MTK_CHECK_PANEL) += -DILI_MTK_CHECK_PANEL
+ccflags-$(CONFIG_TOUCHSCREEN_ILITEK_V3_MMI_MULTI_TP_MODULE) += -DILI_TP_MODULE_EN
+ccflags-$(CONFIG_TOUCHSCREEN_ILITEK_V3_MMI_LAST_TIME) += -DILI_TOUCH_LAST_TIME
+ccflags-$(CONFIG_TOUCHSCREEN_ILITEK_V3_MMI_STOWED_MODE_EN) += -DILI_STOWED_MODE_EN
+ccflags-$(CONFIG_INPUT_TOUCHSCREEN_MMI) += -DCONFIG_INPUT_TOUCHSCREEN_MMI
+
+obj-$(CONFIG_TOUCHSCREEN_ILITEK_V3_MMI) += ilitek_v3_mmi.o
+
+ilitek_v3_mmi-y := ilitek_v3.o
+ilitek_v3_mmi-y += ilitek_v3_spi.o
+ilitek_v3_mmi-y += ilitek_v3_qcom.o
+ilitek_v3_mmi-y += ilitek_v3_ic.o
+ilitek_v3_mmi-y += ilitek_v3_touch.o
+ilitek_v3_mmi-y += ilitek_v3_mp.o
+ilitek_v3_mmi-y += ilitek_v3_hostdl.o
+ilitek_v3_mmi-y += ilitek_v3_node.o

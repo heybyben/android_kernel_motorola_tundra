@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# The driver selects its features with bare -D flags, mirroring the
+# CONFIG_* options the out-of-tree Android.mk passed to it.
+
+ccflags-y += -Wall
+
+ccflags-$(CONFIG_TOUCHSCREEN_CHIPONE_V2_MMI_ENABLE_DOUBLE_TAP) += -DCHIPONE_SENSOR_EN
+ccflags-$(CONFIG_TOUCHSCREEN_CHIPONE_V2_MMI_GTP_LAST_TIME) += -DCONFIG_GTP_LAST_TIME
+ccflags-$(CONFIG_TOUCHSCREEN_CHIPONE_V2_MMI_STOWED_MODE_EN) += -DCTS_STOWED_MODE_EN
+ccflags-$(CONFIG_TOUCHSCREEN_CHIPONE_V2_MMI_PM_BRL_SPI) += -DTOUCHSCREEN_PM_BRL_SPI
+ccflags-$(CONFIG_TOUCHSCREEN_CHIPONE_V2_MMI_CHECK_DEVICE_BOOTMODE) += -DCTS_CHECK_DEVICE_BOOTMODE
+ccflags-$(CONFIG_BOARD_USES_DOUBLE_TAP_CTRL) += -DCONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+ccflags-$(CONFIG_INPUT_TOUCHSCREEN_MMI) += -DCONFIG_INPUT_TOUCHSCREEN_MMI
+
+obj-$(CONFIG_TOUCHSCREEN_CHIPONE_V2_MMI) += chipone_tddi_v2_mmi.o
+
+chipone_tddi_v2_mmi-y := cts_driver.o
+chipone_tddi_v2_mmi-y += cts_core.o
+chipone_tddi_v2_mmi-y += cts_sfctrlv2.o
+chipone_tddi_v2_mmi-y += cts_spi_flash.o
+chipone_tddi_v2_mmi-y += cts_firmware.o
+chipone_tddi_v2_mmi-y += cts_test.o
+chipone_tddi_v2_mmi-y += cts_charger_detect.o
+chipone_tddi_v2_mmi-y += cts_earjack_detect.o
+chipone_tddi_v2_mmi-y += cts_tcs.o
+chipone_tddi_v2_mmi-y += cts_platform.o
+chipone_tddi_v2_mmi-y += cts_tool.o
+chipone_tddi_v2_mmi-y += cts_sysfs.o
+chipone_tddi_v2_mmi-y += cts_strerror.o
+chipone_tddi_v2_mmi-y += cts_oem.o

@@ -119,3 +119,5 @@ obj-$(CONFIG_TOUCHSCREEN_IQS7211)	+= iqs7211.o
 obj-$(CONFIG_TOUCHSCREEN_ZINITIX)	+= zinitix.o
 obj-$(CONFIG_INPUT_TOUCHSCREEN_MMI)	+= touchscreen_mmi/
 obj-$(CONFIG_TOUCHSCREEN_GOODIX_BRL)	+= goodix_berlin_mmi/
+obj-$(CONFIG_TOUCHSCREEN_CHIPONE_V2_MMI)	+= chipone_tddi_v2_mmi/
+obj-$(CONFIG_TOUCHSCREEN_ILITEK_V3_MMI)	+= ilitek_v3_mmi/
