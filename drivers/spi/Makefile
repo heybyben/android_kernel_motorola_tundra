@@ -3,6 +3,11 @@
 # Makefile for kernel SPI drivers.
 #
 
+# spi-qup-trace.h and q2spi-trace.h set TRACE_INCLUDE_PATH to "." and are
+# re-included through include/trace/define_trace.h, so this directory must be
+# on the include path.
+ccflags-y += -I$(src)
+
 ccflags-$(CONFIG_SPI_DEBUG) := -DDEBUG
 
 # small core, mostly translating board-specific

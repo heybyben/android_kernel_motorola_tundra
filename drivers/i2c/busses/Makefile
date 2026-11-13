@@ -3,6 +3,10 @@
 # Makefile for the i2c bus drivers.
 #
 
+# i2c-qup-trace.h sets TRACE_INCLUDE_PATH to "." and is re-included through
+# include/trace/define_trace.h, so this directory must be on the include path.
+ccflags-y += -I$(src)
+
 # ACPI drivers
 obj-$(CONFIG_I2C_SCMI)		+= i2c-scmi.o
 
