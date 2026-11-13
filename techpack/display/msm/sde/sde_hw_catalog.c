@@ -5463,7 +5463,7 @@ static int _sde_hardware_pre_caps(struct sde_mdss_cfg *sde_cfg, uint32_t hw_rev)
 		sde_cfg->mdss_hw_block_size = 0x158;
 		set_bit(SDE_FEATURE_TRUSTED_VM, sde_cfg->features);
 		set_bit(SDE_SYS_CACHE_DISP, sde_cfg->sde_sys_cache_type_map);
-	} else if (IS_HOLI_TARGET(hw_rev)) {
+	} else if (IS_HOLI_TARGET(hw_rev) || IS_BLAIR_TARGET(hw_rev)) {
 		set_bit(SDE_FEATURE_QSYNC, sde_cfg->features);
 		sde_cfg->perf.min_prefill_lines = 24;
 		sde_cfg->vbif_qos_nlvl = 8;

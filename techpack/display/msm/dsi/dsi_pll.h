@@ -205,6 +205,8 @@ static inline struct dsi_pll_clk *to_pll_clk_hw(struct clk_hw *hw)
 
 int dsi_pll_clock_register_5nm(struct platform_device *pdev,
 				  struct dsi_pll_resource *pll_res);
+int dsi_pll_clock_register_10nm(struct platform_device *pdev,
+				  struct dsi_pll_resource *pll_res);
 int dsi_pll_clock_register_4nm(struct platform_device *pdev, struct dsi_pll_resource *pll_res);
 
 int dsi_pll_init(struct platform_device *pdev,

@@ -94,6 +94,7 @@ obj-y			+= $(ARCH_LIB)
 obj-y			+= drivers/
 obj-y			+= sound/
 obj-$(CONFIG_QTI_DISPLAY_LAHAINA) += techpack/display/
+obj-$(CONFIG_QTI_DISPLAY_BLAIR) += techpack/display/
 obj-$(CONFIG_QTI_DATAIPA_LAHAINA) += techpack/dataipa/ techpack/datarmnet-ext/mem/
 obj-$(CONFIG_QTI_DATARMNET_LAHAINA) += techpack/datarmnet/core/
 obj-$(CONFIG_QTI_CAMERA_LAHAINA) += techpack/camera/
