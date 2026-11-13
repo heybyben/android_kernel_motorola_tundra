@@ -85,7 +85,14 @@ TRACE_EVENT(qcom_dcvs_boost,
 		__entry->path_ab)
 );
 
-TRACE_EVENT(memlat_dev_meas,
+/*
+ * The memlat events below carry an extra front-end stall field compared to
+ * the memlat_dev_{meas,update} events in <trace/events/power.h>, so they
+ * cannot share their names: with the dcvs driver built in (=y) the linker
+ * rejects the duplicate tracepoint symbols. Keep the extended variants
+ * under qcom_* names, used by drivers/soc/qcom/dcvs/memlat.c.
+ */
+TRACE_EVENT(qcom_memlat_dev_meas,
 
 	TP_PROTO(const char *name, unsigned int dev_id, unsigned long inst,
 		 unsigned long mem, unsigned long freq, unsigned int stall,
@@ -129,7 +136,7 @@ TRACE_EVENT(memlat_dev_meas,
 		__entry->fe_stall)
 );
 
-TRACE_EVENT(memlat_dev_update,
+TRACE_EVENT(qcom_memlat_dev_update,
 
 	TP_PROTO(const char *name, unsigned int dev_id, unsigned long inst,
 		 unsigned long mem, unsigned long freq, unsigned long vote),

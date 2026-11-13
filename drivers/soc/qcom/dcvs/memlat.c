@@ -971,7 +971,7 @@ static void calculate_sampling_stats(void)
 			}
 #endif
 			/* one meas event per memlat_group with group name */
-			trace_memlat_dev_meas(dev_name(memlat_grp->dev), cpu,
+			trace_qcom_memlat_dev_meas(dev_name(memlat_grp->dev), cpu,
 					delta->common_ctrs[INST_IDX],
 					delta->grp_ctrs[grp][MISS_IDX],
 					stats->freq_mhz, stats->be_stall_pct,
@@ -1013,7 +1013,7 @@ static inline void apply_adaptive_freq(struct memlat_group *memlat_grp,
 		memlat_grp->adaptive_cur_freq = memlat_grp->adaptive_high_freq;
 
 	if (prev_freq != memlat_grp->adaptive_cur_freq)
-		trace_memlat_dev_update(dev_name(memlat_grp->dev),
+		trace_qcom_memlat_dev_update(dev_name(memlat_grp->dev),
 				0, 0, 0, 0, memlat_grp->adaptive_cur_freq);
 }
 
@@ -1058,7 +1058,7 @@ static void calculate_mon_sampling_freq(struct memlat_mon *mon)
 
 	if (max_cpufreq || mon->cur_freq != mon->min_freq) {
 		stats = per_cpu(sampling_stats, max_cpu);
-		trace_memlat_dev_update(dev_name(mon->dev), max_cpu,
+		trace_qcom_memlat_dev_update(dev_name(mon->dev), max_cpu,
 				stats->delta.common_ctrs[INST_IDX],
 				stats->delta.grp_ctrs[hw][MISS_IDX],
 				max_cpufreq, max_memfreq);
