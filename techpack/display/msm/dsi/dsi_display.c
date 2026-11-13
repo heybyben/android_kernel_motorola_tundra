@@ -6112,6 +6112,9 @@ int dsi_display_dev_probe(struct platform_device *pdev)
 	if (!display->display_type)
 		display->display_type = "primary";
 
+	display->display_idx =
+		!strcmp(display->display_type, "secondary") ? DSI_SECONDARY : 0;
+
 	if (!strcmp(display->display_type, "secondary"))
 		index = DSI_SECONDARY;
 

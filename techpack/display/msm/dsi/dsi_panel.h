@@ -254,6 +254,11 @@ struct brightness_alpha_pair {
 	u8 alpha;
 };
 
+enum touch_state {
+	TOUCH_DEEP_SLEEP_STATE = 0,
+	TOUCH_LOW_POWER_STATE,
+};
+
 struct dsi_panel {
 	const char *name;
 	const char *type;
@@ -314,6 +319,8 @@ struct dsi_panel {
 	u32 dsc_count;
 	u32 lm_count;
 
+	enum touch_state tp_state;
+	bool tp_state_check_enable;
 	int panel_test_gpio;
 	int power_mode;
 	enum dsi_panel_physical_type panel_type;

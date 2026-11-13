@@ -15,6 +15,7 @@
 #include <linux/pwm.h>
 #include <linux/string.h>
 #include <video/mipi_display.h>
+#include <linux/soc/qcom/panel_event_notifier.h>
 
 #include "dsi_panel.h"
 
@@ -366,9 +367,36 @@ static int dsi_panel_set_pinctrl_state(struct dsi_panel *panel, bool enable)
 }
 
 
+static bool panel_power_is_alway_on(struct dsi_panel *panel)
+{
+	int touch_state = 0;
+	bool rc = false;
+	struct dsi_display *dsi_display;
+
+	if (!IS_ENABLED(CONFIG_QCOM_PANEL_EVENT_NOTIFIER))
+		return false;
+
+	dsi_display = container_of(panel->host, struct dsi_display, host);
+	if (unlikely(!dsi_display))
+		return false;
+
+	if (!check_touch_state(&touch_state, dsi_display->display_idx)) {
+		panel->tp_state = touch_state;
+		rc = touch_state ? true : false;
+	}
+
+	return rc;
+}
+
 static int dsi_panel_power_on(struct dsi_panel *panel)
 {
 	int rc = 0;
+
+	/* A TDDI panel that stays powered is already out of deep sleep. */
+	if (panel->tp_state_check_enable && panel->tp_state) {
+		pr_info("%s: (%s) power is always on\n", __func__, panel->name);
+		goto exit;
+	}
 
 	rc = dsi_pwr_enable_regulator(&panel->power_info, true);
 	if (rc) {
@@ -411,6 +439,11 @@ static int dsi_panel_power_off(struct dsi_panel *panel)
 {
 	int rc = 0;
 
+	if (panel->tp_state_check_enable && panel_power_is_alway_on(panel)) {
+		pr_info("%s: (%s) power is always on\n", __func__, panel->name);
+		goto exit;
+	}
+
 	if (gpio_is_valid(panel->reset_config.disp_en_gpio))
 		gpio_set_value_cansleep(panel->reset_config.disp_en_gpio, 0);
 
@@ -439,6 +472,7 @@ static int dsi_panel_power_off(struct dsi_panel *panel)
 		DSI_ERR("[%s] failed to enable vregs, rc=%d\n",
 				panel->name, rc);
 
+exit:
 	return rc;
 }
 static int dsi_panel_tx_cmd_set(struct dsi_panel *panel,
@@ -2324,6 +2358,9 @@ static int dsi_panel_parse_misc_features(struct dsi_panel *panel)
 
 	panel->reset_gpio_always_on = utils->read_bool(utils->data,
 			"qcom,platform-reset-gpio-always-on");
+
+	panel->tp_state_check_enable = utils->read_bool(utils->data,
+			"qcom,tp_state_check_enable");
 
 	panel->calibration_enabled = utils->read_bool(utils->data,
 			"qcom,mdss-dsi-panel-calibration-enabled");
