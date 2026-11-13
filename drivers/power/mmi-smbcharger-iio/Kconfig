@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-2.0-only
+
+config MMI_SMBCHARGER_IIO
+	tristate "Motorola SMB charger IIO driver"
+	depends on POWER_SUPPLY
+	help
+	  Motorola charger driver for the SMB5 family, exposing the charging
+	  state used by the fogos charger and USB stack.
+
+	  Say Y to build it into the kernel.
