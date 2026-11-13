@@ -13,6 +13,7 @@
 /dts-v1/;
 
 #include "blair.dtsi"
+#include "display/blair-sde.dtsi"
 
 / {
 	qcom,board-id = <0 0>;

@@ -2,7 +2,7 @@
 
 &soc {
 	kgsl_smmu: arm,smmu-kgsl@5940000 {
-		compatible = "qcom,smmu-v2";
+		compatible = "qcom,smmu-v2", "qcom,adreno-smmu";
 		reg = <0x5940000 0x10000>;
 		#iommu-cells = <1>;
 		qcom,use-3-lvl-tables;
@@ -44,6 +44,7 @@
 		#iommu-cells = <2>;
 		qcom,skip-init;
 		qcom,use-3-lvl-tables;
+		qcom,handoff-smrs = <0x820 0x2>;
 		#global-interrupts = <1>;
 		#size-cells = <1>;
 		#address-cells = <1>;
@@ -115,7 +116,7 @@
 				<GIC_SPI 152 IRQ_TYPE_LEVEL_HIGH>;
 
 		interconnects = <&bimc MASTER_AMPSS_M0
-				 &system_noc SLAVE_TCU>;
+				&system_noc SLAVE_TCU>;
 		qcom,active-only;
 
 		qcom,actlr =
@@ -137,6 +138,7 @@
 					<&bimc MASTER_AMPSS_M0
 					&system_noc SLAVE_TCU>;
 			qcom,active-only;
+			qcom,iova-width = <36>;
 		};
 
 		anoc_2_tbu: anoc_2_tbu@0c709000 {
@@ -150,6 +152,7 @@
 					<&bimc MASTER_AMPSS_M0
 					&system_noc SLAVE_TCU>;
 			qcom,active-only;
+			qcom,iova-width = <36>;
 		};
 
 		mm_rt_tbu: mm_rt_tbu@0c70d000 {
@@ -159,12 +162,13 @@
 			reg-names = "base", "status-reg";
 			qcom,stream-id-range = <0x800 0x400>;
 			qcom,regulator-names = "vdd";
-			vdd-supply = <&hlos1_vote_mm_snoc_mmu_tbu_rt_gdsc>;
-			interconnects = <&mmrt_virt MASTER_MDP_PORT0
-					 &bimc SLAVE_EBI>,
+			vdd-supply = <&hlos1_vote_mm_snoc_mmu_tbu_nrt_gdsc>;
+			interconnects = <&mmnrt_virt MASTER_CAMNOC_SF
+					&bimc SLAVE_EBI>,
 					<&bimc MASTER_AMPSS_M0
 					&system_noc SLAVE_TCU>;
 			qcom,active-only;
+			qcom,iova-width = <32>;
 		};
 
 		mm_nrt_tbu: mm_nrt_tbu@0c711000 {
@@ -180,6 +184,7 @@
 					<&bimc MASTER_AMPSS_M0
 					&system_noc SLAVE_TCU>;
 			qcom,active-only;
+			qcom,iova-width = <32>;
 		};
 
 		compute_dsp_tbu: compute_dsp_0_tbu@0c715000 {
@@ -195,18 +200,56 @@
 					<&bimc MASTER_AMPSS_M0
 					&system_noc SLAVE_TCU>;
 			qcom,active-only;
+			qcom,iova-width = <32>;
 		};
 	};
 
-	kgsl_iommu_test_device {
-		compatible = "iommu-debug-test";
-		iommus = <&kgsl_smmu 0x7>;
-		qcom,iommu-dma = "disabled";
+	dma_dev@0x0 {
+		compatible = "qcom,iommu-dma";
+		memory-region = <&system_cma>;
 	};
 
-	apps_iommu_test_device {
-		compatible = "iommu-debug-test";
-		iommus = <&apps_smmu 0x100 0>;
-		qcom,iommu-dma = "disabled";
+	iommu_test_device {
+		compatible = "qcom,iommu-debug-test";
+
+		usecase0_apps {
+			compatible = "qcom,iommu-debug-usecase";
+			iommus = <&apps_smmu 0x100 0>;
+		};
+
+		usecase1_apps_fastmap {
+			compatible = "qcom,iommu-debug-usecase";
+			iommus = <&apps_smmu 0x100 0x0>;
+			qcom,iommu-dma = "fastmap";
+		};
+
+		usecase2_apps_atomic {
+			compatible = "qcom,iommu-debug-usecase";
+			iommus = <&apps_smmu 0x100 0x0>;
+			qcom,iommu-dma = "atomic";
+		};
+
+		usecase3_apps_dma {
+			compatible = "qcom,iommu-debug-usecase";
+			iommus = <&apps_smmu 0x100 0x0>;
+			dma-coherent;
+		};
+
+		usecase4_apps_secure {
+			compatible = "qcom,iommu-debug-usecase";
+			iommus = <&apps_smmu 0x100 0x0>;
+			qcom,iommu-vmid = <0xa>; /* VMID_CP_PIXEL */
+		};
+
+		usecase5_kgsl {
+			compatible = "qcom,iommu-debug-usecase";
+			iommus = <&kgsl_smmu 0x7>;
+		};
+
+		usecase6_kgsl_dma {
+			compatible = "qcom,iommu-debug-usecase";
+			iommus = <&kgsl_smmu 0x7>;
+			dma-coherent;
+		};
 	};
 };

@@ -122,7 +122,7 @@
 			qcom,mipi-sdw-block-packing-mode = <1>;
 			swrm-io-base = <0xA740000 0x0>;
 			interrupts-extended =
-				<&wakegic 5 IRQ_TYPE_LEVEL_HIGH>,
+				<&mpm 5 IRQ_TYPE_LEVEL_HIGH>,
 				<&tlmm 128 GPIO_ACTIVE_HIGH>;
 			interrupt-names = "swr_master_irq", "swr_wake_irq";
 			qcom,swr-num-ports = <3>;
@@ -248,9 +248,11 @@
 
 &holi_snd {
 	qcom,model = "holi-9370_fs1815-snd-card";
+	/* As on stock: SLIMBUS_7/8 links to the bt_fm_slim codec (btfmslim_slave). */
 	qcom,wcn-btfm = <1>;
 	qcom,tdm-max-slots = <4>;
 	qcom,mi2s-audio-intf = <0>;
+	qcom,wsa-max-devs = <0>;
 
 	qcom,audio-routing =
 		"AMIC1", "Analog Mic1",
@@ -389,4 +391,7 @@
 	nvmem-cell-names = "adsp_variant";
 	adsp-fw-names = "adsp2";
 	adsp-fw-bit-values = <0x1>;
+	/* The fogos modem partition only ships adsp.mdt; never select adsp2. */
+	adsp-fuse-not-supported = <1>;
+	adsp-fw-name = "adsp.mdt";
 };
