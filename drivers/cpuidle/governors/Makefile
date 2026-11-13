@@ -3,7 +3,11 @@
 # Makefile for cpuidle governors.
 #
 
-CFLAGS_qcom_lpm.o := -I$(src)
+# trace-qcom-lpm.h and trace-cluster-lpm.h set TRACE_INCLUDE_PATH to "." and
+# are re-included through include/trace/define_trace.h, so this directory must
+# be on the include path.
+ccflags-y += -I$(src)
+
 obj-$(CONFIG_CPU_IDLE_GOV_LADDER) += ladder.o
 obj-$(CONFIG_CPU_IDLE_GOV_MENU) += menu.o
 obj-$(CONFIG_CPU_IDLE_SIMPLE_GOV_QCOM_LPM) += qcom_simple_lpm.o
