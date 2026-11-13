@@ -119,6 +119,9 @@ enum usbpd_control_msg_type {
 	MSG_FR_SWAP,
 	MSG_GET_PPS_STATUS,
 	MSG_GET_COUNTRY_CODES,
+	MSG_CTRL_GET_SINK_CAP_EXTENDED,
+	MSG_CTRL_GET_SOURCE_INFO,
+	MSG_CTRL_GET_REVISION,
 };
 
 static const char * const usbpd_control_msg_strings[] = {
@@ -137,6 +140,7 @@ enum usbpd_data_msg_type {
 	MSG_BATTERY_STATUS,
 	MSG_ALERT,
 	MSG_GET_COUNTRY_INFO,
+	MSG_GET_REVISION=0xC,
 	MSG_VDM = 0xF,
 };
 
@@ -161,6 +165,8 @@ enum usbpd_ext_msg_type {
 	MSG_PPS_STATUS,
 	MSG_COUNTRY_INFO,
 	MSG_COUNTRY_CODES,
+	MSG_GET_SINK_CAP_EXTENDED,
+	MSG_GET_SOURCE_INFO,
 };
 
 static const char * const usbpd_ext_msg_strings[] = {
@@ -249,16 +255,16 @@ static void *usbpd_ipc_log;
 
 /* Timeouts (in ms) */
 #define ERROR_RECOVERY_TIME	25
-#define SENDER_RESPONSE_TIME	26
+#define SENDER_RESPONSE_TIME	28
 #define SINK_WAIT_CAP_TIME	500
-#define PS_TRANSITION_TIME	450
+#define PS_TRANSITION_TIME	455
 #define SRC_CAP_TIME		120
 #define SRC_TRANSITION_TIME	25
 #define SRC_RECOVER_TIME	750
 #define PS_HARD_RESET_TIME	25
 #define PS_SOURCE_ON		400
-#define PS_SOURCE_OFF		750
-#define FIRST_SOURCE_CAP_TIME	100
+#define PS_SOURCE_OFF		760
+#define FIRST_SOURCE_CAP_TIME	120
 #define VDM_BUSY_TIME		50
 #define VCONN_ON_TIME		100
 #define SINK_TX_TIME		16
@@ -360,9 +366,9 @@ static void *usbpd_ipc_log;
 #define SVDM_HDR_CMD_TYPE(hdr)	(((hdr) >> 6) & 0x3)
 #define SVDM_HDR_CMD(hdr)	((hdr) & 0x1f)
 
-#define SVDM_HDR(svid, ver, obj, cmd_type, cmd) \
-	(((svid) << 16) | (1 << 15) | ((ver) << 13) \
-	| ((obj) << 8) | ((cmd_type) << 6) | (cmd))
+#define SVDM_HDR(svid,ver,obj,cmd_type,cmd) \
+((ver==1)?(((svid)<<16)|(1<<15)|((ver)<<13)|(1<<11) |((obj )<<8)|((cmd_type)<<6)|(cmd)) :\
+(((svid)<<16)|(1<<15)|((ver)<<13) | ((obj )<<8)|((cmd_type)<<6)|(cmd)))
 
 /* discover id response vdo bit fields */
 #define ID_HDR_USB_HOST		BIT(31)
@@ -641,6 +647,12 @@ static void start_usb_peripheral_work(struct work_struct *w)
 	start_usb_peripheral(pd);
 	typec_set_data_role(pd->typec_port, TYPEC_DEVICE);
 	typec_set_pwr_role(pd->typec_port, TYPEC_SINK);
+
+	if ((pd->typec_mode - QTI_POWER_SUPPLY_TYPEC_SOURCE_DEFAULT < TYPEC_PWR_MODE_USB) ||
+		(pd->typec_mode - QTI_POWER_SUPPLY_TYPEC_SOURCE_DEFAULT > TYPEC_PWR_MODE_PD)) {
+		return ;
+	}
+
 	typec_set_pwr_opmode(pd->typec_port,
 			pd->typec_mode - QTI_POWER_SUPPLY_TYPEC_SOURCE_DEFAULT);
 	if (!pd->partner) {
@@ -795,7 +807,7 @@ static int pd_send_msg(struct usbpd *pd, u8 msg_type, const u32 *data,
 
 	/* bail out and try again later if a message just arrived */
 	spin_lock_irqsave(&pd->rx_lock, flags);
-	if (!list_empty(&pd->rx_q)) {
+	if (!list_empty(&pd->rx_q) && (msg_type != MSG_SOFT_RESET)) {
 		spin_unlock_irqrestore(&pd->rx_lock, flags);
 		usbpd_dbg(&pd->dev, "Abort send due to pending RX\n");
 		return -EBUSY;
@@ -883,7 +895,6 @@ static int pd_select_pdo(struct usbpd *pd, int pdo_pos, int uv, int ua)
 	type = PD_SRC_PDO_TYPE(pdo);
 	if (type == PD_SRC_PDO_TYPE_FIXED) {
 		curr = max_current = PD_SRC_PDO_FIXED_MAX_CURR(pdo) * 10;
-
 		/*
 		 * Check if the PDO has enough current, otherwise set the
 		 * Capability Mismatch flag
@@ -917,6 +928,32 @@ static int pd_select_pdo(struct usbpd *pd, int pdo_pos, int uv, int ua)
 
 	pd->requested_current = curr;
 	pd->requested_pdo = pdo_pos;
+	usbpd_warn(&pd->dev, "select_pdo: PDO:%d, %d uV, %d uA\n",
+		   pdo_pos, uv, ua);
+
+	return 0;
+}
+
+static int pd_get_pdo(struct usbpd *pd, int pdo_pos, int *uv_max, int *uv_min, int *ua)
+{
+	u8 type;
+	u32 pdo = pd->received_pdos[pdo_pos - 1];
+
+	if (0 == pdo)
+		return -ENOTSUPP;
+
+	type = PD_SRC_PDO_TYPE(pdo);
+	if (type == PD_SRC_PDO_TYPE_FIXED) {
+		*ua = PD_SRC_PDO_FIXED_MAX_CURR(pdo) * 10;
+		*uv_max = *uv_min = PD_SRC_PDO_FIXED_VOLTAGE(pdo) * 50 * 1000;
+	} else if (type == PD_SRC_PDO_TYPE_AUGMENTED) {
+		*uv_max = PD_APDO_MAX_VOLT(pdo) * 100000;
+		*uv_min = PD_APDO_MIN_VOLT(pdo) *  100000;
+		*ua = PD_APDO_MAX_CURR(pdo) * 50000;
+	} else {
+		usbpd_err(&pd->dev, "Only Fixed or Programmable PDOs supported\n");
+		return -ENOTSUPP;
+	}
 
 	return 0;
 }
@@ -1663,11 +1700,14 @@ static void handle_vdm_rx(struct usbpd *pd, struct rx_msg *rx_msg)
 	switch (cmd_type) {
 	case SVDM_CMD_TYPE_INITIATOR:
 		if (cmd != USBPD_SVDM_ATTENTION) {
-			if (pd->spec_rev == USBPD_REV_30) {
+			if(cmd == USBPD_SVDM_DISCOVER_IDENTITY)
+					usbpd_send_svdm(pd, svid, cmd,
+						SVDM_CMD_TYPE_RESP_NAK, 0, NULL, 0);
+			else if (pd->spec_rev == USBPD_REV_30) {
 				ret = pd_send_msg(pd, MSG_NOT_SUPPORTED, NULL,
-						0, SOP_MSG);
+								 0, SOP_MSG);
 				if (ret)
-					usbpd_set_state(pd, PE_SEND_SOFT_RESET);
+						usbpd_set_state(pd, PE_SEND_SOFT_RESET);
 			}
 		}
 		break;
@@ -1833,9 +1873,10 @@ static void handle_get_src_cap_extended(struct usbpd *pd)
 		u8  source_inputs;
 		u8  num_batt;
 		u8  pdp;
+		u8  epr_source_pdp;
 	} __packed caps = {0};
 
-	caps.vid = 0x5c6;
+	caps.vid = 0x22b8;
 	caps.num_batt = 1;
 	caps.pdp = 5 * PD_SRC_PDO_FIXED_MAX_CURR(default_src_caps[0]) / 100;
 
@@ -1843,6 +1884,87 @@ static void handle_get_src_cap_extended(struct usbpd *pd)
 			sizeof(caps), SOP_MSG);
 	if (ret)
 		usbpd_set_state(pd, PE_SEND_SOFT_RESET);
+}
+
+static void handle_get_source_info(struct usbpd *pd){
+	int ret;
+	union {
+		unsigned long AsUINT32;
+		struct {
+			unsigned long PortReportedPDP :8;
+			unsigned long PortPresentPDP :8;
+			unsigned long PortMaximumPDP :8;
+			unsigned long  :7;
+			unsigned long PortType :1;
+		};
+	} __packed caps = {0};
+	caps.PortType =1;
+	caps.PortMaximumPDP =15;
+	caps.PortReportedPDP =10;
+	caps.PortPresentPDP =10;
+
+	ret = pd_send_ext_msg(pd, MSG_GET_SOURCE_INFO, (u8 *)&caps.AsUINT32,
+			sizeof(caps), SOP_MSG);
+	if (ret)
+		usbpd_set_state(pd, PE_SEND_SOFT_RESET);
+}
+static void handle_get_revision(struct usbpd *pd){
+	int ret;
+	u32 caps =0x31170000;
+
+	ret = pd_send_msg(pd, MSG_GET_REVISION, &caps,
+			1, SOP_MSG);
+	if (ret)
+		usbpd_set_state(pd, PE_SEND_SOFT_RESET);
+}
+static void handle_get_sink_cap_extended(struct usbpd *pd)
+{
+	int ret;
+	struct {
+		u16 vid;          /*size:2*/
+		u16 pid;		 /*size:2*/
+		u32 xid;		/*size:4*/
+		u8  fw_version; /*size:1*/
+		u8  hw_version;  /*size:1*/
+		u8  SKEDBVersion; /*size:1*/
+		u8  LoadStep;      /*size:1*/
+		u16 SinkLoadCharacteristics;  /*size:2*/
+		u8  Compliance;     /*size:1*/
+		u8  TouchTemp;      /*size:1*/
+		u8  BatteryInfo;     /*size:1*/
+		u8  SinkModes;       /*size:1*/
+		u8  SinkMinimumPDP;   /*size:1*/
+		u8  SinkOperationalPDP;    /*size:1*/
+		u8  SinkMaximumPDP;    /*size:1*/
+		u8  EPRSinkMinimumPDP;   /*size:1*/
+		u8  EPRSinkOperationalPDP;  /*size:1*/
+		u8  EPRSinkMaximumPDP; /*size:1*/
+	} __packed caps = {0};
+
+	caps.vid = 0x22b8;
+	caps.pid = 1;
+	caps.xid = 0;
+	caps.fw_version = 0;
+	caps.hw_version=0x20;
+	caps.SKEDBVersion=0x1;
+	caps.LoadStep=0x0;
+	caps.SinkLoadCharacteristics=0x8000;
+	caps.Compliance=0x0;
+	caps.TouchTemp=0x1;
+	caps.BatteryInfo=0x1;
+	caps.SinkModes =0xA |0x01;
+	caps.SinkMinimumPDP=0x0;
+	caps.SinkOperationalPDP = 15;
+	caps.SinkMaximumPDP = 30;
+	caps.EPRSinkMinimumPDP =0x0;
+	caps.EPRSinkOperationalPDP =0x0;
+	caps.EPRSinkMaximumPDP =0x0;
+
+	ret = pd_send_ext_msg(pd, MSG_GET_SINK_CAP_EXTENDED, (u8 *)&caps,
+			sizeof(caps), SOP_MSG);
+	if (ret)
+		usbpd_set_state(pd, PE_SEND_SOFT_RESET);
+	usbpd_warn(&pd->dev, "handle_get_sink_cap_extended \n");
 }
 
 static void handle_get_battery_cap(struct usbpd *pd, struct rx_msg *rx_msg)
@@ -1855,22 +1977,26 @@ static void handle_get_battery_cap(struct usbpd *pd, struct rx_msg *rx_msg)
 		u16 capacity;
 		u16 last_full;
 		u8  type;
-	} __packed bcdb = {0, 0, 0xffff, 0xffff, 0};
+	} __packed bcdb = { 0xffff, 0, 0, 0, 0};
 
 	if (rx_msg->data_len != 1) {
 		usbpd_err(&pd->dev, "Invalid payload size: %d\n",
 				rx_msg->data_len);
 		return;
 	}
-
 	bat_num = rx_msg->payload[0];
-
-	if (bat_num || !pd->bat_psy) {
+	if (bat_num) {
 		usbpd_warn(&pd->dev, "Battery %d unsupported\n", bat_num);
 		bcdb.type = BIT(0); /* invalid */
 		goto send;
 	}
-
+	bcdb.vid = 0x22b8;
+	bcdb.pid = 0x2e70;
+	if(!pd->bat_psy){
+		bcdb.capacity =0x23;
+		bcdb.last_full=0xdb;
+		goto send;
+	}
 	bcdb.capacity = ((pd->bat_charge_full / 1000) *
 			(pd->bat_voltage_max / 1000)) / 100000;
 	/* fix me */
@@ -1889,7 +2015,7 @@ static void handle_get_battery_status(struct usbpd *pd, struct rx_msg *rx_msg)
 	int cap;
 	union power_supply_propval val = {0};
 	u8 bat_num;
-	u32 bsdo = 0xffff0000;
+	u32 bsdo = 0x00000000;
 
 	if (rx_msg->data_len != 1) {
 		usbpd_err(&pd->dev, "Invalid payload size: %d\n",
@@ -1899,12 +2025,17 @@ static void handle_get_battery_status(struct usbpd *pd, struct rx_msg *rx_msg)
 
 	bat_num = rx_msg->payload[0];
 
-	if (bat_num || !pd->bat_psy) {
+	if (bat_num) {
 		usbpd_warn(&pd->dev, "Battery %d unsupported\n", bat_num);
 		bsdo |= BIT(8); /* invalid */
 		goto send;
 	}
-
+	if (!pd->bat_psy) {
+		bsdo |= BIT(9);
+		if (PE_SRC_READY == pd->current_state)
+			bsdo |= (1 << 10);
+		goto send;
+	}
 	ret = power_supply_get_property(pd->bat_psy, POWER_SUPPLY_PROP_PRESENT,
 			&val);
 	if (ret || !val.intval)
@@ -2087,7 +2218,8 @@ static inline void rx_msg_cleanup(struct usbpd *pd)
 static inline bool is_sink_tx_ok(struct usbpd *pd)
 {
 	if (pd->spec_rev == USBPD_REV_30)
-		return pd->typec_mode == QTI_POWER_SUPPLY_TYPEC_SOURCE_HIGH;
+		return pd->typec_mode == QTI_POWER_SUPPLY_TYPEC_SOURCE_HIGH |
+				pd->typec_mode == QTI_POWER_SUPPLY_TYPEC_SOURCE_MEDIUM;
 
 	return true;
 }
@@ -2397,7 +2529,6 @@ static void enter_state_src_negotiate_capability(struct usbpd *pd)
 		usbpd_set_state(pd, PE_SEND_SOFT_RESET);
 		return;
 	}
-
 	/* tSrcTransition required after ACCEPT */
 	usleep_range(SRC_TRANSITION_TIME * USEC_PER_MSEC,
 			(SRC_TRANSITION_TIME + 5) * USEC_PER_MSEC);
@@ -2503,7 +2634,11 @@ static void handle_state_src_ready(struct usbpd *pd, struct rx_msg *rx_msg)
 		usbpd_warn(&pd->dev, "Unexpected message\n");
 		usbpd_set_state(pd, PE_SEND_SOFT_RESET);
 		return;
-	} else if (rx_msg && !IS_CTRL(rx_msg, MSG_NOT_SUPPORTED)) {
+	} else if (IS_CTRL(rx_msg, MSG_CTRL_GET_SOURCE_INFO)){
+		handle_get_source_info(pd);
+	} else if (IS_CTRL(rx_msg, MSG_CTRL_GET_REVISION)) {
+		handle_get_revision(pd);
+	}else if (rx_msg && !IS_CTRL(rx_msg, MSG_NOT_SUPPORTED)) {
 		usbpd_dbg(&pd->dev, "Unsupported message\n");
 		ret = pd_send_msg(pd, pd->spec_rev == USBPD_REV_30 ?
 				MSG_NOT_SUPPORTED : MSG_REJECT,
@@ -2649,6 +2784,10 @@ static void enter_state_snk_startup(struct usbpd *pd)
 
 	typec_set_pwr_role(pd->typec_port, TYPEC_SINK);
 	if (!pd->partner) {
+		if ((pd->typec_mode - QTI_POWER_SUPPLY_TYPEC_SOURCE_DEFAULT < TYPEC_PWR_MODE_USB) ||
+			(pd->typec_mode - QTI_POWER_SUPPLY_TYPEC_SOURCE_DEFAULT > TYPEC_PWR_MODE_PD))
+			return ;
+
 		typec_set_pwr_opmode(pd->typec_port,
 			pd->typec_mode - QTI_POWER_SUPPLY_TYPEC_SOURCE_DEFAULT);
 		memset(&pd->partner_identity, 0, sizeof(pd->partner_identity));
@@ -2730,6 +2869,10 @@ static void handle_state_snk_wait_for_capabilities(struct usbpd *pd,
 
 	if (IS_DATA(rx_msg, MSG_SOURCE_CAPABILITIES)) {
 		val.intval = 0;
+		if (!pd->vbus_present) {
+		    usbpd_dbg(&pd->dev, "vbus not present yet, delay 50ms.\n");
+		    msleep(50);
+		}
 		usbpd_set_psy_iio_property(pd,
 				POWER_SUPPLY_PROP_PD_IN_HARD_RESET, &val);
 
@@ -2779,6 +2922,12 @@ static void enter_state_snk_select_capability(struct usbpd *pd)
 	int ret;
 
 	log_decoded_request(pd, pd->rdo);
+
+	if(PD_RDO_FIXED_CURR(pd->rdo)==0) {
+		union power_supply_propval val = {0};
+		ret = usbpd_set_psy_iio_property(pd,
+			POWER_SUPPLY_PROP_PD_CURRENT_MAX, &val);
+	}
 
 	ret = pd_send_msg(pd, MSG_REQUEST, &pd->rdo, 1, SOP_MSG);
 	if (ret) {
@@ -2955,6 +3104,14 @@ static bool handle_ctrl_snk_ready(struct usbpd *pd, struct rx_msg *rx_msg)
 		break;
 	case MSG_GET_SOURCE_CAP_EXTENDED:
 		handle_get_src_cap_extended(pd);
+		break;
+
+	case MSG_CTRL_GET_SINK_CAP_EXTENDED:
+		handle_get_sink_cap_extended(pd);
+		break;
+
+	case MSG_CTRL_GET_REVISION:
+		handle_get_revision(pd);
 		break;
 	case MSG_ACCEPT:
 	case MSG_REJECT:
@@ -3990,7 +4147,13 @@ static int usbpd_typec_port_type_set(struct typec_port *port,
 	usbpd_dbg(&pd->dev, "Setting mode to %d\n", type);
 
 	if (type == TYPEC_PORT_DRP)
+	{
+		/* Setting it to DRP. HW can figure out new mode */
+		value.intval = QTI_POWER_SUPPLY_TYPEC_PR_DUAL;
+		usbpd_set_psy_iio_property(pd,
+		POWER_SUPPLY_PROP_TYPEC_POWER_ROLE, &value);
 		return 0;
+	}
 
 	/*
 	 * Forces disconnect on CC and re-establishes connection.
@@ -4255,9 +4418,232 @@ static ssize_t pdo_n_show(struct device *dev, struct device_attribute *attr,
 	return -EINVAL;
 }
 
+int usbpd_select_pdo_match(struct usbpd *pd)
+{
+	int uv_diff = 0, max_uv_diff = 0, pdo = 0;
+	int pdo_max_uv = 0, pdo_min_uv = 0, pdo_ua = 0;
+	int uv_in, i;
+	int pdo_pos;
+	u8 type = -1;
+	int ret;
+	union power_supply_propval val;
+
+	if (!pd)
+		return -EINVAL;
+
+	mutex_lock(&pd->swap_lock);
+
+	if (pd->current_pr == PR_SRC) {
+		usbpd_err(&pd->dev, "select_pdo: not support in source mode\n");
+		ret = -ENOTSUPP;
+		goto out;
+	}
+
+	/* Only allowed if we are already in explicit sink contract */
+	if (pd->current_state != PE_SNK_READY || !is_sink_tx_ok(pd)) {
+		usbpd_err(&pd->dev, "select_pdo: Cannot select new PDO yet\n");
+		ret = -EBUSY;
+		goto out;
+	}
+
+	/* Check the Max Input Voltage from USBPSY */
+	power_supply_get_property(pd->usb_psy,
+				  POWER_SUPPLY_PROP_VOLTAGE_MAX, &val);
+	uv_in = val.intval;
+	/* start with 5 V */
+	max_uv_diff = 5000000;
+	for (i = 1; i < 8; i++) {
+		pdo_pos = pd->received_pdos[i - 1];
+		if (pdo_pos != 0)
+			type = PD_SRC_PDO_TYPE(pdo_pos);
+		if (type == PD_SRC_PDO_TYPE_FIXED &&
+			!pd_get_pdo(pd, i, &pdo_max_uv, &pdo_min_uv, &pdo_ua)) {
+			if (pdo_max_uv <= uv_in) {
+				uv_diff = uv_in - pdo_max_uv;
+				if (uv_diff < max_uv_diff) {
+					max_uv_diff = uv_diff;
+					pdo = i;
+				}
+			}
+		}
+	}
+
+	if (pdo < 1 || pdo > 7) {
+		usbpd_err(&pd->dev, "select_pdo: invalid PDO:%d\n", pdo);
+		ret = pd->current_voltage;
+		goto out;
+	}
+
+	pd_get_pdo(pd, pdo, &pdo_max_uv, &pdo_min_uv, &pdo_ua);
+	ret = pd_select_pdo(pd, pdo, pdo_max_uv, pdo_ua);
+	if (ret)
+		goto out;
+	else
+		ret = pdo_max_uv;
+
+	reinit_completion(&pd->is_ready);
+	pd->send_request = true;
+	kick_sm(pd, 0);
+
+	/* wait for operation to complete */
+	if (!wait_for_completion_timeout(&pd->is_ready,
+			msecs_to_jiffies(1000))) {
+		usbpd_err(&pd->dev, "select_pdo: request timed out\n");
+		ret = -ETIMEDOUT;
+		goto out;
+	}
+
+	/* determine if request was accepted/rejected */
+	if (pd->selected_pdo != pd->requested_pdo ||
+			pd->current_voltage != pd->requested_voltage) {
+		usbpd_err(&pd->dev, "select_pdo: request rejected\n");
+		ret = -EINVAL;
+	}
+
+out:
+	pd->send_request = false;
+	mutex_unlock(&pd->swap_lock);
+	return ret;
+}
+EXPORT_SYMBOL(usbpd_select_pdo_match);
+
+int usbpd_get_pdo_info(struct usbpd *pd, struct usbpd_pdo_info *pdo_info, int length)
+{
+	int pdo = 0;
+	int i;
+	int ret = 0;
+
+	if (!pd || !pdo_info)
+		return -EINVAL;
+
+	if (length > PD_MAX_PDO_NUM) {
+		usbpd_err(&pd->dev,
+			"the members of the struct pd_info[] array must be less than %d, "
+			"err length %d\n", PD_MAX_PDO_NUM, length);
+		return -EINVAL;
+	}
+
+	mutex_lock(&pd->swap_lock);
+
+	if (pd->current_pr == PR_SRC) {
+		usbpd_err(&pd->dev, "select_pdo:not support in source mode\n");
+		ret = -ENOTSUPP;
+		goto out;
+	}
+	usbpd_err(&pd->dev, "select pdo info ,pd->current_state %d\n", pd->current_state);
+
+	if (!is_sink_tx_ok(pd))
+		usbpd_err(&pd->dev, "select pdo info , !is_sink_tx_ok\n");
+
+	/* Only allowed if we are already in explicit sink contract */
+	if (pd->current_state != PE_SNK_READY || !is_sink_tx_ok(pd)) {
+		usbpd_err(&pd->dev, "select_pdo_info: Cannot select new PDO yet\n");
+		ret = -EBUSY;
+		goto out;
+	}
+
+	for (i = 0; i < length; i++) {
+		pdo = pd->received_pdos[i];
+		if (pdo == 0)
+			break;
+
+		pdo_info[i].pdo_pos = i + 1;
+		pdo_info[i].type = PD_SRC_PDO_TYPE(pdo);
+		if (pdo_info[i].type == PD_SRC_PDO_TYPE_FIXED) {
+			pdo_info[i].ua = PD_SRC_PDO_FIXED_MAX_CURR(pdo) * 10;
+			pdo_info[i].uv_max = PD_SRC_PDO_FIXED_VOLTAGE(pdo) * 50 * 1000;
+			pdo_info[i].uv_min = PD_SRC_PDO_FIXED_VOLTAGE(pdo) * 50 * 1000;
+
+			printk(KERN_INFO  "pdo %d, Fixed supply\n"
+					"Voltage:%d (uV)\n"
+					"Max Current:%d (uA)\n",
+					pdo_info[i].pdo_pos,
+					pdo_info[i].uv_max,
+					pdo_info[i].ua);
+
+		} else if (pdo_info[i].type == PD_SRC_PDO_TYPE_AUGMENTED) {
+			pdo_info[i].uv_max = PD_APDO_MAX_VOLT(pdo) * 100000;
+			pdo_info[i].uv_min = PD_APDO_MIN_VOLT(pdo) *  100000;
+			pdo_info[i].ua = PD_APDO_MAX_CURR(pdo) * 50000;
+
+			printk(KERN_INFO  "pdo %d, Programmable Power supply\n"
+					"Voltage:%d (uV)\n"
+					"Max Current:%d (uA)\n",
+					pdo_info[i].pdo_pos,
+					pdo_info[i].uv_max,
+					pdo_info[i].ua);
+
+		} else
+			usbpd_err(&pd->dev, "Only get Fixed or Programmable PDOs supported\n");
+	}
+out:
+	mutex_unlock(&pd->swap_lock);
+	return ret;
+}
+EXPORT_SYMBOL(usbpd_get_pdo_info);
+
+int usbpd_select_pdo(struct usbpd *pd, int pdo_pos, int uv, int ua)
+{
+	int ret;
+
+	if (!pd)
+		return -EINVAL;
+
+	mutex_lock(&pd->swap_lock);
+
+	if (pd->current_pr == PR_SRC) {
+		usbpd_err(&pd->dev, "select_pdo:not support in source mode\n");
+		ret = -ENOTSUPP;
+		goto out;
+	}
+
+	/* Only allowed if we are already in explicit sink contract */
+	if (pd->current_state != PE_SNK_READY || !is_sink_tx_ok(pd)) {
+		usbpd_err(&pd->dev, "select_pdo: Cannot select new PDO yet\n");
+		ret = -EBUSY;
+		goto out;
+	}
+
+	if (pdo_pos < 1 || pdo_pos > 7) {
+		usbpd_err(&pd->dev, "select_pdo: invalid PDO:%d\n", pdo_pos);
+		ret = -EINVAL;
+		goto out;
+	}
+
+	ret = pd_select_pdo(pd, pdo_pos, uv, ua);
+	if (ret)
+		goto out;
+
+	reinit_completion(&pd->is_ready);
+	pd->send_request = true;
+	kick_sm(pd, 0);
+
+	/* wait for operation to complete */
+	if (!wait_for_completion_timeout(&pd->is_ready,
+			msecs_to_jiffies(1000))) {
+		usbpd_err(&pd->dev, "select_pdo: request timed out\n");
+		ret = -ETIMEDOUT;
+		goto out;
+	}
+
+	/* determine if request was accepted/rejected */
+	if (pd->selected_pdo != pd->requested_pdo ||
+			pd->current_voltage != pd->requested_voltage) {
+		usbpd_err(&pd->dev, "select_pdo: request rejected\n");
+		ret = -EINVAL;
+	}
+
+out:
+	pd->send_request = false;
+	mutex_unlock(&pd->swap_lock);
+	return ret;
+}
+EXPORT_SYMBOL(usbpd_select_pdo);
+
 static ssize_t select_pdo_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
 {
+#ifdef QCOM_BASE
 	struct usbpd *pd = dev_get_drvdata(dev);
 	int src_cap_id;
 	int pdo, uv = 0, ua = 0;
@@ -4319,6 +4705,9 @@ out:
 	pd->send_request = false;
 	mutex_unlock(&pd->swap_lock);
 	return ret ? ret : size;
+#else
+	return size;
+#endif
 }
 
 static ssize_t select_pdo_show(struct device *dev,
@@ -4928,3 +5317,4 @@ module_exit(usbpd_exit);
 
 MODULE_DESCRIPTION("USB Power Delivery Policy Engine");
 MODULE_LICENSE("GPL");
+
