@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: GPL-2.0-only
+
+ccflags-y += -Wall
+
+ccflags-$(CONFIG_INPUT_MISC_FPC1020_SAVE_TO_CLASS_DEVICE) += -DCONFIG_INPUT_MISC_FPC1020_SAVE_TO_CLASS_DEVICE
+ccflags-$(CONFIG_INPUT_MISC_FPC1020_SUPPORT_PIN_CTRL) += -DSUPPORT_PIN_CTRL
+
+obj-$(CONFIG_INPUT_MISC_FPC1020) += fpc_fps_mmi.o
+fpc_fps_mmi-y := fpc1020_tee.o

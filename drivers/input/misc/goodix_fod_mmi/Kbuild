@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-2.0-only
+
+ccflags-y += -Wall
+
+ccflags-$(CONFIG_MMI_RELAY) += -DMMI_RELAY_MODULE
+ccflags-$(CONFIG_GOODIX_DRM_PANEL_NOTIFICATIONS) += -DCONFIG_GOODIX_DRM_PANEL_NOTIFICATIONS
+ccflags-$(CONFIG_INPUT_MISC_GOODIX_FOD_SOFTDEP) += -DSOFTDEP_GPIO_PCAL6408
+
+obj-$(CONFIG_INPUT_GOODIX_FOD_MMI) += goodix_fod_mmi.o
+goodix_fod_mmi-y := gf_spi.o netlink.o platform.o
