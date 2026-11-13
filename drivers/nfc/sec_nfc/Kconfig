@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: GPL-2.0-only
+
+config SEC_NFC
+	tristate "Samsung NFC driver"
+	depends on NFC && I2C
+	help
+	  Samsung S3NRN4V NFC controller, driven from the Motorola NFC HAL
+	  through /dev/sec-nfc.
+
+	  Say Y to build it into the kernel.
+
+config SEC_NFC_PRODUCT_N5
+	bool "Samsung NFC N5 pin layout"
+	depends on SEC_NFC
+	default y
+	help
+	  Select the N5-family pin and power layout, which is the one used by
+	  fogos.
+
+config SEC_NFC_IF_I2C
+	bool "Samsung NFC on I2C"
+	depends on SEC_NFC
+	default y
+	help
+	  The controller is wired on I2C rather than UART.
+
+config SEC_NFC_WAKE_LOCK
+	bool "Samsung NFC wake lock"
+	depends on SEC_NFC
+	default n
+	help
+	  Hold a wake lock while NFC is active. Fogos does not need it.

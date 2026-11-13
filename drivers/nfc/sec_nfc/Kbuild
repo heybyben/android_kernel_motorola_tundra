@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: GPL-2.0-only
+
+ccflags-y += -Wall
+
+ccflags-$(CONFIG_SEC_NFC_PRODUCT_N5) += -DCONFIG_SEC_NFC_PRODUCT_N5
+ccflags-$(CONFIG_SEC_NFC_IF_I2C) += -DCONFIG_SEC_NFC_IF_I2C
+
+obj-$(CONFIG_SEC_NFC) += sec_nfc.o
