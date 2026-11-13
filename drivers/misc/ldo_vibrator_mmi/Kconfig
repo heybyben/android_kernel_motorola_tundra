@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-2.0-only
+
+config LDO_VIBRATOR_MMI
+	tristate "Motorola LDO vibrator"
+	depends on LEDS_CLASS
+	help
+	  Motorola vibrator driven through an LDO enable GPIO, exposed as an
+	  LED class device so the vibrator HAL can drive it.
+
+	  Say Y to build it into the kernel.
