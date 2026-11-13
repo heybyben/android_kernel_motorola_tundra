@@ -1,4 +1,9 @@
 # SPDX-License-Identifier: GPL-2.0
+# trace.h and trace-gdsc.h define TRACE_INCLUDE_PATH . and are included
+# through include/trace/define_trace.h, so the compiler needs this directory
+# on its include path.
+ccflags-y += -I$(src)
+
 obj-$(CONFIG_COMMON_CLK_QCOM) += clk-qcom.o
 
 clk-qcom-y += common.o
