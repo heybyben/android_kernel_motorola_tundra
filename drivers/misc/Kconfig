@@ -622,4 +622,5 @@ source "drivers/misc/utag/Kconfig"
 source "drivers/misc/sx937x/Kconfig"
 source "drivers/misc/ldo_vibrator_mmi/Kconfig"
 source "drivers/misc/awinic/sarsensor/Kconfig"
+source "drivers/misc/fm/Kconfig"
 endmenu

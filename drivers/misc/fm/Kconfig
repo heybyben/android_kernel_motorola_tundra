@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: GPL-2.0-only
+
+config RADIO_ELNA
+	tristate "Motorola FM ELNA control"
+	help
+	  Controls the FM radio external LNA pin state, exposed to the radio
+	  HAL through sysfs.
+
+	  Say Y to build it into the kernel.
