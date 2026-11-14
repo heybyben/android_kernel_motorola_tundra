@@ -320,7 +320,8 @@ int wlan_hdd_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *dev,
 			      unsigned int link_id);
 #else
 int wlan_hdd_cfg80211_stop_ap(struct wiphy *wiphy,
-			      struct net_device *dev);
+			      struct net_device *dev,
+			      unsigned int link_id);
 #endif
 
 int wlan_hdd_cfg80211_start_ap(struct wiphy *wiphy,

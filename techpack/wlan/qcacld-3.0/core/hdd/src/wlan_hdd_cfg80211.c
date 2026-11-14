@@ -20494,7 +20494,7 @@ static int wlan_hdd_cfg80211_add_key(struct wiphy *wiphy,
 #else
 static int wlan_hdd_cfg80211_add_key(struct wiphy *wiphy,
 				     struct net_device *ndev,
-				     u8 key_index, bool pairwise,
+				     int link_id, u8 key_index, bool pairwise,
 				     const u8 *mac_addr,
 				     struct key_params *params)
 {
@@ -20660,7 +20660,7 @@ static int wlan_hdd_cfg80211_get_key(struct wiphy *wiphy,
 #else
 static int wlan_hdd_cfg80211_get_key(struct wiphy *wiphy,
 				     struct net_device *ndev,
-				     u8 key_index, bool pairwise,
+				     int link_id, u8 key_index, bool pairwise,
 				     const u8 *mac_addr, void *cookie,
 				     void (*callback)(void *cookie,
 						      struct key_params *)
@@ -20774,7 +20774,7 @@ static int wlan_hdd_cfg80211_del_key(struct wiphy *wiphy,
 #else
 static int wlan_hdd_cfg80211_del_key(struct wiphy *wiphy,
 				     struct net_device *dev,
-				     u8 key_index,
+				     int link_id, u8 key_index,
 				     bool pairwise, const u8 *mac_addr)
 {
 	int errno;
@@ -20931,7 +20931,7 @@ static int wlan_hdd_cfg80211_set_default_key(struct wiphy *wiphy,
 #else
 static int wlan_hdd_cfg80211_set_default_key(struct wiphy *wiphy,
 					     struct net_device *ndev,
-					     u8 key_index,
+					     int link_id, u8 key_index,
 					     bool unicast, bool multicast)
 {
 	int errno;
@@ -21007,7 +21007,7 @@ static int wlan_hdd_cfg80211_set_default_beacon_key(struct wiphy *wiphy,
 #else
 static int wlan_hdd_cfg80211_set_default_beacon_key(struct wiphy *wiphy,
 						    struct net_device *ndev,
-						    u8 key_index)
+						    int link_id, u8 key_index)
 {
 	int errno;
 	struct osif_vdev_sync *vdev_sync;
@@ -21354,7 +21354,7 @@ static int wlan_hdd_set_default_mgmt_key(struct wiphy *wiphy,
 #else
 static int wlan_hdd_set_default_mgmt_key(struct wiphy *wiphy,
 					 struct net_device *netdev,
-					 u8 key_index)
+					 int link_id, u8 key_index)
 {
 	int errno;
 	struct osif_vdev_sync *vdev_sync;
@@ -23140,6 +23140,7 @@ wlan_hdd_cfg80211_set_ap_channel_width(struct wiphy *wiphy,
 static int
 wlan_hdd_cfg80211_set_ap_channel_width(struct wiphy *wiphy,
 				       struct net_device *dev,
+				       unsigned int link_id,
 				       struct cfg80211_chan_def *chandef)
 #endif
 {
@@ -24486,6 +24487,7 @@ static int wlan_hdd_cfg80211_get_channel(struct wiphy *wiphy,
 #else
 static int wlan_hdd_cfg80211_get_channel(struct wiphy *wiphy,
 					 struct wireless_dev *wdev,
+					 unsigned int link_id,
 					 struct cfg80211_chan_def *chandef)
 #endif
 {
@@ -24674,6 +24676,7 @@ static int wlan_hdd_cfg80211_set_bitrate_mask(struct wiphy *wiphy,
 #else
 static int wlan_hdd_cfg80211_set_bitrate_mask(struct wiphy *wiphy,
 					      struct net_device *netdev,
+					      unsigned int link_id,
 					      const u8 *peer,
 				       const struct cfg80211_bitrate_mask *mask)
 #endif
