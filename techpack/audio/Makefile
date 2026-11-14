@@ -2,7 +2,11 @@
 ifeq ($(CONFIG_QTI_AUDIO_LAHAINA), y)
 # built into the kernel from techpack/audio
 LEGACY_PATH=$(srctree)/techpack/audio
+# The umbrella option is shared by all techpack/audio SoCs; only fall back to
+# the lahaina feature set when the build is really for lahaina.
+ifneq ($(CONFIG_ARCH_HOLI), y)
 CONFIG_ARCH_LAHAINA := y
+endif
 else ifeq ($(QTI_TECHPACK_KERNEL_6_1), true)
 LEGACY_PATH=$(PWD)/../../../../vendor/qcom/opensource/audio-kernel
 else
