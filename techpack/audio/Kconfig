@@ -34,6 +34,15 @@ config HAPTIC_POWER_ON
 	help
 	  Enable it when haptic power on.
 
+config SND_SOC_FS1815
+	bool "Foursemi FS1815 smart PA"
+	depends on I2C
+	help
+	  Enable the Foursemi FS1815 smart PA used on fogos for the
+	  receiver and the speaker. Its oscillator is fed from the codec,
+	  so the driver alone does not make sound, but it has to be built
+	  in for the fs1815 snd card to probe.
+
 config AW882XX_DRIVER_V1
 	bool "Use aw882xx driver version 1.*"
 	default n

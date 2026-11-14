@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Foursemi FS1815 smart PA. fsm_i2c.c pulls fsm_firmware.c and fsm_misc.c in
+# by #include, the way the vendor tree built it, so they must not be compiled
+# as separate objects.
+
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(srctree)/techpack/audio/include
+EXTRA_CFLAGS += -I$(srctree)/techpack/audio/include/uapi
+
+fs1815_dlkm-objs := fs1815.o fsm_core.o fsm_i2c.o
+
+obj-y += fs1815_dlkm.o

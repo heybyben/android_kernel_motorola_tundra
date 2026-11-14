@@ -288,6 +288,8 @@ else
 	obj-y   += aw882xx/
 endif
 
+obj-$(CONFIG_SND_SOC_FS1815) += fs1815/
+
 ifeq ($(CONFIG_AW882XX_DUAL_SMARTPA), y)
 CDEFINES +=	-DCONFIG_AW882XX_STEREO_SMARTPA
 endif
