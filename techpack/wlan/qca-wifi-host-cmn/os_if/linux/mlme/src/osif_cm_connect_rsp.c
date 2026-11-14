@@ -508,8 +508,8 @@ void osif_copy_connected_info(struct cfg80211_connect_resp_params *conn_rsp,
 			      struct wlan_cm_connect_resp *rsp,
 			      struct cfg80211_bss *bss)
 {
-	conn_rsp->bssid = rsp->bssid.bytes;
-	conn_rsp->bss = bss;
+	conn_rsp->links[0].bssid = rsp->bssid.bytes;
+	conn_rsp->links[0].bss = bss;
 }
 #endif
 

@@ -842,7 +842,7 @@ wlan_util_get_connected_status(struct wireless_dev *wdev)
 static inline bool
 wlan_util_get_connected_status(struct wireless_dev *wdev)
 {
-	return !!wdev->current_bss;
+	return !!wdev->links[0].client.current_bss;
 }
 #endif
 /**

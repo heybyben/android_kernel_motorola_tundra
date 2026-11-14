@@ -7049,13 +7049,13 @@ wlan_util_get_chan_def(struct wireless_dev *wdev, unsigned int link_id)
 static inline struct cfg80211_chan_def
 wlan_util_get_chan_def(struct wireless_dev *wdev, unsigned int link_id)
 {
-	return wdev->chandef;
+	return wdev->links[link_id].ap.chandef;
 }
 
 static inline uint32_t
 wlan_util_get_centre_freq(struct wireless_dev *wdev, unsigned int link_id)
 {
-	return wdev->chandef.chan->center_freq;
+	return wdev->links[link_id].ap.chandef.chan->center_freq;
 }
 #endif
 /**

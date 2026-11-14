@@ -77,7 +77,7 @@ static
 void osif_copy_roamed_info(struct cfg80211_roam_info *info,
 			   struct cfg80211_bss *bss)
 {
-	info->bss = bss;
+	info->links[0].bss = bss;
 }
 #endif
 static void osif_roamed_ind(struct net_device *dev, struct cfg80211_bss *bss,
